@@ -1,0 +1,32 @@
+# dependencies
+node_modules/
+.pnpm-store/
+
+# build output
+dist/
+build/
+.turbo/
+*.tsbuildinfo
+
+# env & secrets — never commit a value
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# test & coverage
+coverage/
+playwright-report/
+test-results/
+
+# local db / storage
+docker-data/
+minio-data/
+
+# editor / os
+.DS_Store
+.idea/
+*.swp
+
+# agent session memory is committed on purpose — see agents/policies/memory.md
