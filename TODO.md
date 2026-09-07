@@ -337,14 +337,37 @@ Task IDs are stable — use them as board card titles.
 | `[H]` | **Human only.** Credentials, billing, legal, account ownership. An agent must never attempt these — it can only write the runbook and tell you what it needs. |
 | `[M]` | **Mixed.** Agent does the work; a human supplies a secret, clicks a dashboard, or makes a product/policy judgement. The task is blocked until the human half lands. |
 | `[A]` | **Agent only.** No human hands on the keyboard — but still requires PR approval and passes all gates. |
+| `[B]` | **Blocked on a business decision.** Additive to the other labels. The mechanism can be built and tested with the number/policy in config; it must not ship with a value an agent invented. Every `[B]` maps to a `BD-xx` in §10.1. |
 
-> ### 🚧 Human blockers before agents can start (do these first)
-> `[H]` **GitHub** repo + branch protection + Actions environments/secrets + PAT · **Neon** account
-> (staging project + production project) · **Fly.io** account + org · **Cloudflare** account (Pages
-> + R2 bucket) · **Flagsmith** account (preview/staging/production environments) · **Google Cloud**
-> project + Maps API key + billing · **Stripe** account (test now, live later) + Connect settings ·
-> email + SMS provider accounts · **Sentry** project · domain + DNS.
-> Everything in W0 stalls without these — this is the real day-one critical path.
+### OPS — manual service setup (human only, tracked on the board)
+
+**Early deployment is the priority**, and these are the real day-one critical path: every W0 task
+stalls until the accounts exist. Each is a board ticket with a *proof of done*, so the setup work is
+visible rather than assumed. All are `[H]` — an agent must never attempt them.
+
+| ID | Operation | Proof of done | Unblocks |
+|---|---|---|---|
+| `OPS-01` | **Personal** GitHub account authenticated on this machine (`gh auth login`, personal SSH key or PAT). Never the work account — see `docs/board/IDENTITY.md` | `gh api user --jq .login` returns the personal login | everything |
+| `OPS-02` | Create the GitHub repo under the personal account; push `main` | remote set, `main` pushed | everything |
+| `OPS-03` | Branch protection on `main`: required checks, ≥1 approval, no direct push | settings screenshot / API check | `W0-T13` |
+| `OPS-04` | GitHub Environments `preview` / `staging` / `production` + secrets | environments exist, empty secrets declared | `W0-T07`, `W0-T09` |
+| `OPS-05` | GitHub Project board created; issues imported (`node --experimental-strip-types scripts/seed-board.ts --repo <owner>/<name>`) | board populated | `W0-T19` |
+| `OPS-06` | GitHub PAT for the MCP server + local MCP connection | `claude mcp list` shows github connected | ticket automation |
+| `OPS-07` | **Neon**: staging project + **separate** production project, PostGIS enabled, API key | connection strings in GitHub Environments | `W0-T16` |
+| `OPS-08` | **Fly.io** account + org + API token | `fly apps list` works from CI | `W0-T07` |
+| `OPS-09` | **Cloudflare**: Pages project + R2 bucket (private) + API token | preview URL resolves | `W0-T07`, `W3-T03` |
+| `OPS-10` | **Flagsmith**: project + `preview`/`staging`/`production` environments + SDK keys | keys in GitHub Environments | `W0-T17` |
+| `OPS-11` | **Sentry** project + DSN | first test event received | `W0-T08` |
+| `OPS-12` | **Google Cloud** project + Maps API key + billing + quota alerts | key restricted by referrer/IP | `W3-T06` |
+| `OPS-13` | **Stripe** account (test mode) + Connect Express settings + webhook endpoint | test PaymentIntent succeeds | `W5-T01`, `W5-T03` |
+| `OPS-14` | Email provider (Resend/Brevo) + verified sender domain | test email delivered | `W2-T01` |
+| `OPS-15` | SMS provider (Twilio) + Spanish sender | test SMS delivered | `W2-T06`, `W7-T04` |
+| `OPS-16` | Domain + DNS pointed at Cloudflare | staging hostname resolves | `W0-T07` |
+| `OPS-17` | Per-environment encryption data keys generated and stored in Fly secrets | keys present, never in repo | `W0-T18` |
+| `OPS-18` | **Stripe live** account + KYC + bank details — *only before M9* | live keys in `production` env | launch |
+
+`OPS-01` … `OPS-06` are the blocking set for M0. The rest can land alongside the slice that needs
+them, but each has to be on the board so nobody assumes it happened.
 
 ### W0 — Platform foundation (`agent-devops`) — *blocks everything*
 - `W0-T01` `[A]` pnpm monorepo skeleton, workspaces, tsconfig base, eslint/prettier presets
@@ -367,6 +390,8 @@ Task IDs are stable — use them as board card titles.
 - `W0-T18` `[M]` **Encryption & keys**: envelope encryption for licence/phone columns, keyed hashes for lookup fields, per-env data keys in Fly secrets, key-rotation runbook *(human: generate and store the keys)* — ADR-006
 - `W0-T19` `[M]` **Board**: GitHub Projects with one issue per task ID from §6, labels for slice + `[H]`/`[M]`/`[A]`, columns Backlog → Spec → Contract → Red → Green → Review → Done *(human: create the project)*
 - `W0-T20` `[A]` Sanitisation step in the seed pipeline so no PII or licence document can reach a preview env
+- `W0-T21` `[A]` CI gate `author-identity`: every commit author/committer is `mastrobardo@gmail.com` (see `docs/board/IDENTITY.md`)
+- `W0-T22` `[A]` ✅ `scripts/seed-board.ts`: creates labels, milestones and one issue per OPS/W/BD id (135 issues; run with `--repo <owner>/<name>`)
 
 ### W1 — Contracts & domain foundation (`agent-contracts`)
 - `W1-T01` `[A]` Error envelope + error-code registry
@@ -387,10 +412,10 @@ Task IDs are stable — use them as board card titles.
 - `W2-T05` `[A]` Provider signup flow (MANITAS vs PRO, different required fields)
 - `W2-T06` `[M]` Phone verification (SMS), required for providers *(human: SMS provider account + credentials)*
 - `W2-T07` `[A]` Rate limiting, brute-force lockout, audit log on auth events
-- `W2-T08` `[M]` GDPR: export my data, delete my account (soft-delete + anonymise) *(human: retention policy decision)*
+- `W2-T08` `[M]` `[B]` GDPR: export my data, delete my account (soft-delete + anonymise) *(human: retention policy decision)*
 
 ### W3 — Providers & discovery (`agent-providers`, `agent-discovery`)
-- `W3-T01` `[M]` Category tree + seed data for reformas/mantenimiento/urgencias, `requiresLicence` flag *(human: which categories legally require a licence in ES)*
+- `W3-T01` `[M]` `[B]` Category tree + seed data for reformas/mantenimiento/urgencias, `requiresLicence` flag *(human: which categories legally require a licence in ES)*
 - `W3-T02` `[A]` Provider profile: bio, categories, radius, rates, working hours
 - `W3-T03` `[M]` Portfolio: image upload (S3 presigned), ordering, per-item category *(human: bucket + CDN credentials)*
 - `W3-T04` `[A]` Listing CRUD with price model
@@ -408,18 +433,18 @@ Task IDs are stable — use them as board card titles.
 - `W4-T05` `[A]` Award → creates Booking (hand-off to S9)
 - `W4-T06` `[A]` Job-scoped message thread + attachments
 - `W4-T07` `[A]` Job feed for providers: matched by category + radius + licence status
-- `W4-T08` `[M]` Anti-disintermediation: mask contact details until booking is paid *(human: how aggressive to be — product call)*
+- `W4-T08` `[M]` `[B]` Anti-disintermediation: mask contact details until booking is paid *(human: how aggressive to be — product call)*
 
 ### W5 — Money (`agent-money`) — *the highest-risk slice, staff it first*
 - `W5-T01` `[M]` Stripe Connect Express onboarding for providers, KYC status sync *(human: Stripe account, Connect config, branding)*
-- `W5-T02` `[A]` Booking creation + PaymentIntent (manual capture) + 3DS handling
+- `W5-T02` `[A]` `[B]` Booking creation + PaymentIntent (manual capture) + 3DS handling
 - `W5-T03` `[M]` Webhook endpoint: idempotent, signature-verified, replayable, dead-letter queue *(human: register endpoint, supply signing secret)*
-- `W5-T04` `[M]` Completion → capture → transfer to provider minus platform fee *(human: **decide the take rate**)*
-- `W5-T05` `[M]` Cancellation & refund policy engine (time-based tiers) + partial refunds *(human: define the policy)*
+- `W5-T04` `[M]` `[B]` Completion → capture → transfer to provider minus platform fee *(human: **decide the take rate**)*
+- `W5-T05` `[M]` `[B]` Cancellation & refund policy engine (time-based tiers) + partial refunds *(human: define the policy)*
 - `W5-T06` `[A]` Dispute/hold flow: freeze payout, admin resolves
-- `W5-T07` `[M]` Stripe Billing: FREE/PLUS/PREMIUM tiers, proration, dunning *(human: create products/prices, set pricing)*
-- `W5-T08` `[M]` Subscription entitlements service *(human: **define what each tier buys**)*
-- `W5-T09` `[H]` Invoices/receipts with Spanish VAT (IVA) + provider payout statements — **needs an accountant**; agent implements only after the rules are written down
+- `W5-T07` `[M]` `[B]` Stripe Billing: FREE/PLUS/PREMIUM tiers, proration, dunning *(human: create products/prices, set pricing)*
+- `W5-T08` `[M]` `[B]` Subscription entitlements service *(human: **define what each tier buys**)*
+- `W5-T09` `[H]` `[B]` Invoices/receipts with Spanish VAT (IVA) + provider payout statements — **needs an accountant**; agent implements only after the rules are written down
 - `W5-T10` `[A]` Ledger table: every money movement double-entered and reconcilable to Stripe
 - `W5-T11` `[A]` Reconciliation job + alert on any mismatch
 
@@ -427,13 +452,13 @@ Task IDs are stable — use them as board card titles.
 - `W6-T01` `[A]` Auction creation from a job (sealed vs open, close time, min bid)
 - `W6-T02` `[A]` Bid submission with validation + one-active-bid rule + entitlement check
 - `W6-T03` `[A]` Scheduled close worker (idempotent, restart-safe), award or expire
-- `W6-T04` `[M]` Anti-sniping: extend close window on late bids *(human: window policy)*
+- `W6-T04` `[M]` `[B]` Anti-sniping: extend close window on late bids *(human: window policy)*
 - `W6-T05` `[A]` Client manual award override before close
 - `W6-T06` `[A]` Auction UI: countdown, bid list per reveal policy, award action
-- `W6-T07` `[M]` Abuse controls: retraction limits, lowball detection, bid caps by tier *(human: thresholds)*
+- `W6-T07` `[M]` `[B]` Abuse controls: retraction limits, lowball detection, bid caps by tier *(human: thresholds)*
 
 ### W7 — Emergency call-outs (`agent-emergency`)
-- `W7-T01` `[M]` Emergency request creation + premium pricing rules *(human: **pricing model**)*
+- `W7-T01` `[M]` `[B]` Emergency request creation + premium pricing rules *(human: **pricing model**)*
 - `W7-T02` `[A]` Broadcast to nearby available verified pros, expanding-radius waves
 - `W7-T03` `[A]` First-accept-wins with a race-safe claim (DB-level, concurrency-tested)
 - `W7-T04` `[M]` Notification transport: web push + email + SMS fallback *(human: provider accounts, VAPID keys, sender verification)*
@@ -445,14 +470,14 @@ Task IDs are stable — use them as board card titles.
 - `W8-T01` `[M]` Licence upload (private bucket, virus scan, EXIF strip, signed short-lived URLs) *(human: AV service + bucket policy)*
 - `W8-T02` `[A]` Verification queue + admin review UI + approve/reject with reason
 - `W8-T03` `[A]` Expiry tracking + re-verification reminders + auto-revoke on expiry
-- `W8-T04` `[M]` Badge engine: VERIFIED_LICENCE, TOP_RATED, FAST_RESPONDER, PREMIUM *(human: qualifying rules)*
+- `W8-T04` `[M]` `[B]` Badge engine: VERIFIED_LICENCE, TOP_RATED, FAST_RESPONDER, PREMIUM *(human: qualifying rules)*
 - `W8-T05` `[A]` Reviews: only after a completed paid booking, both directions, edit window
-- `W8-T06` `[M]` Rating aggregation + display rules (min N reviews before showing an average) *(human: N and the display policy)*
+- `W8-T06` `[M]` `[B]` Rating aggregation + display rules (min N reviews before showing an average) *(human: N and the display policy)*
 - `W8-T07` `[A]` Moderation: report content, hide/remove, appeal trail
 
 ### W9 — Admin & ops (`agent-admin`)
 - `W9-T01` `[A]` Admin auth + audit trail on every admin action
-- `W9-T02` `[M]` Verification queue, user search, impersonate-for-support (logged) *(human: approve the impersonation policy — GDPR sensitive)*
+- `W9-T02` `[M]` `[B]` Verification queue, user search, impersonate-for-support (logged) *(human: approve the impersonation policy — GDPR sensitive)*
 - `W9-T03` `[A]` Dispute & refund console
 - `W9-T04` `[A]` Content moderation queue
 - `W9-T05` `[A]` Ops dashboard: GMV, take rate, active pros, conversion by flow, payout health
@@ -563,13 +588,28 @@ Staff `agent-money` from M0 so Stripe Connect onboarding is already in review wh
 | R14 | Preview envs branched from real data would leak PII/licences | GDPR breach | Previews branch only from **sanitised** staging (`W0-T20`); prod is a separate Neon project |
 | R15 | Flags accumulate and rot into dead code paths | Maintainability | Removal task ID on every flag; 4 weeks at 100% rollout ⇒ cleanup task (ADR-007) |
 
-**Open questions for you:**
-1. Platform take rate — flat %, or lower % for subscribers? Blocks `W5-T04` and `W5-T08`.
-2. Subscription tiers — what exactly does PLUS vs PREMIUM buy? (quote volume, radius, ranking,
-   badge, lead priority?) Blocks `W5-T08`.
-3. Emergency pricing — call-out fee + hourly, or a fixed premium multiplier? Blocks `W7-T01`.
-4. Do manitas need any verification at all (ID check?), or only pros? Blocks `W8` scope.
-5. Target beta city/region — affects seed data and supply recruitment.
+## 10.1 Business decisions register — `[B]`
+
+**You address these; agents must not invent them.** Each is a board ticket labelled
+`decision:business`, and each blocks the listed tasks from *shipping* — not from being built. The
+rule: build the mechanism, read the value from config, ship nothing with an invented number.
+
+| ID | Decision | Blocks | Notes |
+|---|---|---|---|
+| `BD-01` | **Escrow — do we hold client funds until job completion?** | `W5-T02`, `W5-T04` | The keystone decision. Yes ⇒ manual capture + delayed transfer, and R1 legal review before M8. No ⇒ pay-on-completion direct to the pro, far simpler, weaker client protection |
+| `BD-02` | Platform take rate — flat %, or reduced for subscribers? | `W5-T04`, `W5-T08` | Drives unit economics and the tier value proposition |
+| `BD-03` | What do PLUS and PREMIUM actually buy? (quote volume, radius, ranking boost, badge, lead priority) | `W5-T07`, `W5-T08`, `W3-T05` | Ranking boost has a fairness cost — decide deliberately |
+| `BD-04` | Cancellation & refund policy tiers | `W5-T05` | Time-based bands, who bears the fee |
+| `BD-05` | Emergency pricing — call-out fee + hourly, or a premium multiplier? | `W7-T01` | Affects the whole urgency flow's UX |
+| `BD-06` | Do **manitas** need verification (ID check), or only licensed pros? | `W8` scope, `W2-T05` | Trust vs. supply-side friction; affects cold start |
+| `BD-07` | Which categories legally require a licence in Spain? | `W3-T01`, `W3-T08` | Legal boundary, not a UI hint |
+| `BD-08` | How aggressive is anti-disintermediation? | `W4-T08` | Too strict harms UX, too loose leaks revenue |
+| `BD-09` | Auction defaults: sealed vs open, anti-sniping window, bid caps per tier | `W6-T04`, `W6-T07` | |
+| `BD-10` | Badge qualifying rules + minimum reviews before an average is shown | `W8-T04`, `W8-T06` | |
+| `BD-11` | Support impersonation policy (GDPR-sensitive) | `W9-T02` | Consent, time-box, audit |
+| `BD-12` | Target beta city/region | `W10-T01`, supply recruitment | Also shapes seed data |
+| `BD-13` | VAT/IVA invoicing rules for autónomos + DAC7 reporting | `W5-T09` | Needs an accountant, not a decision alone |
+| `BD-14` | GDPR data retention periods per entity | `W2-T08` | |
 
 ---
 
@@ -641,7 +681,7 @@ repeated `prompt-gap` for one agent, the fix lands in `agents/prompts/` and we w
 3. ✅ **Done**: `W0-T11` + `W0-T14` — `agents/` (AGENTS.md, 5 policies, 10 prompts, 13 charters),
    `memory/` (index, repo facts, per-slice files, session template), and the
    `.claude/agents` generator. Review these next.
-4. `agent-devops` then takes **W0-T01 → W0-T20** (M0). Nothing else starts until preview envs and
+4. `agent-devops` then takes **W0-T01 → W0-T22** (M0). Nothing else starts until preview envs and
    the `spec-present` / `intervention-logged` gates are live.
 5. `agent-contracts` writes the first 5 ADRs and `W1-T05` core schema in parallel.
 6. Import §6 into the board: one card per task ID, grouped by workstream, labelled by owning agent
