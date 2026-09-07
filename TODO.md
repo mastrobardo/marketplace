@@ -347,11 +347,11 @@ visible rather than assumed. All are `[H]` — an agent must never attempt them.
 
 | ID | Operation | Proof of done | Unblocks |
 |---|---|---|---|
-| `OPS-01` | **Personal** GitHub account authenticated on this machine (`gh auth login`, personal SSH key or PAT). Never the work account — see `docs/board/IDENTITY.md` | `gh api user --jq .login` returns the personal login | everything |
-| `OPS-02` | Create the GitHub repo under the personal account; push `main` | remote set, `main` pushed | everything |
+| ~~`OPS-01`~~ ✅ | **Personal** GitHub account authenticated on this machine (`gh auth login`, personal SSH key or PAT). Never the work account — see `docs/board/IDENTITY.md` | `gh api user --jq .login` returns the personal login | everything |
+| ~~`OPS-02`~~ ✅ | Create the GitHub repo under the personal account; push `main` | remote set, `main` pushed | everything |
 | `OPS-03` | Branch protection on `main`: required checks, ≥1 approval, no direct push | settings screenshot / API check | `W0-T13` |
 | `OPS-04` | GitHub Environments `preview` / `staging` / `production` + secrets | environments exist, empty secrets declared | `W0-T07`, `W0-T09` |
-| `OPS-05` | GitHub Project board created; issues imported (`node --experimental-strip-types scripts/seed-board.ts --repo <owner>/<name>`) | board populated | `W0-T19` |
+| `OPS-05` | GitHub Project **board** created (needs `gh auth refresh -s project`); ✅ 135 issues imported (`node --experimental-strip-types scripts/seed-board.ts --repo <owner>/<name>`) | board populated | `W0-T19` |
 | `OPS-06` | GitHub PAT for the MCP server + local MCP connection | `claude mcp list` shows github connected | ticket automation |
 | `OPS-07` | **Neon**: staging project + **separate** production project, PostGIS enabled, API key | connection strings in GitHub Environments | `W0-T16` |
 | `OPS-08` | **Fly.io** account + org + API token | `fly apps list` works from CI | `W0-T07` |
