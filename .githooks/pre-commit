@@ -1,0 +1,17 @@
+#!/bin/sh
+# Guard: this repo is PERSONAL. Never commit with a work identity.
+# Install: git config core.hooksPath .githooks
+EXPECTED="mastrobardo@gmail.com"
+ACTUAL="$(git config user.email)"
+if [ "$ACTUAL" != "$EXPECTED" ]; then
+  echo "✖ commit blocked: user.email is '$ACTUAL', expected '$EXPECTED'"
+  echo "  fix: git config user.email $EXPECTED"
+  exit 1
+fi
+REMOTE="$(git remote get-url origin 2>/dev/null || true)"
+case "$REMOTE" in
+  *iagl*|*parserdigital*)
+    echo "✖ commit blocked: origin '$REMOTE' looks like a work account."
+    exit 1 ;;
+esac
+exit 0
