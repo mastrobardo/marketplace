@@ -1,0 +1,130 @@
+# Local development stack — W0-T02.
+#
+# One command, three dependencies, no cloud account:
+#   pnpm stack:up      start and wait until every service is actually usable
+#   pnpm stack:down    stop, keeping data
+#   pnpm stack:reset   stop and destroy the volumes
+#
+# Every port is bound to 127.0.0.1 on purpose. A laptop on a café network must not be serving
+# Postgres. Each host port is overridable, because a developer machine very often already has a
+# Postgres on 5432 from another project; set POSTGRES_PORT / MAIL_SMTP_PORT / MAIL_HTTP_PORT /
+# OBJECTS_PORT / OBJECTS_CONSOLE_PORT in a local `.env` (gitignored) and nothing else changes —
+# every service still reaches its neighbours by container name on the compose network.
+#
+# The credentials below are local-development placeholders and are the only credentials
+# that will ever appear in this file — real values live in Fly/GitHub environment secrets
+# (docs/adr/ADR-006), never in the repo.
+
+name: marketplace
+
+services:
+  # ---------------------------------------------------------------------------------------------
+  # Postgres + PostGIS. Mirrors the Neon Postgres 17 that ADR-006 puts in every other environment.
+  #
+  # Image note: `postgis/postgis` publishes amd64 only. `imresamu/postgis` is the multi-architecture
+  # build from the same maintainer, linked from postgis/docker-postgis as the arm64 source. Switch
+  # back when the canonical repository publishes arm64 itself.
+  # ---------------------------------------------------------------------------------------------
+  db:
+    image: imresamu/postgis:17-3.5-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: marketplace
+      POSTGRES_PASSWORD: marketplace_local
+      POSTGRES_DB: marketplace
+      # Deterministic collation, so ORDER BY sorts the same here as on Neon.
+      POSTGRES_INITDB_ARGS: '--locale-provider=icu --icu-locale=es-ES --encoding=UTF8'
+    ports:
+      - '127.0.0.1:${POSTGRES_PORT:-5432}:5432'
+    volumes:
+      - db-data:/var/lib/postgresql/data
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      # -d matters: without it pg_isready reports ready while the init scripts are still running.
+      test: ['CMD-SHELL', 'pg_isready -U marketplace -d marketplace']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+
+  # ---------------------------------------------------------------------------------------------
+  # Mail catcher. Accepts every message, delivers none, and exposes a JSON API so "an email was
+  # sent" is an assertion rather than an assumption.
+  #
+  # Image note: TODO.md §6 names MailHog. MailHog is archived and ships amd64 only; Mailpit is its
+  # maintained successor, multi-architecture, same SMTP-catcher + HTTP-API shape.
+  # ---------------------------------------------------------------------------------------------
+  mail:
+    image: axllent/mailpit:v1.27
+    restart: unless-stopped
+    environment:
+      MP_MAX_MESSAGES: '5000'
+      MP_DATABASE: /data/mailpit.db
+      # No relay is configured, so there is no path by which a test email reaches a real person.
+      MP_SMTP_AUTH_ACCEPT_ANY: '1'
+      MP_SMTP_AUTH_ALLOW_INSECURE: '1'
+    ports:
+      - '127.0.0.1:${MAIL_SMTP_PORT:-1025}:1025'
+      - '127.0.0.1:${MAIL_HTTP_PORT:-8025}:8025'
+    volumes:
+      - mail-data:/data
+    healthcheck:
+      test: ['CMD', '/mailpit', 'readyz']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  # ---------------------------------------------------------------------------------------------
+  # S3-compatible object storage, standing in for Cloudflare R2 (ADR-006).
+  #
+  # Image note: pinned to the last release that still ships the full web console. Later community
+  # releases removed it, and being able to look at a bucket is most of the value locally.
+  # ---------------------------------------------------------------------------------------------
+  objects:
+    image: minio/minio:RELEASE.2025-04-22T22-12-26Z
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: marketplace
+      MINIO_ROOT_PASSWORD: marketplace_local
+    ports:
+      - '127.0.0.1:${OBJECTS_PORT:-9000}:9000'
+      - '127.0.0.1:${OBJECTS_CONSOLE_PORT:-9001}:9001'
+    volumes:
+      - objects-data:/data
+    healthcheck:
+      test: ['CMD', 'mc', 'ready', 'local']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+
+  # ---------------------------------------------------------------------------------------------
+  # One-shot bucket provisioning. Runs to completion and exits; `stack:up --wait` tolerates that
+  # because the container is expected to stop with exit code 0.
+  # ---------------------------------------------------------------------------------------------
+  objects-init:
+    image: minio/mc:RELEASE.2025-04-16T18-13-26Z
+    depends_on:
+      objects:
+        condition: service_healthy
+    environment:
+      MINIO_ROOT_USER: marketplace
+      MINIO_ROOT_PASSWORD: marketplace_local
+    entrypoint:
+      - sh
+      - -c
+      - |
+        set -eu
+        mc alias set local http://objects:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD"
+        # Private by default and never made public: licence documents and job photos are served
+        # through short-lived presigned GETs only (ADR-006, gotcha MEM-2026-09-07-08).
+        mc mb --ignore-existing local/marketplace-uploads
+        mc anonymous set none local/marketplace-uploads
+        echo "objects-init: marketplace-uploads ready"
+
+volumes:
+  db-data:
+  mail-data:
+  objects-data:
