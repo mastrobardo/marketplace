@@ -99,4 +99,16 @@ Keep it to facts that changed how you would work. Task-specific detail stays in 
 - **apply**: New app packages: `build: tsup`, tsconfig includes `src` **and** `tests`. Preset
   packages that other packages `extends` still need real JSON on disk (`W0-T01`).
 - **evidence**: `docs/specs/S0/W0-T03-api-skeleton.run.md` (deviation 5)
+### `setupFiles` runs for every suite, including the ones pinned to another environment
+- **id**: MEM-2026-09-09-11
+- **scope**: slice:S0
+- **fact**: A vitest `setupFiles` entry runs for **all** suites in the package, so a setup file that
+  touches `document` fails every suite carrying `// @vitest-environment node` — at collection, with
+  an error pointing at the setup file and saying nothing about the environment.
+- **why**: A repo will always mix DOM component tests with filesystem/compiler tests in one package;
+  `apps/web` has both.
+- **apply**: Guard environment-specific work in setup files (`typeof document !== 'undefined'`).
+  Pin filesystem tests to `node` — under jsdom `import.meta.url` is an `http:` URL and
+  `fileURLToPath` throws `ERR_INVALID_URL_SCHEME`.
+- **evidence**: `docs/specs/S0/W0-T04-web-skeleton.run.md` (deviations 2 and 3)
 - **status**: active

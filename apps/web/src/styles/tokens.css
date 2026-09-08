@@ -1,0 +1,74 @@
+/*
+ * Design tokens — the only place a colour, a spacing step, a radius or a font value is written.
+ *
+ * `agent-ui` owns this file from here: packages/ui is built on these names, and a component that
+ * needs a value it cannot find here needs a new token, not a literal. The test in
+ * tests/tokens.test.ts fails the build if a stylesheet hardcodes a colour, and fails it again if a
+ * colour is defined for light but not for dark.
+ *
+ * Namespace `--mp-` so tokens never collide with a third-party stylesheet (a map widget, a Stripe
+ * element) that shares the document.
+ */
+
+:root {
+  color-scheme: light dark;
+
+  /* Colour — semantic names, not shades. `--mp-color-danger`, never `--mp-color-red-500`:
+     the design system should be able to change the red without renaming anything. */
+  --mp-color-bg: #fbfaf9;
+  --mp-color-surface: #ffffff;
+  --mp-color-surface-muted: #f2f0ee;
+  --mp-color-border: #e0dcd7;
+  --mp-color-text: #1c1a18;
+  --mp-color-text-muted: #6b6560;
+  --mp-color-accent: #b4531f;
+  --mp-color-accent-contrast: #ffffff;
+  --mp-color-focus: #1d4ed8;
+  --mp-color-danger: #b3261e;
+  --mp-color-success: #1f6f43;
+
+  /* Spacing — a 4px scale. Every margin and padding is one of these. */
+  --mp-space-1: 0.25rem;
+  --mp-space-2: 0.5rem;
+  --mp-space-3: 0.75rem;
+  --mp-space-4: 1rem;
+  --mp-space-6: 1.5rem;
+  --mp-space-8: 2rem;
+  --mp-space-12: 3rem;
+
+  --mp-radius-sm: 0.25rem;
+  --mp-radius-md: 0.5rem;
+  --mp-radius-lg: 1rem;
+  --mp-radius-full: 9999px;
+
+  --mp-font-family: system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --mp-font-size-sm: 0.875rem;
+  --mp-font-size-base: 1rem;
+  --mp-font-size-lg: 1.25rem;
+  --mp-font-size-xl: 1.75rem;
+  --mp-font-weight-regular: 400;
+  --mp-font-weight-bold: 650;
+  --mp-font-line-height: 1.55;
+
+  --mp-layout-max-width: 68rem;
+}
+
+/*
+ * Dark theme. Every --mp-color-* above has a counterpart here; the token test enforces it, because
+ * a half-converted palette is how text ends up black on near-black.
+ */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --mp-color-bg: #16151a;
+    --mp-color-surface: #1f1e24;
+    --mp-color-surface-muted: #292830;
+    --mp-color-border: #3a3841;
+    --mp-color-text: #f2f0ee;
+    --mp-color-text-muted: #a6a1ac;
+    --mp-color-accent: #e8935c;
+    --mp-color-accent-contrast: #1c1a18;
+    --mp-color-focus: #8ab4f8;
+    --mp-color-danger: #f2b8b5;
+    --mp-color-success: #7fd3a3;
+  }
+}

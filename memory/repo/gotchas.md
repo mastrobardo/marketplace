@@ -111,4 +111,68 @@ come from real experience.
   then observe red. Never build a `Config` or any other module-level value at import scope in a
   test file — it takes the whole file out of collection when it throws.
 - **evidence**: `docs/specs/S0/W0-T03-api-skeleton.run.md` red phase
+### A `@ts-expect-error` comment is a directive even when the rest of it is prose
+- **id**: MEM-2026-09-09-09
+- **scope**: repo
+- **fact**: TypeScript treats any single-line comment **beginning** with the `@ts-expect-error`
+  directive as a suppression, whatever follows it. A fixture written to prove that an unknown
+  translation key fails the build carried the comment
+  `// @ts-expect-error is deliberately NOT used: the point is that tsc fails.` — which suppressed
+  the error it was describing. Because a real error was present, there was no "unused directive"
+  warning either: the file compiled clean and the test that asserted the failure failed instead.
+- **why**: The comment reads like documentation and behaves like code. It fails **open** — the
+  check silently stops checking.
+- **apply**: Never begin a comment with `@ts-expect-error` or `@ts-ignore` unless you mean the
+  directive. Any test asserting that something *fails* to compile needs a sibling fixture asserting
+  something *does* compile; without it, a check that always fails and a check that always passes are
+  indistinguishable.
+- **evidence**: `docs/specs/S0/W0-T04-web-skeleton.run.md` (test-side correction)
+- **status**: active
+
+### i18next's default separators break dotted keys
+- **id**: MEM-2026-09-09-10
+- **scope**: repo
+- **fact**: Our translation keys are flat and dotted (`nav.home` is one key). i18next treats `.` as
+  a path separator into nested resources and `:` as a namespace separator by default, so every
+  lookup misses and it falls back to rendering **the key itself**. `apps/web/src/i18n/index.ts`
+  sets `keySeparator: false` and `nsSeparator: false`.
+- **why**: Rendering a raw key to a user is the exact failure `W0-T04` exists to prevent, and it is
+  a silent one — no error, no warning, just `nav.home` on the page.
+- **apply**: Do not remove those two options. If nested catalogues are ever wanted, that is a
+  deliberate change to the key type in `es.ts` and to the parity test, not a config tweak.
+- **evidence**: `docs/specs/S0/W0-T04-web-skeleton.run.md` (deviation 1)
+- **status**: active
+
+### Parallel branches collide on shared append-only files, not on the seam
+- **id**: MEM-2026-09-09-12
+- **scope**: repo
+- **fact**: Three branches from the same `main`, touching three different slices and sharing **no**
+  source file, still conflicted three times — on `README.md`, `memory/repo/gotchas.md`,
+  `memory/slices/agent-devops.md` and `pnpm-lock.yaml`. Every merge to `main` invalidates every
+  other open branch, so the cost grows as O(n²) in open branches. `TODO.md` R8 predicted this for
+  `schema.prisma` and `packages/contracts`; it arrived first in documentation and memory.
+- **why**: For a human team this is a shrug. For an agent it is a **stop**: the task is finished,
+  the PR is green, and it waits for a human. `AGENTS.md` L8 makes every agent write to
+  `memory/repo/**` on every task, so every task is exposed.
+- **apply**: Until `W0-T23` lands, expect to re-merge `main` after each other PR merges, and resolve
+  by keeping both sides **only after checking the hunk is genuinely an addition**. Worst pending
+  case is `apps/web/src/i18n/locales/{es,en}.ts` — seven user-facing slices will all append keys to
+  those two files, where a dropped key is a missing translation rather than a cosmetic duplicate.
+- **evidence**: PRs #150, #151, #152; issue #153
+- **status**: active
+
+### "Keep both sides" is wrong whenever a hunk is a modification
+- **id**: MEM-2026-09-09-13
+- **scope**: repo
+- **fact**: Resolving the conflicts above with a keep-both script was right on five hunks and wrong
+  on two. The `README.md` Layout table *looks* append-shaped — one row per path — but each branch
+  **edits the row for its own app**. Keeping both sides produced a duplicate row carrying the stale
+  pre-task description, and nothing failed: not the build, not lint, not the tests.
+- **why**: It is the argument against a blanket "append" git merge driver for these files. An
+  automatic driver would have committed the duplicate silently. The fix is to remove the shared
+  files (issue #153), not to automate merging them.
+- **apply**: After any bulk conflict resolution, **read the resolved region**, do not just check
+  that the markers are gone. A markdown table, a config block and an import list all look additive
+  and are not. `pnpm-lock.yaml` is never hand-merged: take `main`'s copy and re-run `pnpm install`.
+- **evidence**: PR #152 merge commits; `docs/specs/S0/W0-T04-web-skeleton.run.md`
 - **status**: active
