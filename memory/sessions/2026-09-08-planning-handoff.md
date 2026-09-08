@@ -38,6 +38,10 @@ GitHub + GitHub Actions · strict spec → contract → TDD → review pipeline.
    completion? — unblocks the most and drives the legal position.
 
 ## Next action for a fresh session
+> **Superseded on 2026-09-08 by `2026-09-08-agent-devops-W0-T01.md`.** `W0-T01` is built and green
+> (PR #149). Read that handoff, not this line, for what to do next. The rest of this file is
+> accurate as a record of the planning session.
+
 Nothing is half-finished. The next piece of work is `W0-T01` (monorepo skeleton) → `W0-T07`
 (preview environments), owned by `agent-devops`, but it stalls at deploy time until the four
 accounts above exist. Building `W0-T01`–`W0-T06` locally does not need any of them.
