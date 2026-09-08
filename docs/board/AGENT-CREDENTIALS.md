@@ -16,6 +16,13 @@ human"** — and the answer must stop hard at production.
 
 ---
 
+## The walking skeleton needs four services
+
+`Fly.io` · `Neon` · `Cloudflare` · `Sentry`. That is the whole M0 credential surface — section A plus
+`SENTRY_DSN` and `SENTRY_AUTH_TOKEN`. Everything in section B arrives with the feature that needs it:
+Stripe with payouts, Flagsmith with the first flag, Maps with the map, email with signup, SMS with
+phone verification. Do not create an account before a ticket needs it.
+
 ## A. Ship a preview environment (the minimum for autonomy)
 
 | Variable | Scope to grant | Why the agent needs it |
@@ -27,24 +34,24 @@ human"** — and the answer must stop hard at production.
 | `NEON_PROJECT_ID` | not secret | Addressing |
 | `DATABASE_URL` | injected per run by the branch-create step | Migrations and tests |
 
-## B. Make the preview actually work
+## B. Make the preview actually work — *added per feature, not up front*
 
-| Variable | Notes |
+| Variable | Needed for | Notes |
 |---|---|
-| `STRIPE_SECRET_KEY_TEST` | **Restricted key**, test mode. Grant only the resources we use (PaymentIntents, Accounts, Transfers, Subscriptions) |
-| `STRIPE_WEBHOOK_SECRET_TEST` | Per endpoint; previews share one staging endpoint |
-| `VITE_STRIPE_PUBLISHABLE_KEY` | Public by design |
-| `FLAGSMITH_ENVIRONMENT_KEY` | Server-side SDK key, one per environment |
-| `FLAGSMITH_ADMIN_TOKEN` | Management API — lets an agent **create the flag it just declared in code** instead of asking you. This is the difference between autonomous and blocked |
-| `GOOGLE_MAPS_BROWSER_KEY` | Referrer-restricted, quota-capped |
-| `GOOGLE_GEOCODING_KEY` | Separate server key, IP-restricted. Never reuse the browser key |
-| `RESEND_API_KEY` | Staging sender domain. Locally, MailHog needs nothing |
-| `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` | Use **Twilio test credentials** in CI — real ones cost money per message and an agent in a retry loop is expensive |
-| `TWILIO_MESSAGING_SERVICE_SID` | |
-| `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` | Web push, generated once per environment |
-| `DATA_ENCRYPTION_KEY` | **Preview and staging keys may be CI-generated.** The production key is human-only and never leaves the production environment |
-| `LOOKUP_HASH_PEPPER` | Same rule |
-| `SENTRY_DSN` | Per environment |
+| `STRIPE_SECRET_KEY_TEST` | `W5-T01` | **Restricted key**, test mode. Grant only the resources we use (PaymentIntents, Accounts, Transfers, Subscriptions) |
+| `STRIPE_WEBHOOK_SECRET_TEST` | `W5-T03` | Per endpoint; previews share one staging endpoint |
+| `VITE_STRIPE_PUBLISHABLE_KEY` | `W5-T02` | Public by design |
+| `FLAGSMITH_ENVIRONMENT_KEY` | `W0-T17` | Server-side SDK key, one per environment |
+| `FLAGSMITH_ADMIN_TOKEN` | `W0-T17` | Management API — lets an agent **create the flag it just declared in code** instead of asking you. This is the difference between autonomous and blocked |
+| `GOOGLE_MAPS_BROWSER_KEY` | `W3-T06` | Referrer-restricted, quota-capped |
+| `GOOGLE_GEOCODING_KEY` | `W3-T05` | Separate server key, IP-restricted. Never reuse the browser key |
+| `RESEND_API_KEY` | `W2-T01` | Staging sender domain. Locally, MailHog needs nothing |
+| `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` | `W2-T06` | Use **Twilio test credentials** in CI — real ones cost money per message and an agent in a retry loop is expensive |
+| `TWILIO_MESSAGING_SERVICE_SID` | `W2-T06` | |
+| `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` | `W7-T04` | Web push, generated once per environment |
+| `DATA_ENCRYPTION_KEY` | `W0-T18` | **Preview and staging keys may be CI-generated.** The production key is human-only and never leaves the production environment |
+| `LOOKUP_HASH_PEPPER` | `W0-T18` | Same rule |
+| `SENTRY_DSN` | **M0** | Per environment |
 
 ## C. Let the agent check its own work (the part usually forgotten)
 

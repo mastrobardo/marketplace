@@ -55,7 +55,7 @@ export const stories: Record<string, Story> = {
     role: 'platform owner', want: 'to choose between the gh CLI and a stored PAT for agent GitHub access',
     so: 'I am not keeping a long-lived credential in a plaintext config without a reason',
     ac: ['a decision is recorded', 'if MCP is adopted, the token is personal and scoped as narrowly as possible'],
-    note: 'The gh CLI already provides full access through the keychain; the MCP adds a second credential path with worse hygiene.',
+    note: 'Not needed for the walking skeleton. Revisit only if agents start needing GitHub access from CI.',
   },
   'OPS-07': {
     title: 'Create the Neon databases (staging and production)',
@@ -86,7 +86,7 @@ export const stories: Record<string, Story> = {
     so: 'unfinished work can merge to main without blocking anyone',
     ac: ['project created', '`preview`, `staging`, `production` environments exist',
          'SDK keys stored per environment'],
-    note: 'Free tier: unlimited flags and environments, 50k requests/month, one seat.',
+    note: 'Not needed for the walking skeleton — set this up with `W0-T17`, when the first feature actually needs a flag.',
   },
   'OPS-11': {
     title: 'Create the Sentry project',
@@ -100,7 +100,7 @@ export const stories: Record<string, Story> = {
     so: 'a bug in a loop cannot generate a four-figure bill overnight',
     ac: ['key created and restricted by referrer/IP', 'billing alerts and a quota cap configured',
          'only the APIs we use are enabled'],
-    note: 'Proximity search runs in PostGIS, not Maps — Maps is display and autocomplete only.',
+    note: 'Not needed for the walking skeleton — set this up with `W3-T06`, when the map and address search are built.',
   },
   'OPS-13': {
     title: 'Set up the Stripe test account with Connect',
@@ -108,24 +108,28 @@ export const stories: Record<string, Story> = {
     so: 'the money flow is proven long before real money touches it',
     ac: ['Connect Express enabled and branded', 'webhook endpoint registered for staging',
          'a test PaymentIntent succeeds', 'test-mode keys stored per environment'],
+    note: 'Not needed for the walking skeleton — set this up with `W5-T01`, when provider payouts are built.',
   },
   'OPS-14': {
     title: 'Set up the transactional email provider',
     role: 'client', want: 'to receive verification and booking emails reliably',
     so: 'I can actually complete signup and know what is happening with my job',
     ac: ['sender domain verified (SPF/DKIM)', 'test email delivered to a real inbox', 'API key stored per environment'],
+    note: 'Not needed for the walking skeleton — set this up with `W2-T01`, when signup needs to send a verification email. MailHog covers local development until then.',
   },
   'OPS-15': {
     title: 'Set up the SMS provider with a Spanish sender',
     role: 'professional', want: 'to be reachable by SMS for phone verification and emergency call-outs',
     so: 'urgent work reaches me even when I do not have the app open',
     ac: ['Spanish sender configured', 'test SMS delivered to a Spanish number', 'per-message cost recorded for budgeting'],
+    note: 'Not needed for the walking skeleton — set this up with `W2-T06`, when phone verification is built.',
   },
   'OPS-16': {
     title: 'Point the domain and DNS at Cloudflare',
     role: 'platform owner', want: 'a real hostname for staging and, later, production',
     so: 'the product can be shown to people without sending them a random preview URL',
     ac: ['domain registered', 'DNS on Cloudflare', 'staging hostname resolves over HTTPS'],
+    note: 'Not needed for the walking skeleton — the fly.dev and pages.dev URLs are enough. Do this before showing staging to anyone outside the project.',
   },
   'OPS-17': {
     title: 'Generate and store the per-environment encryption keys',
@@ -133,13 +137,14 @@ export const stories: Record<string, Story> = {
     so: 'a leak in one environment cannot decrypt another environment’s data',
     ac: ['a distinct key per environment', 'keys stored in the secret store only — never in the repo',
          'a key-rotation procedure written down'],
+    note: 'Not needed for the walking skeleton — set this up with `W0-T18`, when the first sensitive field is actually stored.',
   },
   'OPS-18': {
     title: 'Activate the live Stripe account (before launch only)',
     role: 'platform owner', want: 'the real payment account with KYC and bank details completed',
     so: 'we can take actual money at beta launch',
     ac: ['business verification complete', 'bank account connected', 'live keys stored in production only'],
-    note: 'Do not start this before M9. Live keys must never exist outside the production environment.',
+    note: 'Do not start this before M9.',
   },
 
   // ---------------------------------------------------------- BUSINESS DECISIONS

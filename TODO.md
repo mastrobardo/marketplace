@@ -366,8 +366,15 @@ visible rather than assumed. All are `[H]` — an agent must never attempt them.
 | `OPS-17` | Per-environment encryption data keys generated and stored in Fly secrets | keys present, never in repo | `W0-T18` |
 | `OPS-18` | **Stripe live** account + KYC + bank details — *only before M9* | live keys in `production` env | launch |
 
-`OPS-01` … `OPS-06` are the blocking set for M0. The rest can land alongside the slice that needs
-them, but each has to be on the board so nobody assumes it happened.
+**The walking skeleton needs four services and nothing else**: Fly.io, Neon, Cloudflare, Sentry.
+
+| Needed for M0 | Deferred until the feature needs it |
+|---|---|
+| `OPS-01`–`OPS-05` (GitHub, board), `OPS-07` (Neon), `OPS-08` (Fly), `OPS-09` (Cloudflare), `OPS-11` (Sentry) | `OPS-06` MCP · `OPS-10` Flagsmith → `W0-T17` · `OPS-12` Maps → `W3-T06` · `OPS-13` Stripe → `W5-T01` · `OPS-14` email → `W2-T01` · `OPS-15` SMS → `W2-T06` · `OPS-16` domain → before the first outside demo · `OPS-17` encryption keys → `W0-T18` · `OPS-18` Stripe live → M9 |
+
+Every deferred account still has a ticket so nobody assumes it happened — it is just not on the
+critical path. Local development covers the gaps in the meantime (MailHog for email, docker Postgres
+for data), so no feature is blocked waiting for an account that is not needed yet.
 
 ### W0 — Platform foundation (`agent-devops`) — *blocks everything*
 - `W0-T01` `[A]` pnpm monorepo skeleton, workspaces, tsconfig base, eslint/prettier presets
@@ -386,8 +393,8 @@ them, but each has to be on the board so nobody assumes it happened.
 - `W0-T14` `[A]` **`memory/` scaffold** (§5.8): index, repo facts, per-slice files, session template
 - `W0-T15` `[A]` `agents-drift` CI gate + `scripts/generate-claude-agents.ts` wired into CI
 - `W0-T16` `[M]` **Neon**: staging + production projects, PostGIS enabled, `sslmode=verify-full`; CI creates a branch per PR off sanitised staging and **deletes it on PR close** *(human: Neon account + API key)* — ADR-006
-- `W0-T17` `[M]` **Feature flags**: OpenFeature SDK + Flagsmith provider, typed flag registry (default OFF, owner, removal task ID), server-side evaluation + bootstrap payload, static provider in tests *(human: Flagsmith account + per-env SDK keys)* — ADR-007
-- `W0-T18` `[M]` **Encryption & keys**: envelope encryption for licence/phone columns, keyed hashes for lookup fields, per-env data keys in Fly secrets, key-rotation runbook *(human: generate and store the keys)* — ADR-006
+- `W0-T17` `[M]` **Feature flags** *(not M0 — lands with the first feature that needs a flag)*: OpenFeature SDK + Flagsmith provider, typed flag registry (default OFF, owner, removal task ID), server-side evaluation + bootstrap payload, static provider in tests *(human: Flagsmith account + per-env SDK keys)* — ADR-007
+- `W0-T18` `[M]` **Encryption & keys** *(not M0 — lands with the first sensitive field stored)*: envelope encryption for licence/phone columns, keyed hashes for lookup fields, per-env data keys in Fly secrets, key-rotation runbook *(human: generate and store the keys)* — ADR-006
 - `W0-T19` `[M]` **Board**: GitHub Projects with one issue per task ID from §6, labels for slice + `[H]`/`[M]`/`[A]`, columns Backlog → Spec → Contract → Red → Green → Review → Done *(human: create the project)*
 - `W0-T20` `[A]` Sanitisation step in the seed pipeline so no PII or licence document can reach a preview env
 - `W0-T21` `[A]` CI gate `author-identity`: every commit author/committer is `mastrobardo@gmail.com` (see `docs/board/IDENTITY.md`)
@@ -532,7 +539,7 @@ fixture set — no ad-hoc data creation in tests except via shared factories in 
 
 | # | Milestone | Contains | Exit criteria |
 |---|---|---|---|
-| **M0** | Walking skeleton deployed | W0 complete, W1-T01…T04 | Empty-but-real app on staging; **a PR gets its own Fly app + Neon branch, both destroyed on close**; flags resolve per env; CI green **including `spec-present`, `intervention-logged` and `agents-drift`**; `agents/` + `memory/` in place. **Day 1 target.** |
+| **M0** | Walking skeleton deployed | `OPS-01`–`05`, `07`, `08`, `09`, `11`; W0 minus the deferred setups; W1-T01…T04 | Empty-but-real app on staging; **a PR gets its own Fly app + Neon branch, both destroyed on close**; errors reach Sentry; CI green **including `spec-present`, `intervention-logged` and `agents-drift`**; `agents/` + `memory/` in place. **Four services only: Fly, Neon, Cloudflare, Sentry.** |
 | **M1** | Identity | W2, W1-T05…T09 | Anyone can sign up as client/manitas/pro on staging; permissions tested |
 | **M2** | Discovery | W3 | Client can find and view providers on a map near a real Spanish postcode |
 | **M3** | First euro | W5-T01…T04, W4-T01/T02/T05 | End-to-end paid direct booking with a manitas in Stripe test mode; funds captured and transferred |

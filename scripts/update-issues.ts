@@ -87,9 +87,9 @@ const refreshed: Row[] = JSON.parse(gh(['issue', 'list', '--repo', repo, '--stat
 for (const [key, name, blurb] of EPICS) {
   const isTask = (r: Row) => /^(OPS-\d+|BD-\d+|W\d+-T\d+)$/.test(r.title.split(' ')[0]);
   const children = refreshed.filter((r) => isTask(r) && groupOf(r.title.split(' ')[0]) === key);
-  const list = children.map((c) => `- [ ] #${c.number}`).join('\n');
   const title = `${key} — ${name}`;
-  const epicBody = `${blurb}\n\n**${children.length} issues**\n\n${list}\n`;
+  // GitHub renders linked sub-issues natively; a duplicate checklist here would drift.
+  const epicBody = `${blurb}\n\nThe ${children.length} pieces of work are tracked as sub-issues below.\n`;
   const existing = refreshed.find((r) => r.title === title);
   if (existing) {
     gh(['api', `repos/${repo}/issues/${existing.number}`, '-X', 'PATCH', '--input', '-'],
