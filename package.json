@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Marketplace for reformas, mantenimiento and urgencias — API, web app and shared packages.",
+  "description": "Marketplace for reformas, mantenimiento and urgencias \u2014 API, web app and shared packages.",
   "packageManager": "pnpm@10.13.1",
   "engines": {
     "node": ">=22.11.0",
@@ -11,6 +11,10 @@
   },
   "scripts": {
     "prepare": "pnpm --filter @marketplace/config build",
+    "stack:up": "docker compose up --detach --wait db mail objects && docker compose run --rm objects-init",
+    "stack:down": "docker compose down",
+    "stack:reset": "docker compose down --volumes",
+    "stack:logs": "docker compose logs --follow",
     "build": "turbo run build",
     "typecheck": "turbo run typecheck && tsc --noEmit",
     "lint": "turbo run lint && eslint .",
