@@ -1,0 +1,133 @@
+/*
+ * Shell styles. Values come from tokens.css only — the token test fails the build on a raw colour.
+ * This is the layout, not a design system: `agent-ui` owns components in packages/ui.
+ */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--mp-color-bg);
+  color: var(--mp-color-text);
+  font-family: var(--mp-font-family);
+  font-size: var(--mp-font-size-base);
+  line-height: var(--mp-font-line-height);
+}
+
+/* A visible focus ring on every interactive element. Removing it is the single most common
+   accessibility regression in a design system, so it is set once, here. */
+:focus-visible {
+  outline: 2px solid var(--mp-color-focus);
+  outline-offset: 2px;
+}
+
+.mp-skip-link {
+  position: absolute;
+  left: var(--mp-space-2);
+  top: calc(var(--mp-space-2) * -10);
+  z-index: 10;
+  padding: var(--mp-space-2) var(--mp-space-4);
+  border-radius: var(--mp-radius-md);
+  background: var(--mp-color-accent);
+  color: var(--mp-color-accent-contrast);
+  transition: top 120ms ease-in-out;
+}
+
+.mp-skip-link:focus {
+  top: var(--mp-space-2);
+}
+
+.mp-shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.mp-header,
+.mp-footer {
+  border-bottom: 1px solid var(--mp-color-border);
+  background: var(--mp-color-surface);
+}
+
+.mp-footer {
+  border-bottom: none;
+  border-top: 1px solid var(--mp-color-border);
+  color: var(--mp-color-text-muted);
+  font-size: var(--mp-font-size-sm);
+}
+
+.mp-header__inner,
+.mp-footer__inner,
+.mp-main {
+  margin: 0 auto;
+  width: 100%;
+  max-width: var(--mp-layout-max-width);
+  padding: var(--mp-space-4);
+}
+
+.mp-header__inner {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--mp-space-4);
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.mp-brand {
+  font-size: var(--mp-font-size-lg);
+  font-weight: var(--mp-font-weight-bold);
+  color: var(--mp-color-text);
+  text-decoration: none;
+}
+
+.mp-brand__tagline {
+  display: block;
+  font-size: var(--mp-font-size-sm);
+  font-weight: var(--mp-font-weight-regular);
+  color: var(--mp-color-text-muted);
+}
+
+.mp-nav {
+  display: flex;
+  align-items: center;
+  gap: var(--mp-space-4);
+}
+
+.mp-nav a {
+  color: var(--mp-color-text);
+}
+
+.mp-main {
+  flex: 1;
+  padding-block: var(--mp-space-8);
+}
+
+.mp-main h1 {
+  font-size: var(--mp-font-size-xl);
+  margin-top: 0;
+}
+
+.mp-lead {
+  color: var(--mp-color-text-muted);
+  max-width: 46ch;
+}
+
+.mp-language {
+  display: flex;
+  align-items: center;
+  gap: var(--mp-space-2);
+  font-size: var(--mp-font-size-sm);
+}
+
+.mp-language select {
+  padding: var(--mp-space-1) var(--mp-space-2);
+  border: 1px solid var(--mp-color-border);
+  border-radius: var(--mp-radius-sm);
+  background: var(--mp-color-surface);
+  color: var(--mp-color-text);
+  font: inherit;
+}

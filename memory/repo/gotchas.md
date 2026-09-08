@@ -55,3 +55,35 @@ come from real experience.
   `tsup && tsc -p tsconfig.build.json --emitDeclarationOnly`.
 - **evidence**: `docs/specs/S0/W0-T01-monorepo-skeleton.run.md` (deviations 1 and 2)
 - **status**: active
+
+### A `@ts-expect-error` comment is a directive even when the rest of it is prose
+- **id**: MEM-2026-09-09-09
+- **scope**: repo
+- **fact**: TypeScript treats any single-line comment **beginning** with the `@ts-expect-error`
+  directive as a suppression, whatever follows it. A fixture written to prove that an unknown
+  translation key fails the build carried the comment
+  `// @ts-expect-error is deliberately NOT used: the point is that tsc fails.` — which suppressed
+  the error it was describing. Because a real error was present, there was no "unused directive"
+  warning either: the file compiled clean and the test that asserted the failure failed instead.
+- **why**: The comment reads like documentation and behaves like code. It fails **open** — the
+  check silently stops checking.
+- **apply**: Never begin a comment with `@ts-expect-error` or `@ts-ignore` unless you mean the
+  directive. Any test asserting that something *fails* to compile needs a sibling fixture asserting
+  something *does* compile; without it, a check that always fails and a check that always passes are
+  indistinguishable.
+- **evidence**: `docs/specs/S0/W0-T04-web-skeleton.run.md` (test-side correction)
+- **status**: active
+
+### i18next's default separators break dotted keys
+- **id**: MEM-2026-09-09-10
+- **scope**: repo
+- **fact**: Our translation keys are flat and dotted (`nav.home` is one key). i18next treats `.` as
+  a path separator into nested resources and `:` as a namespace separator by default, so every
+  lookup misses and it falls back to rendering **the key itself**. `apps/web/src/i18n/index.ts`
+  sets `keySeparator: false` and `nsSeparator: false`.
+- **why**: Rendering a raw key to a user is the exact failure `W0-T04` exists to prevent, and it is
+  a silent one — no error, no warning, just `nav.home` on the page.
+- **apply**: Do not remove those two options. If nested catalogues are ever wanted, that is a
+  deliberate change to the key type in `es.ts` and to the parity test, not a config tweak.
+- **evidence**: `docs/specs/S0/W0-T04-web-skeleton.run.md` (deviation 1)
+- **status**: active

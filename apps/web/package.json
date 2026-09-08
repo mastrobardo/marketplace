@@ -3,19 +3,34 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Vite + React SPA. Skeleton only — W0-T04 brings the router, layout, i18n and theme.",
-  "main": "dist/index.js",
+  "description": "Vite + React SPA \u2014 router, layout shell, ES/EN i18n and theme tokens.",
   "scripts": {
-    "build": "tsc",
+    "dev": "vite",
+    "preview": "vite preview",
+    "build": "vite build",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "test": "vitest run"
   },
   "devDependencies": {
     "@marketplace/config": "workspace:*",
+    "@testing-library/dom": "^10.4.1",
+    "@testing-library/react": "^16.3.3",
     "@types/node": "^24.7.2",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.7",
+    "@vitejs/plugin-react": "^6.1.1",
     "eslint": "^10.10.0",
+    "jsdom": "^30.0.1",
     "typescript": "~5.9.3",
+    "vite": "^8.2.2",
     "vitest": "^5.0.0"
+  },
+  "dependencies": {
+    "i18next": "^26.4.2",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "react-i18next": "^17.0.13",
+    "react-router": "^8.3.1"
   }
 }
