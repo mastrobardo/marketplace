@@ -72,4 +72,31 @@ Keep it to facts that changed how you would work. Task-specific detail stays in 
 - **apply**: Loopback bind + `${VAR:-default}` for every new port. In tests, resolve the address at
   runtime. Overrides go in a gitignored `.env`, never in the committed compose file.
 - **evidence**: `docs/specs/S0/W0-T02-local-stack.run.md` (deviation 3)
+### Fastify's own `logger` option, not a pino instance
+- **id**: MEM-2026-09-09-07
+- **scope**: slice:S0
+- **fact**: Passing a constructed pino logger as Fastify's `loggerInstance` makes the instance's
+  `Logger` generic concrete, and every function typed against `FastifyInstance` then fails with
+  `Type 'FastifyBaseLogger' is not assignable to type 'Logger<never, boolean>'`. Fastify's
+  `logger: { level, redact, base, stream }` takes the same pino options, keeps the default
+  generics, and removes the direct `pino` dependency entirely.
+- **why**: The type error appears in unrelated files and reads like a Fastify bug rather than a
+  consequence of one option.
+- **apply**: Configure logging through `logger`. Inject a `stream` when a test needs to assert on
+  log output — that is how `apps/api/tests/app.test.ts` proves redaction and correlation.
+- **evidence**: `docs/specs/S0/W0-T03-api-skeleton.run.md` (deviation 1)
+- **status**: active
+
+### Build apps with tsup so tests are typechecked
+- **id**: MEM-2026-09-09-08
+- **scope**: slice:S0
+- **fact**: Building with `tsc` forces `tsconfig.json` to `include` only `src/` (otherwise tests are
+  emitted into `dist/`), so test files are never typechecked. With tsup owning the build, the
+  tsconfig covers `src`, `tests` and `*.config.ts` under `noEmit` and the gate catches type errors
+  in tests too — there were some.
+- **why**: Untypechecked tests are where `any` and stale imports accumulate, in the exact files
+  meant to be the safety net.
+- **apply**: New app packages: `build: tsup`, tsconfig includes `src` **and** `tests`. Preset
+  packages that other packages `extends` still need real JSON on disk (`W0-T01`).
+- **evidence**: `docs/specs/S0/W0-T03-api-skeleton.run.md` (deviation 5)
 - **status**: active

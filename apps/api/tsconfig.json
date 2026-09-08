@@ -1,9 +1,4 @@
 {
   "extends": "@marketplace/config/tsconfig/node.json",
-  "compilerOptions": {
-    "noEmit": false,
-    "outDir": "dist",
-    "rootDir": "src"
-  },
-  "include": ["src/**/*.ts"]
+  "include": ["src/**/*.ts", "tests/**/*.ts", "*.config.ts"]
 }

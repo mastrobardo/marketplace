@@ -61,6 +61,41 @@ running stack:
 ```bash
 pnpm stack:up && STACK_LIVE=1 pnpm vitest run tests/local-stack.test.ts
 ```
+## Running the API
+
+```bash
+DATABASE_URL=postgres://marketplace:marketplace_local@127.0.0.1:5432/marketplace \
+  pnpm --filter @marketplace/api dev
+```
+
+`DATABASE_URL` is the only required variable, and the process **refuses to start** without it —
+exit code 78 (`EX_CONFIG`) and a message naming every variable that is wrong, not just the first.
+Nothing connects to the database yet (`W0-T05`); the variable is required from the first commit so
+that the day a module needs one is not also the day the deployment discovers it has none.
+
+| Variable | Default | |
+|---|---|---|
+| `DATABASE_URL` | — | **required** |
+| `HOST` | `127.0.0.1` | |
+| `PORT` | `3000` | |
+| `LOG_LEVEL` | `info` | `fatal`…`trace`, `silent` |
+| `NODE_ENV` | `development` | `development` · `test` · `production` |
+| `APP_VERSION` | `0.0.0-dev` | set by the deploy pipeline; surfaced by `/health` |
+
+Every variable lives in `EnvSchema` in `apps/api/src/config.ts` or it does not exist. Reaching for
+`process.env` inside a module is a review failure. (`.env.example` itself is `W0-T09`.)
+
+`GET /health` answers from process state alone and opens no connection. Every response carries an
+`x-request-id`, and every error — including 404 — arrives in one shape:
+
+```json
+{ "error": { "code": "NOT_FOUND", "message": "…", "requestId": "…", "details": {} } }
+```
+
+`code` is the only field a client may branch on. Throw `new AppError('FORBIDDEN', '…')` from a
+route rather than building a reply by hand. The registry is
+`apps/api/src/lib/errors.ts` — **a pre-freeze proposal**; `W1-T01` (`agent-contracts`) moves it
+into `packages/contracts` and owns it from then on.
 
 > TypeScript is pinned to `~5.9.3` on purpose. TS 7 breaks `typescript-eslint` and declaration
 > emit — see `memory/repo/gotchas.md` MEM-2026-09-08-01 for the condition to unpin.
@@ -69,10 +104,10 @@ pnpm stack:up && STACK_LIVE=1 pnpm vitest run tests/local-stack.test.ts
 
 | Path | What |
 |---|---|
-| `apps/api` | Fastify API. Skeleton — `W0-T03` brings the server, `W0-T05` Prisma. |
-| `docker-compose.yml`, `docker/` | The local stack: Postgres + PostGIS, mail catcher, object storage. |
+| `apps/api` | Fastify API — health, config, error envelope, request-id, logging. `W0-T05` brings Prisma. |
 | `apps/web` | Vite + React SPA. Skeleton — `W0-T04` brings router, layout, i18n. |
 | `packages/config` | The one place TypeScript, ESLint, Prettier and Vitest are configured. |
+| `docker-compose.yml`, `docker/` | The local stack: Postgres + PostGIS, mail catcher, object storage. |
 | `agents/` | Charters, prompt templates and policies for the agents building this. |
 | `memory/` | What agents know across sessions. |
 | `docs/adr`, `docs/specs` | Decisions, and one spec + run record per feature. |
