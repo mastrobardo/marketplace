@@ -1,0 +1,32 @@
+{
+  "name": "marketplace",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Marketplace for reformas, mantenimiento and urgencias — API, web app and shared packages.",
+  "packageManager": "pnpm@10.13.1",
+  "engines": {
+    "node": ">=22.11.0",
+    "pnpm": ">=10.13.0"
+  },
+  "scripts": {
+    "prepare": "pnpm --filter @marketplace/config build",
+    "build": "turbo run build",
+    "typecheck": "turbo run typecheck && tsc --noEmit",
+    "lint": "turbo run lint && eslint .",
+    "test": "turbo run test && vitest run",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "verify": "pnpm typecheck && pnpm lint && pnpm format:check && pnpm test && pnpm build"
+  },
+  "devDependencies": {
+    "@marketplace/config": "workspace:*",
+    "@types/node": "^24.7.2",
+    "eslint": "^10.10.0",
+    "prettier": "^3.9.6",
+    "turbo": "^2.5.8",
+    "typescript": "~5.9.3",
+    "vitest": "^5.0.0",
+    "yaml": "^2.9.0"
+  }
+}

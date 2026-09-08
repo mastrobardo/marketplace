@@ -29,7 +29,7 @@ ended mid-task tells you where it got to.
 
 | # | Step | Artifact |
 |---|---|---|
-| 1 | Spec | `docs/specs/<slice>/<feature>.md` |
+| 1 | Spec | `docs/specs/<slice>/<TASK-ID>-<slug>.md` |
 | 2 | Contract freeze | zod + Prisma merged **before** implementation |
 | 3 | **TDD red** | failing test run, pasted into the run record |
 | 4 | Green | minimum code that passes |
@@ -50,8 +50,9 @@ it fail, **paste that failing output into the run record**, then implement. A PR
 has no red phase is invalid regardless of how good the code is.
 
 **L2 — Branch carries its own story.** Branch name `<TASK-ID>-<slug>` (e.g.
-`W4-T03-quote-submission`). The branch must contain `docs/specs/<slice>/<feature>.md` and
-`docs/specs/<slice>/<feature>.run.md`. CI gate `spec-present` enforces this.
+`W4-T03-quote-submission`). The branch must contain `docs/specs/<slice>/<TASK-ID>-<slug>.md` and
+`docs/specs/<slice>/<TASK-ID>-<slug>.run.md` — **both carry the task ID**, so the branch, the spec
+and the run record share one name. CI gate `spec-present` enforces this.
 
 **L3 — Contract freeze.** `packages/contracts/**` and `apps/api/prisma/schema.prisma` are the
 shared seam. Once a shape is merged it changes only through an ADR handled by `agent-contracts`.

@@ -20,4 +20,28 @@ Keep it to facts that changed how you would work. Task-specific detail stays in 
 
 ---
 
-_No entries yet._
+### `pnpm install` must be sufficient on its own
+- **id**: MEM-2026-09-08-03
+- **scope**: slice:S0
+- **fact**: The root `prepare` script runs `pnpm --filter @marketplace/config build`. Without it a
+  fresh clone cannot lint or typecheck, because every `eslint.config.js` imports
+  `@marketplace/config/eslint` from `dist/`, which does not exist until tsup has run.
+- **why**: "A single command installs everything" is an acceptance criterion of `W0-T01`, and CI
+  (`W0-T06`) will run `pnpm install --frozen-lockfile` with no build step before the gates.
+- **apply**: Any future package that other packages import at *config load* time needs the same
+  treatment. Verify by deleting `node_modules` and `dist` and running `pnpm install` alone — cache
+  hides this failure completely.
+- **evidence**: `docs/specs/S0/W0-T01-monorepo-skeleton.run.md` green-phase transcript
+- **status**: active
+
+### Prettier over this repo is destructive by default
+- **id**: MEM-2026-09-08-04
+- **scope**: slice:S0
+- **fact**: `**/*.md` is in `.prettierignore`. A plain `prettier --write .` rewrote 71 markdown
+  files, including all of `.claude/agents/**`, which `scripts/generate-claude-agents.ts` generates.
+- **why**: Reformatting generated agent files breaks the `agents-drift` gate (`W0-T15`), and the
+  prose in `TODO.md` and `agents/` is hand-wrapped at 100 columns on purpose.
+- **apply**: Before widening any formatter or linter scope, run it and read `git diff --stat` first.
+  If it touches generated output or prose, scope it down rather than accepting the churn.
+- **evidence**: `docs/specs/S0/W0-T01-monorepo-skeleton.run.md` scope notes
+- **status**: active

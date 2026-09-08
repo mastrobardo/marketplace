@@ -1,7 +1,8 @@
 # Prompt 00 — spec authoring
 
 **Input**: a task ID from `TODO.md` §6.
-**Output**: `docs/specs/<slice>/<feature>.md` on the feature branch.
+**Output**: `docs/specs/<slice>/<TASK-ID>-<slug>.md` on the feature branch — same `<TASK-ID>-<slug>`
+as the branch name, e.g. `docs/specs/S6/W4-T03-quote-submission.md`.
 **Next step**: `01-contract-proposal.md`.
 
 ---

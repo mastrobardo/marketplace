@@ -24,7 +24,7 @@ Read the spec and the run record **before** the diff.
 - Is anything in the diff *not* in the spec? That is scope creep — flag it.
 
 ## Axis 3 — prompt
-Read `<feature>.run.md`:
+Read `<TASK-ID>-<slug>.run.md`:
 - Was there a red phase with a real failing run? **No red phase = block the PR.**
 - How many corrective iterations? Many → the prompt template is weak. File a follow-up against
   `agents/prompts/` quoting the run record.

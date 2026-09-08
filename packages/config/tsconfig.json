@@ -1,0 +1,4 @@
+{
+  "extends": "@marketplace/config/tsconfig/node.json",
+  "include": ["src/**/*.ts", "tsup.config.ts", "vitest.config.ts"]
+}

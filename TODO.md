@@ -164,7 +164,8 @@ a slice agent opens a change proposal, `agent-contracts` applies it. This is the
 
 ### 5.1 The pipeline (every task follows it)
 
-1. **Spec** — the owning agent writes `docs/specs/<slice>/<feature>.md` **on the feature branch**.
+1. **Spec** — the owning agent writes `docs/specs/<slice>/<TASK-ID>-<slug>.md` **on the feature
+   branch**.
    Must contain: user stories, state machine, API surface, error cases, permissions matrix,
    acceptance criteria (Given/When/Then), out-of-scope. Reviewed by `agent-contracts`.
 2. **Contract freeze** — zod schemas + Prisma models merged into `packages/contracts` /
@@ -185,8 +186,8 @@ Every feature branch is self-describing. Branch name is `<TASK-ID>-<slug>`, e.g.
 
 | File | Purpose |
 |---|---|
-| `docs/specs/<slice>/<feature>.md` | The spec. What we agreed to build. |
-| `docs/specs/<slice>/<feature>.run.md` | The **agent run record**. How it got built. |
+| `docs/specs/<slice>/<TASK-ID>-<slug>.md` | The spec. What we agreed to build. |
+| `docs/specs/<slice>/<TASK-ID>-<slug>.run.md` | The **agent run record**. How it got built. |
 
 The run record makes prompt quality reviewable in the diff, which is the point:
 
@@ -653,7 +654,7 @@ agents/
 │  ├─ agent-qa.md
 │  └─ agent-admin.md
 ├─ prompts/
-│  ├─ 00-spec-authoring.md      # produces docs/specs/<slice>/<feature>.md
+│  ├─ 00-spec-authoring.md      # produces docs/specs/<slice>/<TASK-ID>-<slug>.md
 │  ├─ 01-contract-proposal.md   # produces the zod/Prisma diff for agent-contracts
 │  ├─ 02-tdd-red.md             # write failing tests from acceptance criteria only
 │  ├─ 03-implement-green.md     # minimum code to pass; no scope creep

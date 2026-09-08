@@ -1,12 +1,13 @@
 # Prompt 08 — run record
 
-**Output**: `docs/specs/<slice>/<feature>.run.md`, on the branch, required by CI (`spec-present`).
+**Output**: `docs/specs/<slice>/<TASK-ID>-<slug>.run.md`, on the branch, required by CI
+(`spec-present`). Same `<TASK-ID>-<slug>` as the branch and the spec.
 
 The run record is how prompt quality becomes reviewable. Write it **as you go**, not afterwards
 from memory.
 
 ```markdown
-# Run record — <TASK-ID> <feature>
+# Run record — <TASK-ID> <slug>
 
 Agent:        agent-<slice>
 Model:        <model id>
