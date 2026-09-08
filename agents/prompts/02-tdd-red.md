@@ -20,7 +20,7 @@ Load the `test-driven-development` skill. **Write no implementation code in this
    shared seed being the only source of test data.
 4. Run them. **They must fail for the right reason** — a missing implementation, not a typo or a
    missing import. Read the output and confirm that.
-5. Paste the failing output into `<feature>.run.md` under `## Red phase`.
+5. Paste the failing output into `<TASK-ID>-<slug>.run.md` under `## Red phase`.
 
 ## Self-check
 - [ ] Every acceptance criterion maps to a named test

@@ -30,3 +30,6 @@ minio-data/
 *.swp
 
 # agent session memory is committed on purpose — see agents/policies/memory.md
+
+# local tool artifacts
+.vitest/

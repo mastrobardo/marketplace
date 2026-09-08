@@ -1,6 +1,6 @@
 # Prompt 06 — spec review
 
-**Input**: `docs/specs/<slice>/<feature>.md` before implementation starts.
+**Input**: `docs/specs/<slice>/<TASK-ID>-<slug>.md` before implementation starts.
 **Output**: approve, or findings. Owned by `agent-contracts`.
 
 ---

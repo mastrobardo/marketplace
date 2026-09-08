@@ -29,7 +29,11 @@ function parseFrontmatter(src: string): { front: Front; body: string } {
       const raw = kv[2].trim();
       if (raw === '') front[key] = [];
       else if (raw.startsWith('[')) {
-        front[key] = raw.slice(1, -1).split(',').map((s) => s.trim()).filter(Boolean);
+        front[key] = raw
+          .slice(1, -1)
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean);
       } else front[key] = raw;
     } else if (/^\s+-\s+/.test(line) && Array.isArray(front[key])) {
       (front[key] as string[]).push(line.replace(/^\s+-\s+/, '').trim());
@@ -111,7 +115,9 @@ for (const file of readdirSync(ROLES_DIR).filter((f) => f.endsWith('.md') && !f.
 }
 
 if (check && drift) {
-  console.error(`\n${drift} generated agent file(s) out of date. Run: pnpm tsx scripts/generate-claude-agents.ts`);
+  console.error(
+    `\n${drift} generated agent file(s) out of date. Run: pnpm tsx scripts/generate-claude-agents.ts`,
+  );
   process.exit(1);
 }
 if (check) console.log('.claude/agents is in sync with agents/roles');
