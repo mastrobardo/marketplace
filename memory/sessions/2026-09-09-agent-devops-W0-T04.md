@@ -59,3 +59,27 @@ decisions baked into it (semantic colour names, the `--mp-` namespace, one globa
 preference (`W2-T04`), so an English-speaking user returns to Spanish on refresh. And AC16's colour
 gate is a regex over `.css` files: it will not see a colour in an inline `style` prop or an SVG
 `fill`, so it stops covering the surface the moment those appear.
+
+## Addendum — 2026-09-09, conflict resolution
+
+Reopened after `W0-T02` (#150) and `W0-T03` (#151) merged. This branch had to re-merge `main`
+twice; both times the conflicts were `README.md`, `memory/repo/gotchas.md`,
+`memory/slices/agent-devops.md`, and the second time `pnpm-lock.yaml` as well.
+
+- Resolution rule: keep both sides **for genuinely additive hunks only**. The README Layout table is
+  not additive — each branch edits the row for its own app — and keeping both sides left a stale
+  duplicate row that no gate would have caught. Final state takes `apps/api` from `main` and
+  `apps/web` from this branch.
+- `pnpm-lock.yaml` was **regenerated**, not merged: `git checkout --theirs` then `pnpm install`.
+- All eleven `MEM-2026-09-09-*` ids from the three branches now coexist, ascending, no collisions —
+  they were allocated sequentially across the session on purpose.
+- `pnpm verify` -> 0 with all three slices present for the first time: 23 api + 15 web + 31 root.
+- Filed **issue #153 (`W0-T23`)** for the structural fix. Two new repo gotchas recorded:
+  MEM-2026-09-09-12 (the collision itself) and MEM-2026-09-09-13 (why a keep-both merge driver
+  would be the wrong fix).
+
+**I could not approve #151 or #152.** GitHub forbids approving your own pull request and `gh` is
+authenticated as `mastrobardo`, the author. The other account on this machine
+(`davide-arcinotti_iagl`) could, but `docs/board/IDENTITY.md` forbids the work identity in this
+repo — that is the documented trap, not an oversight. Approval needs a second human or a relaxed
+branch-protection rule (`W0-T13`).

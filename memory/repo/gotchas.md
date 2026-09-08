@@ -142,3 +142,37 @@ come from real experience.
   deliberate change to the key type in `es.ts` and to the parity test, not a config tweak.
 - **evidence**: `docs/specs/S0/W0-T04-web-skeleton.run.md` (deviation 1)
 - **status**: active
+
+### Parallel branches collide on shared append-only files, not on the seam
+- **id**: MEM-2026-09-09-12
+- **scope**: repo
+- **fact**: Three branches from the same `main`, touching three different slices and sharing **no**
+  source file, still conflicted three times — on `README.md`, `memory/repo/gotchas.md`,
+  `memory/slices/agent-devops.md` and `pnpm-lock.yaml`. Every merge to `main` invalidates every
+  other open branch, so the cost grows as O(n²) in open branches. `TODO.md` R8 predicted this for
+  `schema.prisma` and `packages/contracts`; it arrived first in documentation and memory.
+- **why**: For a human team this is a shrug. For an agent it is a **stop**: the task is finished,
+  the PR is green, and it waits for a human. `AGENTS.md` L8 makes every agent write to
+  `memory/repo/**` on every task, so every task is exposed.
+- **apply**: Until `W0-T23` lands, expect to re-merge `main` after each other PR merges, and resolve
+  by keeping both sides **only after checking the hunk is genuinely an addition**. Worst pending
+  case is `apps/web/src/i18n/locales/{es,en}.ts` — seven user-facing slices will all append keys to
+  those two files, where a dropped key is a missing translation rather than a cosmetic duplicate.
+- **evidence**: PRs #150, #151, #152; issue #153
+- **status**: active
+
+### "Keep both sides" is wrong whenever a hunk is a modification
+- **id**: MEM-2026-09-09-13
+- **scope**: repo
+- **fact**: Resolving the conflicts above with a keep-both script was right on five hunks and wrong
+  on two. The `README.md` Layout table *looks* append-shaped — one row per path — but each branch
+  **edits the row for its own app**. Keeping both sides produced a duplicate row carrying the stale
+  pre-task description, and nothing failed: not the build, not lint, not the tests.
+- **why**: It is the argument against a blanket "append" git merge driver for these files. An
+  automatic driver would have committed the duplicate silently. The fix is to remove the shared
+  files (issue #153), not to automate merging them.
+- **apply**: After any bulk conflict resolution, **read the resolved region**, do not just check
+  that the markers are gone. A markdown table, a config block and an import list all look additive
+  and are not. `pnpm-lock.yaml` is never hand-merged: take `main`'s copy and re-run `pnpm install`.
+- **evidence**: PR #152 merge commits; `docs/specs/S0/W0-T04-web-skeleton.run.md`
+- **status**: active
