@@ -56,6 +56,34 @@ come from real experience.
 - **evidence**: `docs/specs/S0/W0-T01-monorepo-skeleton.run.md` (deviations 1 and 2)
 - **status**: active
 
+### The canonical PostGIS and MailHog images are amd64-only
+- **id**: MEM-2026-09-09-01
+- **scope**: repo
+- **fact**: `postgis/postgis` (all tags checked: `17-3.5`, `18-3.6`, and the `-alpine` variants)
+  and `mailhog/mailhog:v1.0.1` publish `linux/amd64` only. `docker-compose.yml` therefore uses
+  `imresamu/postgis` — the multi-architecture build from the same maintainer, linked from
+  `postgis/docker-postgis` as the arm64 source — and `axllent/mailpit`, MailHog's maintained
+  successor, in place of the images `TODO.md` §6 names.
+- **why**: On an arm64 machine the canonical images run under emulation: slow, and for Postgres
+  specifically not something to trust for anything timing- or concurrency-shaped.
+- **apply**: Before adding any image to the stack, run
+  `docker manifest inspect <image> | grep -A3 '"platform"'` and check `arm64` is listed. **Switch
+  back when** `postgis/postgis` publishes arm64 itself.
+- **evidence**: `docs/specs/S0/W0-T02-local-stack.run.md` (deviations 1 and 2)
+- **status**: active
+
+### Vitest 5 ignores the trailing-number test timeout
+- **id**: MEM-2026-09-09-02
+- **scope**: repo
+- **fact**: `it('…', fn, 30_000)` is accepted and silently has no effect; the test still times out
+  at the configured default and the failure still reports that default. Only the options-object
+  form works: `it('…', { timeout: 30_000 }, fn)`.
+- **why**: The old form is what most examples and muscle memory produce, and the failure message
+  names the default timeout — so it reads as "the test really is hanging" rather than "your
+  override was dropped", which is an expensive way to lose half an hour.
+- **apply**: Any test that shells out, polls, or touches the network gets
+  `{ timeout: <ms> }` as the **second** argument.
+- **evidence**: `docs/specs/S0/W0-T02-local-stack.run.md` (AC10 test-side correction)
 ### `app.register` encapsulates — a hook added inside one covers only that context
 - **id**: MEM-2026-09-09-05
 - **scope**: repo
