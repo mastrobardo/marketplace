@@ -1,8 +1,8 @@
 # The API image. Built exactly once per commit, by `deploy-staging.yml`, and promoted to production
 # unchanged (ADR-006) — so this file decides what production runs, not just what staging runs.
 #
-# Build context is the repository root: the API depends on `packages/config` through the workspace,
-# so a context of `apps/api` alone cannot resolve it.
+# Build context is the repository root: the API depends on `packages/config` and
+# `packages/contracts` through the workspace, so a context of `apps/api` alone cannot resolve them.
 
 # ---- build ------------------------------------------------------------------------------------
 FROM node:22.22.0-alpine AS build
@@ -13,14 +13,25 @@ RUN corepack enable
 # Manifests and the lockfile first: this layer changes only when a dependency changes, so an
 # ordinary code commit reuses the installed store instead of re-resolving 400 packages.
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
+#
+# Every workspace member's manifest must be listed, not only the ones the API imports: pnpm
+# resolves the lockfile against the whole workspace, and a member missing here is a member missing
+# from the install. `tests/cd-workflows.test.ts` fails when a new one is not added.
 COPY packages/config/package.json packages/config/
+COPY packages/contracts/package.json packages/contracts/
 COPY apps/api/package.json apps/api/
 COPY apps/web/package.json apps/web/
 RUN pnpm install --frozen-lockfile --ignore-scripts
 
 COPY . .
 # `--ignore-scripts` above skipped the root `prepare`, so both of its halves run explicitly here.
+#
+# `packages/contracts` is a *runtime* dependency of the API and is not bundled into `dist`
+# (`skipNodeModulesBundle: true`), so its own `dist/` has to exist before the image is pruned —
+# otherwise the container resolves `@marketplace/contracts` to a package with no entry point and
+# crash-loops on boot, which reads only as a Fly health-check timeout.
 RUN pnpm --filter @marketplace/config build \
+    && pnpm --filter @marketplace/contracts build \
     && pnpm --filter @marketplace/api db:generate \
     && pnpm --filter @marketplace/api build
 

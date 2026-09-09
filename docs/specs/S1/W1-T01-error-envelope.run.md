@@ -125,7 +125,38 @@ here for the first time, which is decision 2 being applied rather than a contrac
   (OpenAPI generation) and `W1-T04` (contract tests) are what turn this from a schema into a proven
   contract.
 
-## 8. Handoff
+## 8. The deploy failure, and what it says about the image
+
+CI's `deploy` job failed on the first push. Every other check was green.
+
+```
+Machine 859946a4e41398 [app] was created
+✖ Failed: timeout reached waiting for health checks to pass for machine 859946a4e41398
+```
+
+Five minutes of failed health checks, not a network blip — the trailing
+`net/http: request canceled` is only the last poll being cancelled when the timeout hit, and it is
+the most misleading line in the log.
+
+**Cause.** `infra/docker/api.Dockerfile` lists workspace manifests by hand and builds workspace
+packages by hand. `packages/contracts` was in neither list. The API bundles with
+`skipNodeModulesBundle: true`, so `@marketplace/contracts` is resolved from `node_modules` at run
+time; `pnpm deploy --prod` duly copied the package into the pruned tree, but its `dist/` had never
+been built, so the container resolved a package with no entry point and exited on boot.
+
+**Nothing about that reaches the log Fly shows you.** A crash-on-boot and a genuinely unhealthy app
+produce the same "health checks did not pass". This is the same class of failure
+`MEM-2026-09-09-22` records for the Prisma client — the image is assembled from lists that a new
+workspace member does not automatically join.
+
+**Fixed** by adding the manifest COPY and `pnpm --filter @marketplace/contracts build` before the
+prune, and — because the next package will hit this too — by two assertions in
+`tests/cd-workflows.test.ts` derived from the workspace rather than hard-coded: every member's
+manifest is COPYed, and every `@marketplace/*` in the API's **runtime** dependencies is built
+before `deploy --legacy`. Verified red against the unfixed Dockerfile (both fail, naming
+`packages/contracts`) and green against the fix, so they are not assertions that cannot fail.
+
+## 9. Handoff
 
 - `W1-T02` (#56) inherits this envelope rather than negotiating with it — pagination errors use
   `VALIDATION_FAILED` with `issues`.
@@ -134,4 +165,5 @@ here for the first time, which is decision 2 being applied rather than a contrac
 - A slice needing a new code adds it to `ERROR_CODES` **and** to `ErrorBodySchema`'s union. If it
   carries structured data, add it to `DETAIL_SCHEMAS` too. Post-freeze changes are an ADR.
 - `packages/contracts` is the second workspace member `agent-contracts` owns; `packages/testing`
-  (`W1-T09`) is the next.
+  (`W1-T09`) is the next — and §8's guards now fail loudly if its manifest is not added to the
+  image, so that lesson is paid for once.
