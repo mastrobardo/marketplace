@@ -10,10 +10,16 @@ to work is [`agents/AGENTS.md`](agents/AGENTS.md), and it is worth reading befor
 
 ```bash
 pnpm install
+./scripts/setup-git.sh
 ```
 
-That is the whole setup. It links every workspace member, builds `@marketplace/config` — which the
-lint and test configs import at load time — and generates the Prisma client.
+`pnpm install` links every workspace member, builds `@marketplace/config` — which the lint and test
+configs import at load time — and generates the Prisma client.
+
+`setup-git.sh` configures this clone: the identity guard hook that keeps a work account off a
+personal repo, and the merge drivers for the three generated files in `.gitattributes`. Skipping it
+costs you a manual conflict resolution, never a bad merge — see [Files nobody merges by
+hand](#files-nobody-merges-by-hand).
 
 ```bash
 cp .env.example .env
@@ -339,6 +345,32 @@ gain it retroactively. Delete the stale branch and let the next run recreate it.
 | `agents/` | Charters, prompt templates and policies for the agents building this. |
 | `memory/` | What agents know across sessions. |
 | `docs/adr`, `docs/specs` | Decisions, and one spec + run record per feature. |
+
+## Files nobody merges by hand
+
+Three files are **generated** — each is a function of inputs that cannot themselves conflict — and
+none may be line-merged. `.gitattributes` marks them and `scripts/setup-git.sh` registers a driver
+per file that resolves a conflict by recomputing it and discarding both sides.
+
+| File | Computed from | Fix a conflict with |
+|---|---|---|
+| `memory/LONG_TERM.md` | the record files under `memory/` | `pnpm memory:render` |
+| `pnpm-lock.yaml` | the `package.json` files | `./scripts/relock.sh` |
+
+A lockfile is a *resolution*, so the only correct way to combine two of them is to resolve again.
+A three-way text merge produces a file that parses, installs, and describes a dependency graph
+nobody chose.
+
+This is deliberately narrower than "these files are append-only". A keep-both driver on an
+append-*shaped* file is the trap `W0-T23` exists to avoid: run on `README.md` during the
+#150/#151/#152 session it was right on five hunks and wrong on two, because the Layout table below
+looks append-shaped and is really a modification — each branch edits the row for its own app.
+Recomputing discards both sides, so that failure cannot happen to the files above.
+
+The rule behind all of it: **a file two agents both have to change on the same day is a design
+defect, not a merge problem.** Either give each agent its own file — one memory record per file, one
+i18n namespace per file — or make the shared file generated. `tests/parallel-merge.test.ts` proves
+it by actually merging two branches.
 
 ## Adding a workspace package
 
