@@ -119,6 +119,24 @@ That last pair is the payoff of the `database` job: twenty of those forty-four a
 `STACK_LIVE` criteria `W0-T02` and `W0-T05` could not run in the default gate. Until now they were
 skipped everywhere, and the suite measured less than it claimed.
 
+## The workflow running on its own pull request
+
+Run [34317052298](https://github.com/mastrobardo/marketplace/actions/runs/34317052298), PR #155:
+
+```
+success   typecheck
+success   lint
+success   unit
+success   build
+success   database
+success   workflows
+2026-09-09T05:58:38Z → 2026-09-09T06:00:07Z   (1m 29s)
+```
+
+Six green, **89 seconds** against a ten-minute budget (AC: "under about ten minutes"). The
+`database` job was the long pole at 88s, which is the compose stack coming up — worth watching as
+the suite grows, but there is a lot of headroom.
+
 ## Deviations from the plan
 
 1. **The `database` job runs `pnpm stack:up`, not a PostGIS service container.** The plan said
