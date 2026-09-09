@@ -8,6 +8,12 @@
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "start": "node dist/server.js",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate dev",
+    "db:migrate:deploy": "prisma migrate deploy",
+    "db:migrate:status": "prisma migrate status",
+    "db:seed": "tsx prisma/seed.ts",
+    "db:reset": "tsx prisma/reset.ts",
     "build": "tsup",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
@@ -17,13 +23,18 @@
     "@marketplace/config": "workspace:*",
     "@types/node": "^24.7.2",
     "eslint": "^10.10.0",
+    "prisma": "^6.19.3",
     "tsup": "^8.5.1",
     "tsx": "^4.23.13",
     "typescript": "~5.9.3",
     "vitest": "^5.0.0"
   },
   "dependencies": {
+    "@prisma/client": "^6.19.3",
     "fastify": "^5.12.3",
     "zod": "^4.5.4"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
   }
 }

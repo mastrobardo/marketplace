@@ -112,3 +112,17 @@ Keep it to facts that changed how you would work. Task-specific detail stays in 
   `fileURLToPath` throws `ERR_INVALID_URL_SCHEME`.
 - **evidence**: `docs/specs/S0/W0-T04-web-skeleton.run.md` (deviations 2 and 3)
 - **status**: active
+
+### `prisma migrate diff` rejects `--schema`
+- **id**: MEM-2026-09-09-16
+- **scope**: slice:S0
+- **fact**: `--schema` is accepted by `prisma generate`, `migrate deploy`, `migrate dev` and
+  `migrate status`, but **not** by `migrate diff`, which takes `--from-*`/`--to-*` instead. Passing
+  it makes the CLI print its help text and exit 1 — which reads exactly like a failing drift check.
+- **why**: A test helper that appends `--schema` to every invocation looks right and is wrong for
+  one subcommand only. The failure mode is a *false positive* on the drift assertion, which is the
+  most expensive kind: it says the schema and migrations disagree when they do not.
+- **apply**: In a helper that shells out to the Prisma CLI, let the caller pass `--schema`. When a
+  drift check fails, read the captured output before believing it — usage text is not a diff.
+- **evidence**: `apps/api/tests/db.test.ts`; `docs/specs/S0/W0-T05-database-toolchain.run.md`
+- **status**: active

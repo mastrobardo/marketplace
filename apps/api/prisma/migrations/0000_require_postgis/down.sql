@@ -1,0 +1,8 @@
+-- Intentionally a no-op.
+--
+-- 0000 creates nothing; it only asserts that PostGIS is installed. Rolling it back must not drop
+-- the extension: this migration did not create it, other databases on the cluster may rely on it,
+-- and dropping it would cascade away every geography column in the schema.
+--
+-- The file exists because the convention is one down.sql per migration (spec §8, AC9). A rollback
+-- that is genuinely empty says so here rather than being silently absent.

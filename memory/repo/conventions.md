@@ -49,3 +49,36 @@ How we do things here, beyond what lint and CI enforce automatically.
   copy the base options.
 - **evidence**: `docs/specs/S0/W0-T01-monorepo-skeleton.md`
 - **status**: active
+
+### Every migration carries a hand-written `down.sql`
+- **id**: MEM-2026-09-09-14
+- **scope**: repo
+- **fact**: Prisma generates no down migrations, so each folder in `apps/api/prisma/migrations/`
+  holds `migration.sql` **and** `down.sql`, and `apps/api/tests/db.test.ts` fails when one is
+  missing or empty. Folders are `NNNN_snake_case`, contiguous from `0000`. Migration `0000`
+  creates nothing — it *asserts* PostGIS is installed and raises `POSTGIS_MISSING` if not, because
+  `CREATE EXTENSION` needs rights the application role has in no environment.
+- **why**: "Reversible" has to be a file a reviewer can read, not a claim in a PR description. And
+  a precondition that is only established once, by hand, is a precondition that is eventually not
+  established — asserting it per deploy fails the deploy instead of the first geo query.
+- **apply**: Adding a migration? Write its `down.sql` in the same commit. A rollback that genuinely
+  cannot restore state (a dropped column's data) says so in a comment — it is never absent. Never
+  add `CREATE EXTENSION` to a migration; it belongs in `docker/postgres/init` and to Neon.
+- **evidence**: `docs/specs/S0/W0-T05-database-toolchain.md` §8; PR #154
+- **status**: active
+
+### A seeder runs at most once per database, and the ledger decides
+- **id**: MEM-2026-09-09-15
+- **scope**: repo
+- **fact**: `pnpm db:seed` runs each entry of `apps/api/prisma/seed/registry.ts` whose `id` is not
+  already in the `_seed_run` table. The seeder's work and its ledger row are written **in one
+  transaction**, so a seeder that throws leaves neither data nor a row claiming it ran. Ids are
+  permanent: renaming one makes it run again on every existing database.
+- **why**: It is what makes re-running the seed safe, and it means a seeder can `create` rather
+  than contorting itself into an `upsert` on a natural key it may not have. Recording *after* the
+  run instead would turn any crash into a permanently half-seeded database.
+- **apply**: Append to the registry; do not write a standalone seed script. Set `localOnly: true`
+  on anything that must never reach a non-loopback database — the guard runs before connecting and
+  is the hook `W0-T20` grows into. Order in the array is execution order.
+- **evidence**: `apps/api/prisma/seed/run.ts`; `docs/specs/S0/W0-T05-database-toolchain.md` §7
+- **status**: active
