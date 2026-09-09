@@ -230,7 +230,9 @@ jobs:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
 
       - name: Deploy the API
-        run: flyctl deploy --app "$APP" --config infra/fly/api.preview.toml --remote-only --wait-timeout 300
+        # --ha=false: Fly provisions two machines by default for availability. A preview is one
+        # reviewer clicking a link, and the second machine is pure cost on every open PR.
+        run: flyctl deploy --app "$APP" --config infra/fly/api.preview.toml --remote-only --ha=false --wait-timeout 300
         env:
           APP: ${{ needs.preflight.outputs.app }}
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
@@ -240,8 +242,12 @@ jobs:
         env:
           VITE_API_URL: https://${{ needs.preflight.outputs.app }}.fly.dev
 
+      # `wrangler` is a root devDependency and `wranglerVersion` matches it exactly. The action
+      # otherwise tries `pnpm add wrangler@…` at the workspace root, which pnpm refuses without
+      # `-w` — so in a pnpm monorepo this action cannot install its own tool. AC34.
       - uses: cloudflare/wrangler-action@v3.14.1
         with:
+          wranglerVersion: '3.90.0'
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: pages deploy apps/web/dist --project-name marketplace-web --branch ${{ needs.preflight.outputs.pages-branch }}
