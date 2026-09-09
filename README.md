@@ -70,8 +70,8 @@ DATABASE_URL=postgres://marketplace:marketplace_local@127.0.0.1:5432/marketplace
 
 `DATABASE_URL` is the only required variable, and the process **refuses to start** without it —
 exit code 78 (`EX_CONFIG`) and a message naming every variable that is wrong, not just the first.
-Nothing connects to the database yet (`W0-T05`); the variable is required from the first commit so
-that the day a module needs one is not also the day the deployment discovers it has none.
+Booting still opens no connection: `buildApp` does not import the database module, and Prisma
+connects lazily on the first query.
 
 | Variable | Default | |
 |---|---|---|
@@ -96,6 +96,73 @@ Every variable lives in `EnvSchema` in `apps/api/src/config.ts` or it does not e
 route rather than building a reply by hand. The registry is
 `apps/api/src/lib/errors.ts` — **a pre-freeze proposal**; `W1-T01` (`agent-contracts`) moves it
 into `packages/contracts` and owns it from then on.
+## The database
+
+Prisma, against the local stack's Postgres. `pnpm install` generates the client, so nothing extra
+is needed before `pnpm typecheck`.
+
+```bash
+pnpm stack:up
+pnpm db:migrate:deploy   # apply pending migrations — what CI and every deploy run
+pnpm db:seed             # run every seeder that has not run
+pnpm db:reset            # drop, re-migrate, re-seed (refuses when NODE_ENV=production)
+```
+
+| Command | |
+|---|---|
+| `pnpm db:generate` | regenerate the client; needs no database |
+| `pnpm db:migrate` | dev loop: diff the schema, write a migration, apply it |
+| `pnpm db:migrate:deploy` | apply pending migrations only |
+| `pnpm db:migrate:status` | non-zero when the database is behind or failed |
+| `pnpm db:seed` | run pending seeders |
+| `pnpm db:reset` | drop, re-migrate, re-seed |
+
+`pnpm verify` deliberately calls **none** of them — the local gate stays daemon-free. The tests
+that need a real database are skipped unless you opt in, exactly like the stack tests:
+
+```bash
+pnpm stack:up && STACK_LIVE=1 pnpm --filter @marketplace/api exec vitest run tests/db.test.ts
+```
+
+### Migrations
+
+`apps/api/prisma/schema.prisma` is **the shared seam**: `agent-contracts` owns the models and adds
+the first of them in `W1-T05`. Today it holds one infrastructure table and no business meaning.
+
+Every migration folder carries a **`down.sql` as well as `migration.sql`** — Prisma generates no
+down migrations, so the rollback is hand-written and a test fails when one is missing. A rollback
+that genuinely cannot restore state says so in a comment; it is never simply absent.
+
+Migration `0000_require_postgis` creates nothing. It **asserts** PostGIS is installed and fails the
+deploy if it is not — `CREATE EXTENSION` needs rights the application role has in no environment,
+so the extension is installed by `docker/postgres/init` locally and by Neon everywhere else. That
+turns "somebody enabled PostGIS once" into a precondition every environment re-proves.
+
+Migrations never run on boot. `db:migrate:deploy` is a separate, explicit step, which is what lets
+a production release be approved and observed rather than implicit (ADR-006).
+
+### Seeding
+
+A seeder runs **at most once per database, ever**. `_seed_run` records which have run, and the
+seeder's work and its ledger row are written in one transaction — so a seeder that throws leaves
+neither data nor a record claiming it ran, and re-running repairs it.
+
+Add one to `apps/api/prisma/seed/registry.ts`:
+
+```ts
+export const seeders: readonly Seeder[] = [
+  {
+    id: 'categories.base',       // permanent — renaming it re-runs the seeder everywhere
+    description: 'The category tree from TODO.md §3',
+    localOnly: false,            // true keeps it off any non-loopback database (W0-T20)
+    run: async ({ db }) => { await db.category.createMany({ data: [/* … */] }); },
+  },
+];
+```
+
+Because the ledger decides whether a seeder runs, a seeder may `create` rather than contorting
+itself into an `upsert` on a natural key it may not have.
+
 ## Running the web app
 
 ```bash
@@ -134,7 +201,7 @@ Your page owns its own single `<h1>`; the layout has none.
 
 | Path | What |
 |---|---|
-| `apps/api` | Fastify API — health, config, error envelope, request-id, logging. `W0-T05` brings Prisma. |
+| `apps/api` | Fastify API — health, config, error envelope, request-id, logging, Prisma. |
 | `apps/web` | Vite + React SPA — router, layout shell, ES/EN i18n, theme tokens. |
 | `packages/config` | The one place TypeScript, ESLint, Prettier and Vitest are configured. |
 | `docker-compose.yml`, `docker/` | The local stack: Postgres + PostGIS, mail catcher, object storage. |

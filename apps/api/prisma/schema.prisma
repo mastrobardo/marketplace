@@ -1,0 +1,29 @@
+// The shared seam (AGENTS.md L3). `agent-contracts` owns the domain models and adds them in
+// `W1-T05`; `W0-T05` deliberately leaves this file with no business meaning at all, so that the
+// first schema decision is made while designing the domain rather than while wiring the tooling.
+//
+// The one model below is infrastructure owned by `agent-devops` — see docs/specs/S0/W0-T05 §8.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/// Which seeders have already run against this database. Makes `pnpm db:seed` idempotent —
+/// re-running it is a no-op rather than a duplicate-key error or, worse, duplicated rows.
+///
+/// It lives in this file rather than in raw SQL because Prisma compares the database against the
+/// schema: a table created by a migration but absent here is reported as drift on every later
+/// `migrate dev`, which teaches agents to ignore drift warnings.
+model SeedRun {
+  /// The seeder's own id, e.g. "categories.base".
+  id          String   @id
+  description String
+  ranAt       DateTime @default(now())
+
+  @@map("_seed_run")
+}
