@@ -142,10 +142,38 @@ jobs:
           NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
           NEON_PROJECT_ID: ${{ secrets.NEON_PROJECT_ID }}
 
+      # `|| true` here reported success while creating nothing, and the next step then failed with
+      # "app not found" — the real error, `unauthorized`, never reached the log. Same shape as the
+      # neonctl swallow above: an existing app is the one tolerable outcome, so it is the one
+      # tested for. AC31 keeps blanket fallbacks out of this file.
       - name: Create the Fly app if it does not exist
-        run: flyctl apps create "$APP" --org personal || true
+        run: |
+          set -euo pipefail
+          if out="$(flyctl apps create "$APP" --org "$FLY_ORG" 2>&1)"; then
+            echo "$out"
+          else
+            echo "$out"
+            case "$out" in
+              *"already been taken"* | *"already exists"*)
+                echo "Reusing the existing Fly app for this pull request."
+                ;;
+              *nauthorized*)
+                echo "BLOCKED — needs human"
+                echo "Need:     a FLY_API_TOKEN that may create apps in the \"$FLY_ORG\" org"
+                echo "Where:    fly tokens create org $FLY_ORG"
+                echo "          → Settings → Environments → preview → FLY_API_TOKEN"
+                echo "Why:      a Fly *deploy* token is scoped to one app that already exists and"
+                echo "          cannot create the per-PR app this workflow needs. An org token can."
+                exit 1
+                ;;
+              *)
+                exit 1
+                ;;
+            esac
+          fi
         env:
           APP: ${{ needs.preflight.outputs.app }}
+          FLY_ORG: personal
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
 
       # The API exits on boot without DATABASE_URL (`z.url()`, no default). Setting it only on the

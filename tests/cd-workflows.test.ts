@@ -513,3 +513,46 @@ describe('AC30 — a deployed app is given the variables it requires', () => {
     });
   }
 });
+
+/**
+ * Three separate failures on this task were the same shape: a real error ending in a blanket
+ * fallback, so the step went green having done nothing.
+ *
+ *   neonctl branches create … || echo "branch already exists"   # command not found
+ *   neonctl branches delete … || true                           # leaked the branch
+ *   flyctl apps create … || true                                # unauthorized; app never created
+ *
+ * The last one reported success and the *next* step failed with "app not found", which is worse
+ * than a crash: the log names a consequence and hides the cause.
+ *
+ * Teardown is the documented exception — a destroy that fails because the resource is already gone
+ * must not abort the destroys that follow it — and it is exempted by file, in one place, rather
+ * than by scattering opt-outs.
+ */
+describe('AC31 — a deploy step never swallows the error it just caused', () => {
+  for (const file of [PREVIEW, STAGING, RELEASE]) {
+    it(`${file} tolerates named outcomes, not every outcome`, () => {
+      for (const [name, job] of Object.entries(jobs(file))) {
+        for (const step of steps(job)) {
+          const run = (step.run ?? '')
+            .split('\n')
+            .map((line) => line.replace(/(^|\s)#.*$/, ''))
+            .join('\n');
+          expect(
+            run,
+            `${file}:${name} "${step.name ?? ''}" ends a command in \`|| true\``,
+          ).not.toMatch(/\|\|\s*true\b/);
+          expect(
+            run,
+            `${file}:${name} "${step.name ?? ''}" hides a failure behind \`|| echo\``,
+          ).not.toMatch(/\|\|\s*echo\b/);
+        }
+      }
+    });
+  }
+
+  it('leaves the teardown its deliberate fallbacks, and says why', () => {
+    expect(text(TEARDOWN)).toMatch(/\|\|\s*true/);
+    expect(text(TEARDOWN), 'the exception is undocumented').toMatch(/deliberate/i);
+  });
+});
