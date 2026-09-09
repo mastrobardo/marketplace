@@ -1,0 +1,78 @@
+# W0-T07 — destroy a preview when its pull request closes.
+#
+# `closed` fires for merged and abandoned pull requests alike, which is what makes the bill a
+# function of *open* PRs rather than of PRs ever opened.
+#
+# Every destroy tolerates an absent resource. A teardown that fails because the thing was already
+# gone is a teardown that gets re-run and leaves the *other* resources alive, billing — so the
+# `|| true` here is deliberate, and is the one place in this repo where it is.
+#
+# THIS WORKFLOW HAS NEVER RUN — see deploy-preview.yml and W0-T24.
+
+name: Destroy preview
+
+on:
+  pull_request:
+    types: [closed]
+
+permissions:
+  contents: read
+  deployments: write
+
+concurrency:
+  group: preview-${{ github.event.number }}
+  cancel-in-progress: false # never cancel a teardown; a cancelled one leaks resources
+
+jobs:
+  preflight:
+    name: preflight
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    environment: preview
+    outputs:
+      configured: ${{ steps.guard.outputs.configured }}
+      app: ${{ steps.guard.outputs.app }}
+      db-branch: ${{ steps.guard.outputs.db-branch }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - id: guard
+        run: pnpm tsx scripts/deploy/check.ts preview "$PR_NUMBER"
+        env:
+          PR_NUMBER: ${{ github.event.number }}
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          NEON_PROJECT_ID: ${{ secrets.NEON_PROJECT_ID }}
+
+  destroy:
+    name: destroy
+    needs: preflight
+    if: needs.preflight.outputs.configured == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment: preview
+    steps:
+      - uses: superfly/flyctl-actions/setup-flyctl@v1.5
+
+      - name: Destroy the Fly app
+        run: flyctl apps destroy "$APP" --yes || true
+        env:
+          APP: ${{ needs.preflight.outputs.app }}
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
+      - name: Delete the preview database branch
+        run: |
+          neonctl branches delete "$DB_BRANCH" \
+            --project-id "$NEON_PROJECT_ID" || true
+        env:
+          DB_BRANCH: ${{ needs.preflight.outputs.db-branch }}
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          NEON_PROJECT_ID: ${{ secrets.NEON_PROJECT_ID }}

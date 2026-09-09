@@ -170,3 +170,22 @@ Keep it to facts that changed how you would work. Task-specific detail stays in 
   empty list is the failure mode, and it is invisible in the PR UI.
 - **evidence**: PR #155; `docs/specs/S0/W0-T06-ci-pull-request-checks.run.md` (deviation 5)
 - **status**: active
+
+### `secrets` is unavailable in a job-level `if:` — the guard has to be a job
+- **id**: MEM-2026-09-09-23
+- **scope**: slice:S0
+- **fact**: GitHub's `secrets` context cannot be read from `jobs.<id>.if` or from a step `if:`.
+  Gating a deploy on "is this configured?" therefore needs a **preflight job** that reads the
+  secrets into `outputs`, with the real jobs on `needs: preflight` +
+  `if: needs.preflight.outputs.configured == 'true'`.
+- **why**: It is why `scripts/deploy/config.ts` exists instead of a shell condition in YAML. The
+  guard is the one part of the pipeline that must already be correct on the day the credentials
+  finally arrive, and YAML cannot be unit tested. Booleans derived from a secret are safe as
+  outputs; the value itself never is.
+- **apply**: Reuse `scripts/deploy/check.ts` for any new deploy target — add the target's required
+  names to `REQUIRED` and its tests come free. Also: never interpolate `${{ }}` into a `run:`
+  block. Pass it through `env:` — direct interpolation is textual substitution before the shell
+  sees it (the Actions injection vector), and actionlint's shellcheck cannot parse the result
+  either.
+- **evidence**: `.github/workflows/deploy-preview.yml`; `tests/deploy-guard.test.ts`
+- **status**: active

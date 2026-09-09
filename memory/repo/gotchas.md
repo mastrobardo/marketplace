@@ -176,3 +176,22 @@ come from real experience.
   and are not. `pnpm-lock.yaml` is never hand-merged: take `main`'s copy and re-run `pnpm install`.
 - **evidence**: PR #152 merge commits; `docs/specs/S0/W0-T04-web-skeleton.run.md`
 - **status**: active
+
+### `pnpm deploy --prod` discards the generated Prisma client
+- **id**: MEM-2026-09-09-22
+- **scope**: repo
+- **fact**: `pnpm deploy` rebuilds `node_modules` from the store, and the store holds the
+  **published** `@prisma/client` — a shell whose real code `prisma generate` writes *into the
+  installed package*. A Dockerfile that generates before pruning ships a client that throws
+  `MODULE_NOT_FOUND` on first import. Confirmed by running the built image:
+  `require('@prisma/client')` failed while `GET /health` returned 200.
+- **why**: Nothing catches it. The image builds, boots and serves — because no route touches the
+  database *yet*. The first slice to run a query would have found it in production, on a deploy
+  that passed every gate. `pnpm deploy` also needs `--legacy` from pnpm 10 unless the workspace
+  sets `inject-workspace-packages=true`.
+- **apply**: In `infra/docker/api.Dockerfile`, `prisma generate` runs **after**
+  `pnpm deploy --legacy` and targets the pruned tree. `tests/cd-workflows.test.ts` AC27 asserts
+  that ordering. A static test cannot prove the image works — build it and
+  `docker run … node -e "require('@prisma/client')"` after any change to that file.
+- **evidence**: `infra/docker/api.Dockerfile`; `docs/specs/S0/W0-T07-deploy-environments.md` §7b
+- **status**: active

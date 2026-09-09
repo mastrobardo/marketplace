@@ -1,0 +1,115 @@
+# W0-T07 — production, and only ever on purpose.
+#
+# Three properties, all of them expensive to retrofit:
+#
+#   1. It runs on a `v*` tag, never on a merge. A merge must not be a customer-visible event.
+#   2. It has NO BUILD STEP. It deploys the image `deploy-staging.yml` already pushed for that
+#      commit, so production runs the bytes staging tested (ADR-006). If no such image exists, the
+#      release fails rather than quietly rebuilding something that was never tested.
+#   3. `environment: production` — where a human approval and the production secrets live. That
+#      protection rule is configured in GitHub, not here, and is part of W0-T24.
+#
+# ─────────────────────────────────────────────────────────────────────────────────────────────
+# THIS WORKFLOW IS NOT MERELY UNCONFIGURED — IT CANNOT BE TRIGGERED BY THE PR THAT ADDS IT.
+# A `push: tags` workflow exists on a tag only once it has been merged and a tag created. Its
+# trigger, its environment protection and its approval gate are therefore completely unexercised
+# until somebody tags a release. That is what W0-T24 is for.
+# ─────────────────────────────────────────────────────────────────────────────────────────────
+
+name: Release to production
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+  deployments: write
+
+concurrency:
+  group: production
+  cancel-in-progress: false
+
+jobs:
+  preflight:
+    name: preflight
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment: production
+    outputs:
+      configured: ${{ steps.guard.outputs.configured }}
+      sha: ${{ steps.commit.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0 # the ancestry check below needs main's history, not just the tag
+
+      # Production only ever runs code staging saw. A tag on a commit that never reached `main`
+      # has no staging image and no staging soak, so it is refused here rather than discovered
+      # halfway through a deploy.
+      - id: commit
+        name: Refuse a tag that is not on main
+        run: |
+          # Quoted: the `^{commit}` peel is git syntax, but an unquoted `{` reads as a shell brace.
+          sha="$(git rev-parse "HEAD^{commit}")"
+          # A tag checkout has no remote-tracking branch for main, so fetch the one ref we compare
+          # against rather than assuming `origin/main` resolves.
+          git fetch --no-tags --quiet origin +refs/heads/main:refs/remotes/origin/main
+          if ! git merge-base --is-ancestor "$sha" origin/main; then
+            echo "RELEASE_NOT_ON_MAIN: $sha is not an ancestor of origin/main" >&2
+            exit 1
+          fi
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - id: guard
+        run: pnpm tsx scripts/deploy/check.ts production
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          PRODUCTION_DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL }}
+
+  deploy:
+    name: deploy
+    needs: preflight
+    if: needs.preflight.outputs.configured == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    environment: production # the approval gate hangs here
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - uses: superfly/flyctl-actions/setup-flyctl@v1.5
+
+      # No `docker build` anywhere in this file. If staging never pushed an image for this commit,
+      # the release stops here — which is the point.
+      - name: Require the staging image for this commit
+        run: |
+          flyctl auth docker
+          docker manifest inspect "$IMAGE" > /dev/null \
+            || { echo "IMAGE_NOT_FOUND: staging never built $IMAGE" >&2; exit 1; }
+        env:
+          IMAGE: registry.fly.io/marketplace-api-staging:${{ needs.preflight.outputs.sha }}
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
+      - name: Migrate production
+        run: pnpm db:migrate:deploy
+        env:
+          DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL }}
+
+      - name: Promote the tested image
+        run: flyctl deploy --app marketplace-api-production --config infra/fly/api.production.toml --image "$IMAGE"
+        env:
+          IMAGE: registry.fly.io/marketplace-api-staging:${{ needs.preflight.outputs.sha }}
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}

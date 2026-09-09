@@ -1,0 +1,154 @@
+# W0-T07 — one deployed environment per pull request.
+#
+# A reviewer reading a diff is imagining the product. This gives them a URL instead.
+#
+# ─────────────────────────────────────────────────────────────────────────────────────────────
+# THIS WORKFLOW HAS NEVER RUN. Every credential it needs is [H] and none exists yet: OPS-07
+# (Neon), OPS-08 (Fly), OPS-09 (Cloudflare), OPS-04 (environments), W0-T09 (the values). The
+# preflight job below will report "unconfigured" and the deploy will skip. W0-T24 is the ticket
+# that sets the secrets and proves each of these four workflows actually works.
+# ─────────────────────────────────────────────────────────────────────────────────────────────
+#
+# Note what is NOT here: `pull_request_target`. It runs the base branch's workflow with full
+# secrets against untrusted code, and it is the only way to deploy a fork's PR. Fork PRs take the
+# unconfigured path instead, on purpose.
+
+name: Deploy preview
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write # to comment the preview URL, and nothing else
+  deployments: write
+
+concurrency:
+  group: preview-${{ github.event.number }}
+  cancel-in-progress: true
+
+jobs:
+  preflight:
+    name: preflight
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    environment: preview
+    outputs:
+      configured: ${{ steps.guard.outputs.configured }}
+      app: ${{ steps.guard.outputs.app }}
+      db-branch: ${{ steps.guard.outputs.db-branch }}
+      pages-branch: ${{ steps.guard.outputs.pages-branch }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+
+      # The guard is tested code (tests/deploy-guard.test.ts), not a shell condition: the `secrets`
+      # context is unavailable in a job-level `if:`, so this has to be a job — and it is the one
+      # part of the pipeline that must already work on the day the credentials finally arrive.
+      # Every GitHub expression reaches the shell through `env:`, never interpolated into `run:`.
+      # `${{ }}` in a script is textual substitution before the shell ever sees it — the classic
+      # Actions injection vector — and shellcheck cannot read the result either.
+      - id: guard
+        run: pnpm tsx scripts/deploy/check.ts preview "$PR_NUMBER"
+        env:
+          PR_NUMBER: ${{ github.event.number }}
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          NEON_PROJECT_ID: ${{ secrets.NEON_PROJECT_ID }}
+
+  deploy:
+    name: deploy
+    needs: preflight
+    if: needs.preflight.outputs.configured == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment: preview
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+
+      - uses: superfly/flyctl-actions/setup-flyctl@v1.5
+
+      # Branched from the SANITISED staging branch, never from production and never from raw
+      # staging: a preview must not be able to reach a licence document or a phone number
+      # (ADR-006). W0-T16 owns this; W0-T20 owns what "sanitised" means.
+      - name: Create the preview database branch
+        run: |
+          neonctl branches create \
+            --project-id "$NEON_PROJECT_ID" \
+            --name "$DB_BRANCH" \
+            --parent sanitised-staging \
+            || echo "branch already exists — reusing it"
+        env:
+          DB_BRANCH: ${{ needs.preflight.outputs.db-branch }}
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          NEON_PROJECT_ID: ${{ secrets.NEON_PROJECT_ID }}
+
+      - name: Create the Fly app if it does not exist
+        run: flyctl apps create "$APP" --org personal || true
+        env:
+          APP: ${{ needs.preflight.outputs.app }}
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
+      # Preview databases are branched, not migrated from empty, but the branch may be behind this
+      # PR's migrations. Running them here is what makes the preview reflect the change.
+      - name: Migrate the preview database
+        run: pnpm db:migrate:deploy
+        env:
+          DATABASE_URL: ${{ secrets.PREVIEW_DATABASE_URL }}
+
+      - name: Deploy the API
+        run: flyctl deploy --app "$APP" --config infra/fly/api.preview.toml --remote-only --wait-timeout 300
+        env:
+          APP: ${{ needs.preflight.outputs.app }}
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
+      - name: Build the web app
+        run: pnpm --filter @marketplace/web build
+        env:
+          VITE_API_URL: https://${{ needs.preflight.outputs.app }}.fly.dev
+
+      - uses: cloudflare/wrangler-action@v3.14.1
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy apps/web/dist --project-name marketplace-web --branch ${{ needs.preflight.outputs.pages-branch }}
+
+      - name: Comment the URLs
+        uses: actions/github-script@v7.0.1
+        with:
+          script: |
+            const app = process.env.APP;
+            const branch = process.env.PAGES_BRANCH;
+            const body = [
+              '### Preview environment',
+              '',
+              `- Web: https://${branch}.marketplace-web.pages.dev`,
+              `- API: https://${app}.fly.dev/health`,
+              '',
+              'Destroyed automatically when this pull request closes.',
+            ].join('\n');
+            await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body,
+            });
+        env:
+          APP: ${{ needs.preflight.outputs.app }}
+          PAGES_BRANCH: ${{ needs.preflight.outputs.pages-branch }}

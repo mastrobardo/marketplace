@@ -1,0 +1,29 @@
+# Per-PR preview. `--app` is supplied by the workflow from scripts/deploy/names.ts, so this file
+# carries no app name: one preview per pull request, and the name lives in one place.
+primary_region = "cdg" # Paris — Fly has no Spain region (ADR-006); ~25ms from Madrid
+
+[build]
+  dockerfile = "../docker/api.Dockerfile"
+
+[env]
+  NODE_ENV = "production"
+  LOG_LEVEL = "debug" # a preview exists to be debugged
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  # Scale to zero. A preview is idle almost all of its life, and the bill should reflect that.
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+
+  [[http_service.checks]]
+    interval = "15s"
+    timeout = "2s"
+    grace_period = "10s"
+    method = "GET"
+    path = "/health"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"
