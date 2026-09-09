@@ -556,3 +556,77 @@ describe('AC31 — a deploy step never swallows the error it just caused', () =>
     expect(text(TEARDOWN), 'the exception is undocumented').toMatch(/deliberate/i);
   });
 });
+
+/**
+ * A preview branch whose migration fails is poisoned: Prisma records the failure in
+ * `_prisma_migrations` and refuses every later run with P3009, while the workflow happily reuses
+ * the branch. No re-run can recover, and the PR shows P3009 forever — a tombstone, never the real
+ * error.
+ *
+ * A preview database is disposable and branched from sanitised data, so recreating it is safe in a
+ * way it would not be on staging or production. Retrying on a fresh branch also surfaces the
+ * *actual* migration failure instead of the P3009 masking it.
+ */
+describe('AC32 — a failed preview migration is recoverable without a human', () => {
+  function migrateStep(): Step {
+    const job = jobs(PREVIEW)['deploy'] ?? {};
+    const step = steps(job).find((candidate) => /db:migrate:deploy/.test(candidate.run ?? ''));
+    expect(step, 'deploy-preview.yml has no migrate step').toBeDefined();
+    return step as Step;
+  }
+
+  it('recreates the branch and retries when the migration fails', () => {
+    const run = migrateStep().run ?? '';
+    expect(run, 'the migrate step cannot recover — one command, no retry').toMatch(
+      /branches delete|branches create/,
+    );
+    expect(run, 'nothing re-runs the migration after recreating the branch').toMatch(
+      /db:migrate:deploy[\s\S]*db:migrate:deploy/,
+    );
+  });
+
+  it('gives up after one attempt rather than looping', () => {
+    const run = migrateStep().run ?? '';
+    const attempts = [...run.matchAll(/db:migrate:deploy/g)].length;
+    expect(attempts, 'more than one retry — a broken migration should fail, not spin').toBe(2);
+  });
+
+  it('never recreates a database it did not branch itself', () => {
+    // The recovery is scoped to the per-PR branch name. Anything that could name the parent, or a
+    // branch this workflow did not create, is a data-loss bug rather than a retry.
+    const run = migrateStep().run ?? '';
+    expect(run, 'the recovery could target the sanitised parent').not.toMatch(
+      /branches delete\s+"?\$?\{?PARENT/,
+    );
+    expect(run).toMatch(/\$DB_BRANCH|\$\{DB_BRANCH\}/);
+  });
+});
+
+/**
+ * The self-heal in AC32 can change the database URL midway through the job. Staging the
+ * pre-migration URL onto the Fly app would then point the deployed API at a branch that was just
+ * deleted — a container talking to nothing, after a deploy that reported success.
+ */
+describe('AC33 — the app is pointed at the database the migration actually used', () => {
+  it('takes DATABASE_URL from the migrate step, not the branch-creation step', () => {
+    const deploy = jobs(PREVIEW)['deploy'] ?? {};
+    const secret = steps(deploy).find((step) => /flyctl secrets set/.test(step.run ?? ''));
+    expect(secret, 'no step sets DATABASE_URL on the preview app').toBeDefined();
+    expect(
+      secret?.env?.['DATABASE_URL'],
+      'the app is given the pre-migration URL, which the retry may have invalidated',
+    ).toMatch(/steps\.migrate\.outputs/);
+  });
+
+  it('sets the secret after the migration, so the value cannot be stale', () => {
+    const names = steps(jobs(PREVIEW)['deploy'] ?? {}).map((step) => step.run ?? '');
+    const migrated = names.findIndex((run) => /db:migrate:deploy/.test(run));
+    const staged = names.findIndex((run) => /flyctl secrets set/.test(run));
+    expect(migrated, 'no migrate step').toBeGreaterThan(-1);
+    expect(staged, 'no secrets step').toBeGreaterThan(-1);
+    expect(
+      staged,
+      'the app is configured before the migration that may replace the branch',
+    ).toBeGreaterThan(migrated);
+  });
+});

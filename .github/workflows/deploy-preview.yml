@@ -176,23 +176,58 @@ jobs:
           FLY_ORG: personal
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
 
-      # The API exits on boot without DATABASE_URL (`z.url()`, no default). Setting it only on the
-      # migrate step below — which is all this workflow used to do — migrates the database and then
-      # deploys a container that crash-loops on a variable nobody gave it. `--stage` holds it for
-      # the deploy that follows rather than restarting the app twice.
+      # Preview databases are branched, not migrated from empty, but the branch may be behind this
+      # PR's migrations. Running them here is what makes the preview reflect the change.
+      # A failed migration is recorded in `_prisma_migrations`, and Prisma then refuses every later
+      # run with P3009 — which is a tombstone from an earlier failure, never the failure itself. The
+      # workflow reuses the branch, so without this the pull request shows P3009 for ever and the
+      # real error is unreachable.
+      #
+      # Recreating is safe *here* and nowhere else in this pipeline: a preview database is
+      # disposable and branched from sanitised data. The retry is capped at one, so a genuinely
+      # broken migration fails on a clean branch with its own error rather than spinning.
+      - name: Migrate the preview database
+        id: migrate
+        run: |
+          set -euo pipefail
+          if pnpm db:migrate:deploy; then
+            echo "url=$DATABASE_URL" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "Migration failed. Recreating $DB_BRANCH from $PARENT and trying once more."
+          neonctl branches delete "$DB_BRANCH" --project-id "$NEON_PROJECT_ID"
+          neonctl branches create \
+            --project-id "$NEON_PROJECT_ID" \
+            --name "$DB_BRANCH" \
+            --parent "$PARENT"
+
+          DATABASE_URL="$(neonctl connection-string "$DB_BRANCH" --project-id "$NEON_PROJECT_ID")"
+          echo "::add-mask::$DATABASE_URL"
+          export DATABASE_URL
+
+          if ! pnpm db:migrate:deploy; then
+            echo "The migration failed on a freshly branched database, so this is the migration"
+            echo "itself and not a poisoned branch. The error above is the real one."
+            exit 1
+          fi
+          echo "url=$DATABASE_URL" >> "$GITHUB_OUTPUT"
+        env:
+          DATABASE_URL: ${{ steps.db.outputs.url }}
+          DB_BRANCH: ${{ needs.preflight.outputs.db-branch }}
+          PARENT: sanitised-staging
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          NEON_PROJECT_ID: ${{ secrets.NEON_PROJECT_ID }}
+
+      # After the migration, not before: the step above may have recreated the branch, and staging
+      # the pre-migration URL would point the deployed API at a database that no longer exists.
+      # `--stage` holds it for the deploy that follows rather than restarting the app twice.
       - name: Give the preview API its own database
         run: flyctl secrets set DATABASE_URL="$DATABASE_URL" --app "$APP" --stage
         env:
           APP: ${{ needs.preflight.outputs.app }}
-          DATABASE_URL: ${{ steps.db.outputs.url }}
+          DATABASE_URL: ${{ steps.migrate.outputs.url }}
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-
-      # Preview databases are branched, not migrated from empty, but the branch may be behind this
-      # PR's migrations. Running them here is what makes the preview reflect the change.
-      - name: Migrate the preview database
-        run: pnpm db:migrate:deploy
-        env:
-          DATABASE_URL: ${{ steps.db.outputs.url }}
 
       - name: Deploy the API
         run: flyctl deploy --app "$APP" --config infra/fly/api.preview.toml --remote-only --wait-timeout 300
