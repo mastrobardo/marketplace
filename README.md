@@ -278,7 +278,7 @@ for it first.
 
 | Environment | Secrets | Blocked on |
 |---|---|---|
-| `preview` | `FLY_API_TOKEN`, `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `NEON_API_KEY`, `NEON_PROJECT_ID`, `PREVIEW_DATABASE_URL` | `OPS-07`, `OPS-08`, `OPS-09` |
+| `preview` | `FLY_API_TOKEN`, `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `NEON_API_KEY`, `NEON_PROJECT_ID` | `OPS-07`, `OPS-08`, `OPS-09` |
 | `staging` | `FLY_API_TOKEN`, `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `STAGING_DATABASE_URL` | `OPS-07`, `OPS-08`, `OPS-09` |
 | `production` | `FLY_API_TOKEN`, `PRODUCTION_DATABASE_URL` | `OPS-07`, `OPS-08` |
 
@@ -287,6 +287,24 @@ cannot create or destroy a database branch. Blast radius is a function of what t
 
 The `production` environment also needs a **required reviewer** and a branch/tag rule limiting it to
 `v*`. That is a GitHub settings change, not a file in this repo — `W0-T24` again.
+
+A preview's database URL is **not** in that table. It comes back from `neonctl` at deploy time, so
+each pull request gets its own branch instead of every open PR sharing one static database.
+
+### What a human has to provision
+
+Secrets are not enough. These are the account-side preconditions `W0-T24` found by running the
+pipeline until it stopped, each of which fails a deploy in a way no unit test can predict.
+
+| What | Why | Where |
+|---|---|---|
+| **PostGIS on every Neon branch** | Migration `0000_require_postgis` asserts the extension and refuses to create a single table without it. It is a precondition the environment provides, never something a migration establishes — locally that is `docker/postgres/init`, on Neon it is one statement per project. A preview inherits it from `sanitised-staging`, so enabling it on the parent covers every PR. | `CREATE EXTENSION IF NOT EXISTS postgis;` on `sanitised-staging`, and on the staging and production databases |
+| **A Fly *org* token** | A deploy token is scoped to one app that already exists. Previews create an app per pull request, which a deploy token cannot do — it fails with `unauthorized`. | `fly tokens create org <org>` |
+| **No expiry on `sanitised-staging`** | Neon refuses to create a child branch of an expiring branch, so no PR can get a preview database. | `neonctl branches set-expiration sanitised-staging --project-id <id>` (omitting `--expires-at` clears it) |
+| **A Cloudflare Pages project** | `wrangler pages deploy --project-name` does not create the project. | Cloudflare → Workers & Pages → Create → Pages |
+
+Order matters for the first one: a preview branch created *before* the parent had PostGIS does not
+gain it retroactively. Delete the stale branch and let the next run recreate it.
 
 ## Layout
 
