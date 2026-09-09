@@ -28,6 +28,8 @@ table of terms rather than a record per file, because a term is one line and coi
 - [Every migration carries a hand-written `down.sql`](repo/conventions/MEM-2026-09-09-14.md) — Prisma generates no down migrations, so each folder in `apps/api/prisma/migrations/` holds `migration.sql` **and** `down.sql`, and `apps/api/tests/db.test.ts` fails when one is missing or empty.
 - [A seeder runs at most once per database, and the ledger decides](repo/conventions/MEM-2026-09-09-15.md) — `pnpm db:seed` runs each entry of `apps/api/prisma/seed/registry.ts` whose `id` is not already in the `_seed_run` table.
 - [The six CI check names are a contract with branch protection](repo/conventions/MEM-2026-09-09-17.md) — `.github/workflows/ci.yml` declares six jobs — `typecheck`, `lint`, `unit`, `build`, `database`, `workflows` — and no aggregate `ci` job.
+- [A file two agents change on the same day is a design defect, not a merge problem](repo/conventions/MEM-2026-09-09-30.md) — The fix for a recurring conflict is to remove the shared structure — one record per file, one i18n namespace per file — or to make the file **generated** so a conflict is resolved by recomputing it.
+- [Memory ids are global, and the filename is the id](repo/conventions/MEM-2026-09-09-31.md) — `MEM-YYYY-MM-DD-NN` is unique across all of `memory/`, not per directory.
 
 ### Gotchas — traps found the hard way, with evidence
 
@@ -46,6 +48,7 @@ table of terms rather than a record per file, because a term is one line and coi
 - [`pnpm deploy --prod` discards the generated Prisma client](repo/gotchas/MEM-2026-09-09-22.md) — `pnpm deploy` rebuilds `node_modules` from the store, and the store holds the **published** `@prisma/client` — a shell whose real code `prisma generate` writes *into the installed package*.
 - [A CI gate on a shallow clone reports green because it cannot see](repo/gotchas/MEM-2026-09-09-27.md) — `actions/checkout` defaults to `fetch-depth: 1`.
 - [A vitest JSON report file can be stale, and a stale report is indistinguishable from no change](repo/gotchas/MEM-2026-09-09-28.md) — Re-reading `.vitest/json/output.json` after a second run returned byte-identical results — including assertions that had just been made to pass — so a fixed suite still read as 25 failures.
+- [`satisfies` stops catching excess keys the moment the object is built from spreads](repo/gotchas/MEM-2026-09-09-29.md) — TypeScript's excess-property check applies to **direct object literals** only.
 
 ### Per-slice
 
@@ -69,7 +72,7 @@ table of terms rather than a record per file, because a term is one line and coi
 
 _None._
 
-_41 records. Generated — run `pnpm memory:render`._
+_44 records. Generated — run `pnpm memory:render`._
 <!-- END GENERATED -->
 
 ## Rules
