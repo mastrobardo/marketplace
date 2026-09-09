@@ -201,10 +201,10 @@ describe('the deploy credentials are inventoried, and only inventoried', () => {
 });
 
 describe('the example holds no real credential', () => {
-  it('carries no provider token shape', () => {
-    const shapes = /(FlyV1 |fo1_|CFPAT-|neon_api_key_[A-Za-z0-9]|gh[pousr]_[A-Za-z0-9]{20})/;
-    expect(shapes.test(readFileSync(EXAMPLE, 'utf8'))).toBe(false);
-  });
+  // There is deliberately no token-shape scan here. `tests/cd-workflows.test.ts` AC22 already
+  // greps *every* tracked file, `.env.example` included, and duplicating the patterns into a
+  // second file makes that file match itself — which is exactly how this suite broke CI once.
+  // One copy of a rule, in one place.
 
   it('is committed, unlike every other .env', () => {
     const ignored = readFileSync(join(root, '.gitignore'), 'utf8');

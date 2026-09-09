@@ -215,10 +215,11 @@ Keep it to facts that changed how you would work. Task-specific detail stays in 
 - **why**: The general trap is that `git ls-files` and the working tree disagree about a file you
   have just written. Any test that iterates tracked files behaves differently before and after the
   first commit, so "green locally" is not evidence for that class of test.
-- **apply**: When a test reads `git ls-files`, commit first and re-run before believing it. Exclude
-  a self-matching file by path with a comment rather than obfuscating the patterns — a scanner
-  whose rules are unreadable is worse than one with a named exception.
-- **evidence**: PR #157 run 34318203881
+- **apply**: When a test reads `git ls-files`, **`git add` first, then run the gate** — an untracked
+  or unstaged new file is invisible to it, so a local pass proves nothing. Keep the patterns in
+  exactly one file and exclude that file by path; the second time this broke CI it was because the
+  same regex had been copied into a new suite, which then matched itself. One copy of a rule.
+- **evidence**: PR #157 runs 34318203881 and 34332813834 — the same failure, twice
 - **status**: active
 
 ### Diff `${{ secrets.* }}` against the guard — the two drift silently

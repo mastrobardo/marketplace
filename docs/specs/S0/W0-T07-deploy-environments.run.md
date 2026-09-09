@@ -236,6 +236,14 @@ is the whole of `W0-T24`. CI itself: six gates green
    equal, so no credential can be consumed without being checked for. (`W0-T16` replaces this one
    with the URL `neonctl branches create` returns, at which point it stops being a secret.)
 
+9. **The AC22 self-match recurred, in a new file.** Writing `.env.example` came with a
+   `tests/env-example.test.ts` that duplicated the token-shape regex, so AC22 flagged *that* file
+   the moment it was tracked — the identical failure to deviation 7, from the identical cause, and
+   MEM-2026-09-09-25 had already written down the rule that would have prevented it ("commit first
+   and re-run"). The fix is not a second path exclusion: the duplicate scan was **redundant**,
+   because AC22 already greps every tracked file including `.env.example`. Removed it. One copy of
+   a rule, in one place, and the habit is now `git add` **then** `pnpm verify`.
+
 ## Notes for the reviewer
 
 - **This lands inert, and the PR body says so.** Do not read six green checks as evidence that a
