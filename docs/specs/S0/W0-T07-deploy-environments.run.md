@@ -144,6 +144,39 @@ client loaded, seedRun delegate: object
 
 That last line is the whole reason for building it — see *Deviations* 2.
 
+## The unconfigured path, proven in CI
+
+The deploy workflows cannot deploy, but the path they *do* take was exercised for real on PR #157
+([run 34318489905](https://github.com/mastrobardo/marketplace/actions/runs/34318489905)):
+
+```
+success   preflight
+skipped   deploy
+```
+
+and the preflight job's log, verbatim:
+
+```
+BLOCKED — needs human
+Target:   preview
+Need:     5 secret(s) that no agent may create
+Where:    Settings → Environments → preview → Add secret
+
+  - FLY_API_TOKEN
+  - CLOUDFLARE_API_TOKEN
+  - CLOUDFLARE_ACCOUNT_ID
+  - NEON_API_KEY
+  - NEON_PROJECT_ID
+
+Meanwhile: this deploy is skipped, not failed. Nothing was created and nothing was changed.
+See W0-T24 for the activation checklist, and docs/adr/ADR-006 for what each one is for.
+```
+
+So the guard, the skip, the reporting and the green-not-red decision are all **verified against
+GitHub**, not just against unit tests. What remains unverified is every line after the gate — which
+is the whole of `W0-T24`. CI itself: six gates green
+([34318489835](https://github.com/mastrobardo/marketplace/actions/runs/34318489835)).
+
 ## Deviations from the plan
 
 1. **`pnpm deploy` needs `--legacy`.** From pnpm 10, `deploy` refuses a workspace that does not set
