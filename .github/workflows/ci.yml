@@ -147,3 +147,89 @@ jobs:
         uses: docker://rhysd/actionlint:1.7.7
         with:
           args: -color
+
+  # ── The gates AGENTS.md, TODO.md §5.5 and IDENTITY.md promise ────────────────────────────────
+  #
+  # W0-T12/T15/T21. Each was documented as enforced long before it existed; until this change the
+  # repo asked every agent to police itself and reported success either way.
+  #
+  # No `if:` on any of them (AC8): a conditional job reports "skipped", and GitHub counts a skipped
+  # required check as satisfied — a gate that can vanish is not a gate. On a push to `main` there is
+  # no base ref and no labels, so the gates run and report "not a pull request" themselves, which is
+  # an honest answer rather than an absent one.
+
+  spec-present:
+    name: spec-present
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          # The diff is against the base branch, which a shallow clone does not contain. With the
+          # default depth the gate sees no changed files and passes every branch.
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm tsx scripts/gates/run.ts spec-present
+
+  intervention-logged:
+    name: intervention-logged
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm tsx scripts/gates/run.ts intervention-logged
+        env:
+          # A JSON array. Passed through `env:` rather than interpolated into the `run:` string, so
+          # a label containing shell metacharacters cannot become a command — and JSON rather than a
+          # delimiter, because GitHub labels may legally contain both commas and spaces.
+          PR_LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
+
+  author-identity:
+    name: author-identity
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          # Every commit on the branch is walked, so the whole range must be present.
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm tsx scripts/gates/run.ts author-identity
+
+  agents-drift:
+    name: agents-drift
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      # `.claude/agents/` is build output from `agents/roles/`. Hand-edit one and Claude Code reads
+      # a charter the repo does not describe.
+      - run: pnpm tsx scripts/generate-claude-agents.ts --check

@@ -195,3 +195,34 @@ come from real experience.
   `docker run … node -e "require('@prisma/client')"` after any change to that file.
 - **evidence**: `infra/docker/api.Dockerfile`; `docs/specs/S0/W0-T07-deploy-environments.md` §7b
 - **status**: active
+
+### A CI gate on a shallow clone reports green because it cannot see
+- **id**: MEM-2026-09-09-23
+- **scope**: repo
+- **fact**: `actions/checkout` defaults to `fetch-depth: 1`. Any gate that diffs against the base
+  branch or walks a commit range has no base commit in that clone: `git diff origin/main...HEAD`
+  aborts with "unknown revision". The obvious repair — catch the error, treat it as "no changed
+  files" — makes the gate **pass every branch** while reporting green.
+- **why**: Found while writing `spec-present` and `author-identity` (`W0-T12`). A gate that fails
+  open is worse than no gate: reviewers stop checking the thing themselves precisely because CI is
+  believed to have checked it.
+- **apply**: Any job diffing or walking history sets `fetch-depth: 0`. `scripts/gates/run.ts`
+  asserts `git rev-parse --verify origin/<base>` first and exits **2** — distinct from a gate
+  failure (1) — with the `fetch-depth: 0` fix in the message. `tests/ci-gates.test.ts` AC6 asserts
+  the depth in the YAML and AC7 drives the CLI end-to-end.
+- **evidence**: `.github/workflows/ci.yml`; `docs/specs/S0/W0-T12-ci-gates.run.md` §3
+- **status**: active
+
+### A vitest JSON report file can be stale, and a stale report is indistinguishable from no change
+- **id**: MEM-2026-09-09-24
+- **scope**: repo
+- **fact**: Re-reading `.vitest/json/output.json` after a second run returned byte-identical
+  results — including assertions that had just been made to pass — so a fixed suite still read as
+  25 failures.
+- **why**: The comparison "did my change fix anything?" is exactly the moment a stale file lies,
+  and it lies in the direction of more work rather than less: the fix looks ineffective.
+- **apply**: Write the report somewhere fresh per run (`vitest run --reporter=json
+  --outputFile=<new path>`) before comparing two runs. Never diff two reads of the same default
+  report path.
+- **evidence**: `docs/specs/S0/W0-T12-ci-gates.run.md` §5
+- **status**: active

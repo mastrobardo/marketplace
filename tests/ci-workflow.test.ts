@@ -58,7 +58,19 @@ function allSteps(): Array<{ job: string; step: Step }> {
 }
 
 /** Spec §4 — these names are the contract W0-T13 requires in branch protection. */
-const GATES = ['build', 'typecheck', 'lint', 'unit', 'database', 'workflows'] as const;
+const GATES = [
+  'build',
+  'typecheck',
+  'lint',
+  'unit',
+  'database',
+  'workflows',
+  // W0-T12: the gates AGENTS.md and TODO.md §5.5 had claimed were enforced since before they existed.
+  'spec-present',
+  'intervention-logged',
+  'author-identity',
+  'agents-drift',
+] as const;
 
 const raw = (): string => readFileSync(CI, 'utf8');
 
@@ -111,7 +123,7 @@ describe('AC3 — a run on main is never cancelled', () => {
  * The gates — AC4..AC9
  * ------------------------------------------------------------------------------------------- */
 
-describe('AC4 — exactly the six named gates exist', () => {
+describe('AC4 — exactly the ten named gates exist', () => {
   it('declares one job per check name and no aggregate job', () => {
     expect(Object.keys(jobs()).sort()).toEqual([...GATES].sort());
   });
