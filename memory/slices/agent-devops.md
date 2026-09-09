@@ -189,3 +189,34 @@ Keep it to facts that changed how you would work. Task-specific detail stays in 
   either.
 - **evidence**: `.github/workflows/deploy-preview.yml`; `tests/deploy-guard.test.ts`
 - **status**: active
+
+### `pnpm <binary>` is a script lookup, not an exec
+- **id**: MEM-2026-09-09-24
+- **scope**: slice:S0
+- **fact**: `pnpm tsx foo.ts` makes pnpm look for a **script** called `tsx` and fail with
+  `Command "tsx" not found` / `Did you mean "pnpm test"?`. Running a binary from `node_modules/.bin`
+  needs `pnpm exec tsx`. Separately, a binary that is a devDependency of one workspace member is
+  not on the root's PATH — `tsx` belonged to `apps/api` and had to be added at the root.
+- **why**: The error names a missing command, so it reads as a missing dependency rather than as
+  the wrong invocation, and the suggested fix ("did you mean pnpm test") points nowhere useful.
+- **apply**: In a workflow or a root script, always `pnpm exec <bin>`. The repo's older root
+  scripts use `node --experimental-strip-types`, which does **not** work for a module with
+  relative imports: it resolves `./config.js` literally and cannot find the `.ts` file. Use `tsx`
+  for anything with imports.
+- **evidence**: PR #157 run 34318204023; `docs/specs/S0/W0-T07-deploy-environments.run.md`
+- **status**: active
+
+### A secret scanner that greps tracked files will flag its own patterns
+- **id**: MEM-2026-09-09-25
+- **scope**: slice:S0
+- **fact**: `tests/cd-workflows.test.ts` AC22 greps every `git ls-files` entry for provider token
+  prefixes. Its own regex contains all four, so it matches itself — but only once it is **tracked**,
+  which is why it passed every local `pnpm verify` and failed on CI's first run.
+- **why**: The general trap is that `git ls-files` and the working tree disagree about a file you
+  have just written. Any test that iterates tracked files behaves differently before and after the
+  first commit, so "green locally" is not evidence for that class of test.
+- **apply**: When a test reads `git ls-files`, commit first and re-run before believing it. Exclude
+  a self-matching file by path with a comment rather than obfuscating the patterns — a scanner
+  whose rules are unreadable is worse than one with a named exception.
+- **evidence**: PR #157 run 34318203881
+- **status**: active

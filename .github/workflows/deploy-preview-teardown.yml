@@ -43,7 +43,7 @@ jobs:
           cache-dependency-path: pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile
       - id: guard
-        run: pnpm tsx scripts/deploy/check.ts preview "$PR_NUMBER"
+        run: pnpm exec tsx scripts/deploy/check.ts preview "$PR_NUMBER"
         env:
           PR_NUMBER: ${{ github.event.number }}
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}

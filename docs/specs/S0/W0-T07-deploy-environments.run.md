@@ -180,6 +180,20 @@ That last line is the whole reason for building it — see *Deviations* 2.
    were flagged as the very things they rule out. The assertions now strip comments first: a test
    about what a workflow does must read code, not prose.
 
+7. **Two defects that only CI could find**, on the first run of PR #157 — both invisible locally,
+   and both exactly what `W0-T06` was built for:
+   - **`pnpm tsx …` is not a command.** pnpm reads a bare word as a script name, so the preflight
+     step died with `Command "tsx" not found`. `tsx` was a devDependency of `apps/api` only; it is
+     now a root devDependency and the workflows call `pnpm exec tsx`. The repo's other root scripts
+     use `node --experimental-strip-types`, which cannot be used here: it does not resolve the
+     `./config.js` specifiers that `check.ts` imports.
+     The failure mode matters more than the fix — preflight *failed* rather than reporting
+     "unconfigured", so the PR showed a red X. That is the outcome spec §10 argues against.
+   - **AC22 flagged itself.** The test greps every tracked file for the four providers' token
+     prefixes, and its own regex necessarily contains all four. It passed locally because the file
+     was still untracked when `pnpm verify` ran, and failed the moment it was committed. Excluded
+     by path with a comment, rather than by obfuscating the patterns.
+
 ## Notes for the reviewer
 
 - **This lands inert, and the PR body says so.** Do not read six green checks as evidence that a

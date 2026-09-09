@@ -39,7 +39,7 @@ jobs:
           cache-dependency-path: pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile
       - id: guard
-        run: pnpm tsx scripts/deploy/check.ts staging
+        run: pnpm exec tsx scripts/deploy/check.ts staging
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

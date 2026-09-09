@@ -259,7 +259,14 @@ describe('AC22 — no secret value is anywhere in the repository', () => {
 
     // Prefixes the three providers actually use, plus a generic GitHub token.
     const shapes = /(FlyV1 |fo1_|CFPAT-|neon_api_key_[A-Za-z0-9]|gh[pousr]_[A-Za-z0-9]{20})/;
+
+    // This file necessarily contains every prefix it searches for, so it matches itself as soon as
+    // it is tracked — which is why this passed locally, while untracked, and failed in CI on the
+    // very first run. Excluded by path rather than by obfuscating the patterns: a scanner whose
+    // rules are unreadable is worse than one with a named exception.
+    const self = 'tests/cd-workflows.test.ts';
     const offenders = tracked.filter((file) => {
+      if (file === self) return false;
       try {
         return shapes.test(readFileSync(join(root, file), 'utf8'));
       } catch {
