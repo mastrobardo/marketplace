@@ -1,4 +1,4 @@
-import { type es } from './locales/es/index.js';
+import { type es } from './locales/es.js';
 
 /**
  * Teaches `useTranslation()` our key set, so `t('nope')` is a compile error in every component
