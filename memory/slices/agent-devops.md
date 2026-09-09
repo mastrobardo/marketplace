@@ -126,3 +126,30 @@ Keep it to facts that changed how you would work. Task-specific detail stays in 
   drift check fails, read the captured output before believing it — usage text is not a diff.
 - **evidence**: `apps/api/tests/db.test.ts`; `docs/specs/S0/W0-T05-database-toolchain.run.md`
 - **status**: active
+
+### `pnpm stack:logs` follows — never put it in a CI failure step
+- **id**: MEM-2026-09-09-18
+- **scope**: slice:S0
+- **fact**: `stack:logs` is `docker compose logs --follow`. In an `if: failure()` step it never
+  returns, so the job runs to its `timeout-minutes` and the diagnostic step becomes the reason the
+  build takes fifteen minutes to report a failure it already knew about.
+- **why**: The convenience scripts are written for a terminal a human interrupts with Ctrl-C. CI
+  has no such human, and a script name gives no hint that it blocks.
+- **apply**: In CI call `docker compose logs --no-color --tail=200` directly. Before using any
+  `pnpm <convenience>` script in a workflow, read what it actually runs — `stack:up` is safe
+  because of `--wait`; `stack:logs` is not.
+- **evidence**: `.github/workflows/ci.yml`; `docs/specs/S0/W0-T06-ci-pull-request-checks.run.md`
+- **status**: active
+
+### `docker://` actions are pinned by tag, not by `@ref`
+- **id**: MEM-2026-09-09-19
+- **scope**: slice:S0
+- **fact**: A workflow step may use `owner/repo@ref` or `docker://image:tag`. Both forms must name
+  a fixed version, but only the first has an `@`. A "pin every action" check that looks for `@`
+  rejects the container form, which is the documented way to run `actionlint`.
+- **why**: The naive check produced a failure that looked like a security finding and was a parsing
+  bug — the reference *was* pinned, to `1.7.7`.
+- **apply**: When asserting over `uses:`, branch on the `docker://` prefix and take the tag after
+  the last `:`. Reject `main`, `master` and `latest` in both shapes.
+- **evidence**: `tests/ci-workflow.test.ts` AC13
+- **status**: active
