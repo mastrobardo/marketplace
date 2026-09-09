@@ -26,11 +26,12 @@ export const REQUIRED: Record<DeployTarget, readonly string[]> = {
     'CLOUDFLARE_ACCOUNT_ID',
     'NEON_API_KEY',
     'NEON_PROJECT_ID',
-    // Used by the preview's migrate step. Without it here the guard would report "configured",
-    // create a Fly app and a Neon branch, and only then fail — which is the exact half-built state
-    // this guard exists to prevent. `W0-T16` replaces it with the URL `neonctl branches create`
-    // returns, at which point it stops being a secret and this entry goes away.
-    'PREVIEW_DATABASE_URL',
+    // No PREVIEW_DATABASE_URL. It was briefly here, and it was the wrong shape twice over: the
+    // guard was never handed it (so every preview and every teardown skipped, permanently), and a
+    // single static URL points every open pull request at one shared database — which makes the
+    // per-PR Neon branch pointless and lets two PRs' migrations corrupt each other. The preview's
+    // connection URL now comes back from `neonctl` at deploy time, so it is not a secret a human
+    // sets and there is nothing here to check.
   ],
   staging: [
     'FLY_API_TOKEN',

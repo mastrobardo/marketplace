@@ -7,7 +7,7 @@
 # gone is a teardown that gets re-run and leaves the *other* resources alive, billing — so the
 # `|| true` here is deliberate, and is the one place in this repo where it is.
 #
-# THIS WORKFLOW HAS NEVER RUN — see deploy-preview.yml and W0-T24.
+# Live since W0-T24 — see deploy-preview.yml.
 
 name: Destroy preview
 
@@ -61,6 +61,12 @@ jobs:
     environment: preview
     steps:
       - uses: superfly/flyctl-actions/setup-flyctl@v1.5
+
+      # Installed for the same reason as in deploy-preview.yml, and it matters more here: paired
+      # with the deliberate `|| true` below, a missing neonctl made every teardown green while the
+      # database branch it was supposed to delete stayed alive and billing.
+      - name: Install neonctl
+        run: npm install --global neonctl@4.14.5
 
       - name: Destroy the Fly app
         run: flyctl apps destroy "$APP" --yes || true

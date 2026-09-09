@@ -363,3 +363,153 @@ describe('AC26 — a deploy is never a required check', () => {
     );
   });
 });
+
+/* ------------------------------------------------------------------------------------------- *
+ * Activation — AC28, AC29 (W0-T24)
+ * ------------------------------------------------------------------------------------------- */
+
+/** The target a workflow's preflight guards, read from the `check.ts` invocation itself. */
+function guardTarget(file: string): string | undefined {
+  return /scripts\/deploy\/check\.ts\s+(\w+)/.exec(script(jobs(file)['preflight'] ?? {}))?.[1];
+}
+
+/** The names in `REQUIRED[target]`, read from the guard's own source. */
+function required(target: string): string[] {
+  const source = readFileSync(join(root, 'scripts/deploy/config.ts'), 'utf8');
+  const block = new RegExp(`${target}:\\s*\\[([\\s\\S]*?)\\]`).exec(source);
+  expect(block, `REQUIRED has no ${target} entry`).not.toBeNull();
+  return [...(block?.[1] ?? '').matchAll(/'([A-Z][A-Z0-9_]*)'/g)].map((m) => m[1] as string);
+}
+
+/**
+ * The defect this exists for, and it is not hypothetical: `PREVIEW_DATABASE_URL` was added to
+ * `REQUIRED` and never added to the preflight step's `env:`. The guard read `undefined`, reported
+ * it missing, and every preview deploy and every teardown skipped — permanently, and regardless of
+ * what a human set in GitHub.
+ *
+ * `tests/env-example.test.ts` could not catch it. That suite unions `secrets.*` across the whole
+ * workflow directory, so a single read anywhere satisfied it: it proves a secret is consumed
+ * somewhere, not that the guard deciding on it is handed it.
+ */
+describe('AC28 — the guard is handed every secret it checks for', () => {
+  for (const file of DEPLOY_WORKFLOWS) {
+    it(`${file}'s preflight passes all of REQUIRED into the guard step`, () => {
+      const target = guardTarget(file);
+      expect(target, `${file}: cannot tell which target its preflight guards`).toBeDefined();
+
+      const guard = steps(jobs(file)['preflight'] ?? {}).find((step) =>
+        (step.run ?? '').includes('check.ts'),
+      );
+      expect(guard, `${file} has no guard step`).toBeDefined();
+
+      const passed = Object.keys(guard?.env ?? {});
+      for (const name of required(target as string)) {
+        expect(passed, `${file}: the guard checks ${name} but is never given it`).toContain(name);
+      }
+    });
+  }
+});
+
+/**
+ * A CLI that was never installed fails with `command not found` — and both preview workflows end
+ * their `neonctl` calls with `|| echo …` or `|| true`, which turns that into a green step. The
+ * deploy would report success having created no database branch; the teardown would report success
+ * having deleted nothing, and leak it.
+ */
+describe('AC29 — every CLI a workflow runs is installed first', () => {
+  /** On the runner already, or shipped by a step every job here has. */
+  const PROVIDED = new Set(['git', 'echo', 'node', 'npm', 'npx', 'pnpm', 'docker', 'curl', 'jq']);
+
+  /** Shell grammar, not commands. `sha=…` is an assignment; `fi` closes an `if`. */
+  const SHELL = new Set([
+    'if',
+    'then',
+    'elif',
+    'else',
+    'fi',
+    'for',
+    'while',
+    'do',
+    'done',
+    'case',
+    'esac',
+    'exit',
+    'set',
+    'cd',
+    'export',
+    'local',
+    'return',
+    'read',
+    'shift',
+    'trap',
+    'true',
+    'false',
+  ]);
+
+  for (const file of DEPLOY_WORKFLOWS) {
+    it(`${file} sets up every command it invokes`, () => {
+      for (const [name, job] of Object.entries(jobs(file))) {
+        const commands = new Set(
+          steps(job)
+            .flatMap((step) => (step.run ?? '').split('\n'))
+            .map((line) => line.replace(/(^|\s)#.*$/, '').trim())
+            // `NAME=value cmd` and a bare assignment both start with a word and an `=`.
+            .filter((line) => !/^[A-Za-z_][A-Za-z0-9_]*=/.test(line))
+            .map((line) => /^([a-z][a-z0-9-]*)\b/.exec(line)?.[1])
+            .filter((command): command is string => command !== undefined)
+            .filter((command) => !PROVIDED.has(command) && !SHELL.has(command)),
+        );
+
+        const setup = script(job);
+        for (const command of commands) {
+          expect(setup, `${file}:${name} runs "${command}" without installing it`).toMatch(
+            new RegExp(
+              `(setup-${command}|install.*${command}|${command}.*action|add -g.*${command})`,
+              'i',
+            ),
+          );
+        }
+      }
+    });
+  }
+});
+
+/**
+ * `DATABASE_URL` is `z.url()` with no default in `apps/api/src/config.ts`, so the API exits on
+ * boot without it. All three deploy workflows set it as a *workflow* variable for the migration
+ * command and never on the Fly app itself — the migration would run, the deploy would report
+ * success, and the container would crash-loop on a variable nothing had given it.
+ */
+describe('AC30 — a deployed app is given the variables it requires', () => {
+  /** Every variable `EnvSchema` demands and provides no default for. */
+  function requiredByTheApi(): string[] {
+    const source = readFileSync(join(root, 'apps/api/src/config.ts'), 'utf8');
+    const block = /const EnvSchema = z\.object\(\{([\s\S]*?)\n\}\);/.exec(source);
+    expect(block, 'EnvSchema is no longer a z.object literal').not.toBeNull();
+    return [...(block?.[1] ?? '').matchAll(/^\s{2}([A-Z][A-Z0-9_]*):\s*(.+?),\s*$/gm)]
+      .filter((declaration) => !(declaration[2] ?? '').includes('.default('))
+      .map((declaration) => declaration[1] as string);
+  }
+
+  for (const file of [PREVIEW, STAGING, RELEASE]) {
+    it(`${file} sets them on the app, not only on the migration step`, () => {
+      const deploy = deployJobs(file)
+        .map(([, job]) => job)
+        .filter((job) => /flyctl deploy/.test(script(job)));
+      expect(deploy.length, `${file} has no job that deploys to Fly`).toBeGreaterThan(0);
+
+      for (const job of deploy) {
+        const setSecrets = steps(job)
+          .filter((step) => /flyctl secrets set/.test(step.run ?? ''))
+          .map((step) => [step.run ?? '', JSON.stringify(step.env ?? {})].join('\n'))
+          .join('\n');
+
+        for (const name of requiredByTheApi()) {
+          expect(setSecrets, `${file} never sets ${name} on the Fly app`).toMatch(
+            new RegExp(`\\b${name}\\b`),
+          );
+        }
+      }
+    });
+  }
+});

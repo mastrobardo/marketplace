@@ -3,10 +3,9 @@
 # A reviewer reading a diff is imagining the product. This gives them a URL instead.
 #
 # ─────────────────────────────────────────────────────────────────────────────────────────────
-# THIS WORKFLOW HAS NEVER RUN. Every credential it needs is [H] and none exists yet: OPS-07
-# (Neon), OPS-08 (Fly), OPS-09 (Cloudflare), OPS-04 (environments), W0-T09 (the values). The
-# preflight job below will report "unconfigured" and the deploy will skip. W0-T24 is the ticket
-# that sets the secrets and proves each of these four workflows actually works.
+# The `preview` environment is configured (W0-T24). Everything below the preflight gate now runs
+# for real on every pull request; `staging` and `production` are still unset, so those two
+# workflows continue to report what is missing and skip.
 # ─────────────────────────────────────────────────────────────────────────────────────────────
 #
 # Note what is NOT here: `pull_request_target`. It runs the base branch's workflow with full
@@ -84,16 +83,34 @@ jobs:
 
       - uses: superfly/flyctl-actions/setup-flyctl@v1.5
 
+      # neonctl was invoked by this workflow and installed by nothing. Combined with the
+      # `|| echo "branch already exists"` below, `command not found` read as success: the deploy
+      # went green having created no database at all. Pinned, like every action here (AC23).
+      - name: Install neonctl
+        run: npm install --global neonctl@4.14.5
+
       # Branched from the SANITISED staging branch, never from production and never from raw
       # staging: a preview must not be able to reach a licence document or a phone number
       # (ADR-006). W0-T16 owns this; W0-T20 owns what "sanitised" means.
+      #
+      # "Already exists" is the one failure worth tolerating, so it is the one that is tested for.
+      # The blanket `||` this replaces swallowed a missing binary and a missing parent branch just
+      # as happily, which is how a pipeline reports success and deploys nothing.
       - name: Create the preview database branch
+        id: db
         run: |
-          neonctl branches create \
-            --project-id "$NEON_PROJECT_ID" \
-            --name "$DB_BRANCH" \
-            --parent sanitised-staging \
-            || echo "branch already exists — reusing it"
+          set -euo pipefail
+          if neonctl branches get "$DB_BRANCH" --project-id "$NEON_PROJECT_ID" >/dev/null 2>&1; then
+            echo "Reusing the existing branch for this pull request."
+          else
+            neonctl branches create \
+              --project-id "$NEON_PROJECT_ID" \
+              --name "$DB_BRANCH" \
+              --parent sanitised-staging
+          fi
+          url="$(neonctl connection-string "$DB_BRANCH" --project-id "$NEON_PROJECT_ID")"
+          echo "::add-mask::$url"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
         env:
           DB_BRANCH: ${{ needs.preflight.outputs.db-branch }}
           NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
@@ -105,12 +122,23 @@ jobs:
           APP: ${{ needs.preflight.outputs.app }}
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
 
+      # The API exits on boot without DATABASE_URL (`z.url()`, no default). Setting it only on the
+      # migrate step below — which is all this workflow used to do — migrates the database and then
+      # deploys a container that crash-loops on a variable nobody gave it. `--stage` holds it for
+      # the deploy that follows rather than restarting the app twice.
+      - name: Give the preview API its own database
+        run: flyctl secrets set DATABASE_URL="$DATABASE_URL" --app "$APP" --stage
+        env:
+          APP: ${{ needs.preflight.outputs.app }}
+          DATABASE_URL: ${{ steps.db.outputs.url }}
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
       # Preview databases are branched, not migrated from empty, but the branch may be behind this
       # PR's migrations. Running them here is what makes the preview reflect the change.
       - name: Migrate the preview database
         run: pnpm db:migrate:deploy
         env:
-          DATABASE_URL: ${{ secrets.PREVIEW_DATABASE_URL }}
+          DATABASE_URL: ${{ steps.db.outputs.url }}
 
       - name: Deploy the API
         run: flyctl deploy --app "$APP" --config infra/fly/api.preview.toml --remote-only --wait-timeout 300
