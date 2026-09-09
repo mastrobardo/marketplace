@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Fastify API — health, config, error envelope, request-id and structured logging.",
+  "description": "Fastify API \u2014 health, config, error envelope, request-id, structured logging and Prisma.",
   "main": "dist/server.js",
   "scripts": {
     "dev": "tsx watch src/server.ts",

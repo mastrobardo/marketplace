@@ -65,9 +65,9 @@ marketplace/
 │  ├─ config/              # eslint, tsconfig, prettier, vitest presets
 │  └─ testing/             # fixtures, factories, Stripe/Maps mocks, seed data
 ├─ memory/                 # what agents know across sessions — see §5.8
-│  ├─ LONG_TERM.md         # index, loaded by every agent
-│  ├─ repo/                # durable repo-wide facts (decisions, conventions, gotchas, glossary)
-│  ├─ slices/<agent>.md    # durable per-agent knowledge
+│  ├─ LONG_TERM.md         # index, loaded by every agent — GENERATED
+│  ├─ repo/<kind>/MEM-….md # durable repo-wide facts — one record per file
+│  ├─ slices/<agent>/       # durable per-agent knowledge — one record per file
 │  └─ sessions/            # per-session working memory + handoffs
 ├─ docs/
 │  ├─ adr/                 # architecture decision records
@@ -309,12 +309,16 @@ transcript is lost. Full contract: `agents/policies/memory.md`.
 
 | Layer | Path | Lifetime | Writer |
 |---|---|---|---|
-| Index | `memory/LONG_TERM.md` | forever | anyone — **one-line pointers only** |
-| Repo-wide | `memory/repo/{decisions,conventions,gotchas,glossary}.md` | forever, committed | anyone, via PR |
-| Per-slice | `memory/slices/<agent>.md` | forever, committed | **only** the owning agent |
+| Index | `memory/LONG_TERM.md` | forever | **generated** — `pnpm memory:render`, never by hand |
+| Repo-wide | `memory/repo/{decisions,conventions,gotchas}/MEM-….md` | forever, committed | anyone, via PR |
+| Glossary | `memory/repo/glossary.md` | forever, committed | anyone, via PR — a table of terms |
+| Per-slice | `memory/slices/<agent>/MEM-….md` | forever, committed | **only** the owning agent |
 | Session | `memory/sessions/<date>-<agent>-<TASK-ID>.md` | one task, then archived | that session's agent |
 
-**Every task starts** by reading long-term memory + the agent's slice file + *any open session file
+**One record per file** (`W0-T23`): a new record is a new file, so thirteen agents can each promote
+a learning on the same day without any of them waiting on a merge.
+
+**Every task starts** by reading long-term memory + the agent's slice records + *any open session file
 for that task ID* — an interrupted session hands off through that file rather than being redone.
 **Every task ends** by closing the session file with a `## Handoff` block and **promoting** anything
 that outlives the task into `repo/` or `slices/`.
@@ -400,7 +404,7 @@ for data), so no feature is blocked waiting for an account that is not needed ye
 - `W0-T20` `[A]` Sanitisation step in the seed pipeline so no PII or licence document can reach a preview env
 - `W0-T21` `[A]` CI gate `author-identity`: every commit author/committer is `mastrobardo@gmail.com` (see `docs/board/IDENTITY.md`)
 - `W0-T22` `[A]` ✅ `scripts/seed-board.ts`: creates labels, milestones and one issue per OPS/W/BD id (135 issues; run with `--repo <owner>/<name>`)
-- `W0-T23` `[A]` Stop parallel agents colliding on shared append-only files — namespaced i18n catalogues, one-record-per-file memory, README fragments *(issue #153)*
+- `W0-T23` `[A]` ✅ Stop parallel agents colliding on shared files — namespaced i18n catalogues, one-record-per-file memory, generated `LONG_TERM.md` and README Layout table, scripted lockfile resolution. `tests/parallel-merge.test.ts` merges two branches to prove it *(issue #153)*
 - `W0-T24` `[H]` **Activate and verify the deploy pipeline**: set the `preview`/`staging`/`production` secrets, then prove one preview deploy, one teardown, one staging deploy and one tagged production release actually run. `W0-T07` lands the pipeline **inert** — no deploy job can execute on its own PR, and `release-production.yml` is not even *triggered* until a tag exists *(issue #156; needs `OPS-04`, `OPS-07`, `OPS-08`, `OPS-09`, `W0-T09`)*
 
 ### W1 — Contracts & domain foundation (`agent-contracts`)
