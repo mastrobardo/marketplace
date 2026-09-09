@@ -1,4 +1,4 @@
 {
   "extends": "@marketplace/config/tsconfig/node.json",
-  "include": ["tests/**/*.ts", "*.config.ts"]
+  "include": ["tests/**/*.ts", "scripts/deploy/**/*.ts", "*.config.ts"]
 }

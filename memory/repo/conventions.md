@@ -82,3 +82,20 @@ How we do things here, beyond what lint and CI enforce automatically.
   is the hook `W0-T20` grows into. Order in the array is execution order.
 - **evidence**: `apps/api/prisma/seed/run.ts`; `docs/specs/S0/W0-T05-database-toolchain.md` §7
 - **status**: active
+
+### The six CI check names are a contract with branch protection
+- **id**: MEM-2026-09-09-17
+- **scope**: repo
+- **fact**: `.github/workflows/ci.yml` declares six jobs — `typecheck`, `lint`, `unit`, `build`,
+  `database`, `workflows` — and no aggregate `ci` job. `W0-T13` requires those exact names in
+  branch protection, and GitHub matches required checks **by name**: a required check that simply
+  never arrives is reported as nothing at all, so renaming a job silently unblocks merges instead
+  of failing loudly.
+- **why**: An aggregate job also hides which class of thing broke, which is the whole reason the
+  gates are separate. Each job runs the *same* `pnpm` script an agent runs locally — a CI-only
+  variant command is how "green locally" and "green in CI" become two things to satisfy.
+- **apply**: Renaming or removing a job means updating branch protection in the same change. Adding
+  a gate means adding a job, not a step inside one. Never add `continue-on-error` or an `if:` to a
+  gate job — `tests/ci-workflow.test.ts` fails the build for both.
+- **evidence**: `docs/specs/S0/W0-T06-ci-pull-request-checks.md` §4; PR #155
+- **status**: active

@@ -35,3 +35,22 @@ this file records the *why* an agent would otherwise have to rediscover.
 - **apply**: If you are about to type `number` for an amount, stop.
 - **evidence**: `TODO.md` §2 rule 4; `agents/roles/agent-money.md`
 - **status**: active
+
+### The deploy pipeline exists but has never run
+- **id**: MEM-2026-09-09-21
+- **scope**: repo
+- **fact**: `.github/workflows/deploy-{preview,preview-teardown,staging}.yml` and
+  `release-production.yml` are complete and merged, and **not one of them has ever executed**.
+  Every deploy job is gated on a preflight guard (`scripts/deploy/config.ts`) that reports which
+  credentials are absent and skips. `release-production.yml` is stronger than unconfigured — a
+  `push: tags` workflow is not *triggered* at all until a tag exists, so its `environment:
+  production` protection and approval gate are wholly unexercised.
+- **why**: `OPS-04`, `OPS-07`, `OPS-08`, `OPS-09` and `W0-T09` are all `[H]` and none is done. An
+  unconfigured deploy **succeeds** rather than failing, because failing would make every PR red
+  until four accounts exist, which is how a team learns to ignore red.
+- **apply**: Do not treat a green PR as evidence a deploy works, and do not add a deploy to the
+  required checks. Issue **#156 (`W0-T24`)** is the activation checklist; until it closes, the
+  pipeline is code, not capability. If a deploy job silently does nothing, read the preflight job's
+  log first — it prints exactly which secret is missing and where to set it.
+- **evidence**: `docs/specs/S0/W0-T07-deploy-environments.md` §11; issue #156
+- **status**: active

@@ -384,7 +384,7 @@ for data), so no feature is blocked waiting for an account that is not needed ye
 - `W0-T04` `[A]` Vite React skeleton: router, layout shell, i18n (ES/EN), theme tokens
 - `W0-T05` `[A]` Prisma init + first migration + seed script scaffold
 - `W0-T06` `[A]` CI on **GitHub Actions**: typecheck/lint/test/build matrix on PR
-- `W0-T07` `[M]` CD: Fly app + CF Pages preview per PR, staging on merge to `main`, **manual tagged release to prod** *(human: Fly/Cloudflare accounts, CI secrets)*
+- `W0-T07` `[M]` CD: Fly app + CF Pages preview per PR, staging on merge to `main`, **manual tagged release to prod** *(human: Fly/Cloudflare accounts, CI secrets)* — lands inert; activation is `W0-T24`
 - `W0-T08` `[M]` Error tracking (Sentry), uptime check, structured log sink *(human: accounts + DSN)*
 - `W0-T09` `[H]` Secret management: GitHub Environments + Fly secrets, populated per environment; agents only maintain `.env.example`
 - `W0-T10` `[A]` `CONTRIBUTING-agents.md`: the pipeline in §5 as an enforceable checklist
@@ -400,6 +400,8 @@ for data), so no feature is blocked waiting for an account that is not needed ye
 - `W0-T20` `[A]` Sanitisation step in the seed pipeline so no PII or licence document can reach a preview env
 - `W0-T21` `[A]` CI gate `author-identity`: every commit author/committer is `mastrobardo@gmail.com` (see `docs/board/IDENTITY.md`)
 - `W0-T22` `[A]` ✅ `scripts/seed-board.ts`: creates labels, milestones and one issue per OPS/W/BD id (135 issues; run with `--repo <owner>/<name>`)
+- `W0-T23` `[A]` Stop parallel agents colliding on shared append-only files — namespaced i18n catalogues, one-record-per-file memory, README fragments *(issue #153)*
+- `W0-T24` `[H]` **Activate and verify the deploy pipeline**: set the `preview`/`staging`/`production` secrets, then prove one preview deploy, one teardown, one staging deploy and one tagged production release actually run. `W0-T07` lands the pipeline **inert** — no deploy job can execute on its own PR, and `release-production.yml` is not even *triggered* until a tag exists *(issue #156; needs `OPS-04`, `OPS-07`, `OPS-08`, `OPS-09`, `W0-T09`)*
 
 ### W1 — Contracts & domain foundation (`agent-contracts`)
 - `W1-T01` `[A]` Error envelope + error-code registry

@@ -126,3 +126,115 @@ Keep it to facts that changed how you would work. Task-specific detail stays in 
   drift check fails, read the captured output before believing it — usage text is not a diff.
 - **evidence**: `apps/api/tests/db.test.ts`; `docs/specs/S0/W0-T05-database-toolchain.run.md`
 - **status**: active
+
+### `pnpm stack:logs` follows — never put it in a CI failure step
+- **id**: MEM-2026-09-09-18
+- **scope**: slice:S0
+- **fact**: `stack:logs` is `docker compose logs --follow`. In an `if: failure()` step it never
+  returns, so the job runs to its `timeout-minutes` and the diagnostic step becomes the reason the
+  build takes fifteen minutes to report a failure it already knew about.
+- **why**: The convenience scripts are written for a terminal a human interrupts with Ctrl-C. CI
+  has no such human, and a script name gives no hint that it blocks.
+- **apply**: In CI call `docker compose logs --no-color --tail=200` directly. Before using any
+  `pnpm <convenience>` script in a workflow, read what it actually runs — `stack:up` is safe
+  because of `--wait`; `stack:logs` is not.
+- **evidence**: `.github/workflows/ci.yml`; `docs/specs/S0/W0-T06-ci-pull-request-checks.run.md`
+- **status**: active
+
+### `docker://` actions are pinned by tag, not by `@ref`
+- **id**: MEM-2026-09-09-19
+- **scope**: slice:S0
+- **fact**: A workflow step may use `owner/repo@ref` or `docker://image:tag`. Both forms must name
+  a fixed version, but only the first has an `@`. A "pin every action" check that looks for `@`
+  rejects the container form, which is the documented way to run `actionlint`.
+- **why**: The naive check produced a failure that looked like a security finding and was a parsing
+  bug — the reference *was* pinned, to `1.7.7`.
+- **apply**: When asserting over `uses:`, branch on the `docker://` prefix and take the tag after
+  the last `:`. Reject `main`, `master` and `latest` in both shapes.
+- **evidence**: `tests/ci-workflow.test.ts` AC13
+- **status**: active
+
+### `pull_request: branches: [main]` gives a stacked PR no checks at all
+- **id**: MEM-2026-09-09-20
+- **scope**: slice:S0
+- **fact**: A `pull_request` trigger filtered by `branches:` matches the PR's **base**, not its
+  head. A PR from `B` into `A` (both feature branches) does not match `branches: [main]`, so it
+  runs nothing — and reports nothing, which reads as "no checks configured" rather than as a
+  failure. Observed the moment the first stacked PR was opened: `gh run list` returned `[]`.
+- **why**: The filter is near-universal boilerplate and looks like a safety measure. It is really a
+  scope restriction, and its blind spot is the review situation with the *most* moving parts.
+  Restricting `push` to `main` is correct and separate — it stops a branch push being checked
+  twice, once by the push and once by its PR.
+- **apply**: Leave `pull_request:` unfiltered. Filter `push:` to `main`. After opening a PR that
+  adds or changes a workflow, run `gh run list --branch <branch>` and confirm it is not empty — an
+  empty list is the failure mode, and it is invisible in the PR UI.
+- **evidence**: PR #155; `docs/specs/S0/W0-T06-ci-pull-request-checks.run.md` (deviation 5)
+- **status**: active
+
+### `secrets` is unavailable in a job-level `if:` — the guard has to be a job
+- **id**: MEM-2026-09-09-23
+- **scope**: slice:S0
+- **fact**: GitHub's `secrets` context cannot be read from `jobs.<id>.if` or from a step `if:`.
+  Gating a deploy on "is this configured?" therefore needs a **preflight job** that reads the
+  secrets into `outputs`, with the real jobs on `needs: preflight` +
+  `if: needs.preflight.outputs.configured == 'true'`.
+- **why**: It is why `scripts/deploy/config.ts` exists instead of a shell condition in YAML. The
+  guard is the one part of the pipeline that must already be correct on the day the credentials
+  finally arrive, and YAML cannot be unit tested. Booleans derived from a secret are safe as
+  outputs; the value itself never is.
+- **apply**: Reuse `scripts/deploy/check.ts` for any new deploy target — add the target's required
+  names to `REQUIRED` and its tests come free. Also: never interpolate `${{ }}` into a `run:`
+  block. Pass it through `env:` — direct interpolation is textual substitution before the shell
+  sees it (the Actions injection vector), and actionlint's shellcheck cannot parse the result
+  either.
+- **evidence**: `.github/workflows/deploy-preview.yml`; `tests/deploy-guard.test.ts`
+- **status**: active
+
+### `pnpm <binary>` is a script lookup, not an exec
+- **id**: MEM-2026-09-09-24
+- **scope**: slice:S0
+- **fact**: `pnpm tsx foo.ts` makes pnpm look for a **script** called `tsx` and fail with
+  `Command "tsx" not found` / `Did you mean "pnpm test"?`. Running a binary from `node_modules/.bin`
+  needs `pnpm exec tsx`. Separately, a binary that is a devDependency of one workspace member is
+  not on the root's PATH — `tsx` belonged to `apps/api` and had to be added at the root.
+- **why**: The error names a missing command, so it reads as a missing dependency rather than as
+  the wrong invocation, and the suggested fix ("did you mean pnpm test") points nowhere useful.
+- **apply**: In a workflow or a root script, always `pnpm exec <bin>`. The repo's older root
+  scripts use `node --experimental-strip-types`, which does **not** work for a module with
+  relative imports: it resolves `./config.js` literally and cannot find the `.ts` file. Use `tsx`
+  for anything with imports.
+- **evidence**: PR #157 run 34318204023; `docs/specs/S0/W0-T07-deploy-environments.run.md`
+- **status**: active
+
+### A secret scanner that greps tracked files will flag its own patterns
+- **id**: MEM-2026-09-09-25
+- **scope**: slice:S0
+- **fact**: `tests/cd-workflows.test.ts` AC22 greps every `git ls-files` entry for provider token
+  prefixes. Its own regex contains all four, so it matches itself — but only once it is **tracked**,
+  which is why it passed every local `pnpm verify` and failed on CI's first run.
+- **why**: The general trap is that `git ls-files` and the working tree disagree about a file you
+  have just written. Any test that iterates tracked files behaves differently before and after the
+  first commit, so "green locally" is not evidence for that class of test.
+- **apply**: When a test reads `git ls-files`, **`git add` first, then run the gate** — an untracked
+  or unstaged new file is invisible to it, so a local pass proves nothing. Keep the patterns in
+  exactly one file and exclude that file by path; the second time this broke CI it was because the
+  same regex had been copied into a new suite, which then matched itself. One copy of a rule.
+- **evidence**: PR #157 runs 34318203881 and 34332813834 — the same failure, twice
+- **status**: active
+
+### Diff `${{ secrets.* }}` against the guard — the two drift silently
+- **id**: MEM-2026-09-09-26
+- **scope**: slice:S0
+- **fact**: `deploy-preview.yml` read `secrets.PREVIEW_DATABASE_URL` while `REQUIRED.preview` in
+  `scripts/deploy/config.ts` did not list it. The preflight guard would have answered
+  `configured: true`, the deploy would have created a Fly app and a Neon branch, and only then hit
+  an empty `DATABASE_URL` at the migrate step — the half-built state the guard exists to prevent,
+  leaking a Fly app per attempt.
+- **why**: The guard's list and the workflow's usage are written in different files, in different
+  languages, and nothing connected them. Adding a secret to a workflow is a one-line change that
+  never touches the guard, so the two drift by default rather than by mistake.
+- **apply**: `tests/env-example.test.ts` now asserts three-way equality between every
+  `${{ secrets.* }}` any workflow reads, `REQUIRED`, and the inventory in `.env.example`. Adding a
+  secret to a workflow fails the build until all three agree. Do not weaken that to a subset check.
+- **evidence**: `scripts/deploy/config.ts`; `docs/specs/S0/W0-T07-deploy-environments.run.md` (deviation 8)
+- **status**: active
