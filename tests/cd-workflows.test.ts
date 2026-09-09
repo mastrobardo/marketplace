@@ -433,6 +433,8 @@ describe('AC29 — every CLI a workflow runs is installed first', () => {
     'done',
     'case',
     'esac',
+    'break',
+    'continue',
     'exit',
     'set',
     'cd',
@@ -673,4 +675,37 @@ describe('AC34 — wrangler is pinned, and is not a dependency of this workspace
       }
     });
   }
+});
+
+/**
+ * The comment step used to build `https://<branch>.marketplace-web.pages.dev` from the project
+ * name. `*.pages.dev` subdomains are globally unique, so a project called `marketplace-web` is
+ * served from `marketplace-web-ane.pages.dev` when the plain name is taken — and every reviewer
+ * got a dead link. A URL a reviewer is asked to click must come from the tool that created it.
+ */
+describe('AC35 — the preview URL is read back, never constructed', () => {
+  const comment = steps(jobs(PREVIEW)['deploy'] ?? {}).find((step) =>
+    /createComment/.test(String(step.with?.['script'] ?? '')),
+  );
+
+  it('comments a URL that came out of the deploy step', () => {
+    expect(comment, 'nothing comments the preview URLs').toBeDefined();
+    expect(
+      JSON.stringify(comment?.env ?? {}),
+      'the web URL is not taken from the Pages deploy step',
+    ).toMatch(/steps\.pages\.outputs\.url/);
+  });
+
+  it('hardcodes no pages.dev hostname anywhere in the workflow', () => {
+    expect(code(PREVIEW), 'a pages.dev hostname is spelled out in the workflow').not.toMatch(
+      /[a-z0-9-]+\.pages\.dev/,
+    );
+  });
+
+  it('fails rather than commenting a guess when wrangler prints no URL', () => {
+    const deploy = steps(jobs(PREVIEW)['deploy'] ?? {}).find((step) =>
+      /wrangler/.test(step.run ?? ''),
+    );
+    expect(deploy?.run ?? '', 'an empty URL is commented instead of failing').toMatch(/exit 1/);
+  });
 });

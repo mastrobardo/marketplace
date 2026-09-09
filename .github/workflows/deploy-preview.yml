@@ -248,11 +248,42 @@ jobs:
       # workspace whose vite 8 wants ^0.27, which broke the *API image build* — a package the web
       # deploy needs has no business in the API's dependency graph. `npx` with an exact version
       # needs neither. AC34.
+      # The URL is read back from wrangler, never constructed. `*.pages.dev` subdomains are globally
+      # unique, so a project named `marketplace-web` can be served from `marketplace-web-ane.pages.dev`
+      # — and the hostname this workflow used to guess was simply wrong, giving every reviewer a
+      # dead link. Prefer the branch alias (stable across pushes to this PR) over the immutable
+      # per-deployment URL.
       - name: Deploy the web app to Cloudflare Pages
+        id: pages
         run: |
+          set -euo pipefail
           npx --yes wrangler@3.90.0 pages deploy apps/web/dist \
             --project-name marketplace-web \
-            --branch "$PAGES_BRANCH"
+            --branch "$PAGES_BRANCH" 2>&1 | tee pages-deploy.log
+
+          # `sed -n …p` rather than `grep`: grep exits 1 on no match, which under `set -e` means
+          # either an aborted job or a `|| true` that AC31 rightly forbids. sed exits 0 either way,
+          # and the emptiness is handled explicitly below.
+          urls="$(sed -nE 's|.*(https://[a-zA-Z0-9.-]+\.pages\.dev).*|\1|p' pages-deploy.log)"
+
+          # The branch alias is stable across pushes to this PR; the per-deployment URL is not.
+          alias_url=""
+          for candidate in $urls; do
+            case "$candidate" in
+              "https://$PAGES_BRANCH."*)
+                alias_url="$candidate"
+                break
+                ;;
+            esac
+          done
+          deployment_url="$(printf '%s\n' "$urls" | head -1)"
+          url="${alias_url:-$deployment_url}"
+
+          if [ -z "$url" ]; then
+            echo "wrangler printed no *.pages.dev URL — refusing to comment a guessed one." >&2
+            exit 1
+          fi
+          echo "url=$url" >> "$GITHUB_OUTPUT"
         env:
           PAGES_BRANCH: ${{ needs.preflight.outputs.pages-branch }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -263,11 +294,11 @@ jobs:
         with:
           script: |
             const app = process.env.APP;
-            const branch = process.env.PAGES_BRANCH;
+            const web = process.env.WEB_URL;
             const body = [
               '### Preview environment',
               '',
-              `- Web: https://${branch}.marketplace-web.pages.dev`,
+              `- Web: ${web}`,
               `- API: https://${app}.fly.dev/health`,
               '',
               'Destroyed automatically when this pull request closes.',
@@ -280,4 +311,4 @@ jobs:
             });
         env:
           APP: ${{ needs.preflight.outputs.app }}
-          PAGES_BRANCH: ${{ needs.preflight.outputs.pages-branch }}
+          WEB_URL: ${{ steps.pages.outputs.url }}
