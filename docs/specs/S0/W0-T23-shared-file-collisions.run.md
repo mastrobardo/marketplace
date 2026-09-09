@@ -35,7 +35,43 @@ for the wrong reason. So AC2 merges two branches that both append to one shared 
 the conflict by path. If that ever goes green, `merge-tree` is not being asked what this suite
 thinks it is, and AC1 is vacuous. That pairing is the only reason to trust the result.
 
-## 3. Two defects the flat layout had been hiding
+## 3. The red phase, honestly
+
+`MEM-2026-09-09-06` says a module-resolution failure is not a red phase, and **two of the three
+suites started with exactly that** — the tests could not import files that did not exist yet:
+
+```
+Cannot find module '../src/i18n/locales/en/index.js' imported from apps/web/tests/i18n.test.ts
+  TOTAL 0  FAILED 0
+
+ENOENT: no such file or directory, scandir 'memory/repo/gotchas'
+  TOTAL 0  FAILED 0
+```
+
+`TOTAL 0` is the tell: no assertion ran, so nothing was proved except that a path was wrong. Where
+the layout change *is* the feature, that is unavoidable — the test cannot import a barrel before
+the barrel exists — so it is recorded as what it is rather than pasted as if it were a red phase.
+
+The real red came after the files existed, and it is the one worth reading, because it failed on
+facts rather than on paths:
+
+```
+FAILED  memory/repo/gotchas/MEM-2026-09-07-09.md is well-formed
+  AssertionError: bad scope: expected 'slice:S9' to match /^(repo|slice:[a-z-]+|flow:[a-z-]+)$/
+FAILED  has no two records sharing an id
+  AssertionError: two records claim the same id: expected 39 to be 41
+  TOTAL 46  FAILED 17
+```
+
+Both were my errors about the repo rather than the repo's errors: `scope` uses slice **codes**
+(`slice:S0`), which `agents/policies/memory.md` had fixed and my regex had guessed at. The second
+was not my error — see §4.
+
+`tests/parallel-merge.test.ts` never had a red phase against a broken implementation, which is why
+its AC2 case exists: it merges two branches that append to one shared file and asserts the conflict.
+A green AC1 is only meaningful because that case is green too.
+
+## 4. Two defects the flat layout had been hiding
 
 Neither was the task. Both were found by validating a layout that had never been validated, which
 is most of the argument for the layout.
@@ -61,7 +97,7 @@ The fix direction was not free. `W0-T07`'s run record and session file already c
 broken two existing citations; renumbering the newer `W0-T12` gotchas to `-27` and `-28` broke none.
 Checked with a grep before choosing, not after.
 
-## 4. Decisions worth reviewing
+## 5. Decisions worth reviewing
 
 - **The barrel is guarded, the index is generated.** Both are shared files, and they got different
   treatment on purpose. A generator that emits TypeScript is more machinery than two lines per
@@ -93,7 +129,7 @@ Checked with a grep before choosing, not after.
   key and silently accepted an invented one. `W0-T04` claimed the excess direction and never proved
   it; there is now an `excess-key` fixture that fails to compile.
 
-## 5. Method note
+## 6. Method note
 
 The migration ran as a throwaway script rather than 41 hand-written files, and it **failed loudly
 on the first malformed record instead of skipping it** — which is how §3's first defect surfaced.
@@ -106,7 +142,7 @@ vitest 5. Every run here went through `rtk proxy npx vitest run --reporter=json 
 path>` — a fresh path each time, per `MEM-2026-09-09-28`, because a report file that is not
 regenerated is indistinguishable from a run that changed nothing.
 
-## 6. Self-assessment
+## 7. Self-assessment
 
 - **Weakest part:** the merge drivers are per-clone local config. An agent that never runs
   `scripts/setup-git.sh` gets the old behaviour on `LONG_TERM.md` and the lockfile. It fails
@@ -122,7 +158,7 @@ regenerated is indistinguishable from a run that changed nothing.
   thirteen times ever, down from once per task. Sorted one-per-line so two such branches usually
   merge anyway. Stated in the spec's risks rather than left for a reviewer to find.
 
-## 7. Handoff
+## 8. Handoff
 
 - **Every agent must run `./scripts/setup-git.sh` once**, and `pnpm memory:render` after writing a
   record. `agents/AGENTS.md` §3, `agents/policies/memory.md` and `agents/prompts/09-memory-write.md`
