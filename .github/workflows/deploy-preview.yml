@@ -3,10 +3,9 @@
 # A reviewer reading a diff is imagining the product. This gives them a URL instead.
 #
 # ─────────────────────────────────────────────────────────────────────────────────────────────
-# THIS WORKFLOW HAS NEVER RUN. Every credential it needs is [H] and none exists yet: OPS-07
-# (Neon), OPS-08 (Fly), OPS-09 (Cloudflare), OPS-04 (environments), W0-T09 (the values). The
-# preflight job below will report "unconfigured" and the deploy will skip. W0-T24 is the ticket
-# that sets the secrets and proves each of these four workflows actually works.
+# The `preview` environment is configured (W0-T24). Everything below the preflight gate now runs
+# for real on every pull request; `staging` and `production` are still unset, so those two
+# workflows continue to report what is missing and skip.
 # ─────────────────────────────────────────────────────────────────────────────────────────────
 #
 # Note what is NOT here: `pull_request_target`. It runs the base branch's workflow with full
@@ -82,38 +81,158 @@ jobs:
           cache-dependency-path: pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile
 
-      - uses: superfly/flyctl-actions/setup-flyctl@v1.5
+      # `1.5`, not `v1.5`: superfly/flyctl-actions tags its releases without the prefix, and
+      # `v1.5` does not exist. It resolved to nothing and failed the job at "Set up job" —
+      # invisible until now, because this job had never once got past the preflight gate.
+      - uses: superfly/flyctl-actions/setup-flyctl@1.5
+
+      # neonctl was invoked by this workflow and installed by nothing. Combined with the
+      # `|| echo "branch already exists"` below, `command not found` read as success: the deploy
+      # went green having created no database at all. Pinned, like every action here (AC23).
+      - name: Install neonctl
+        run: npm install --global neonctl@4.14.5
 
       # Branched from the SANITISED staging branch, never from production and never from raw
       # staging: a preview must not be able to reach a licence document or a phone number
       # (ADR-006). W0-T16 owns this; W0-T20 owns what "sanitised" means.
+      #
+      # "Already exists" is the one failure worth tolerating, so it is the one that is tested for.
+      # The blanket `||` this replaces swallowed a missing binary and a missing parent branch just
+      # as happily, which is how a pipeline reports success and deploys nothing.
       - name: Create the preview database branch
+        id: db
         run: |
-          neonctl branches create \
-            --project-id "$NEON_PROJECT_ID" \
-            --name "$DB_BRANCH" \
-            --parent sanitised-staging \
-            || echo "branch already exists — reusing it"
+          set -euo pipefail
+          if neonctl branches get "$DB_BRANCH" --project-id "$NEON_PROJECT_ID" >/dev/null 2>&1; then
+            echo "Reusing the existing branch for this pull request."
+          else
+            if ! out="$(neonctl branches create \
+              --project-id "$NEON_PROJECT_ID" \
+              --name "$DB_BRANCH" \
+              --parent "$PARENT" 2>&1)"; then
+              echo "$out"
+              # Neon refuses to branch off a parent that expires, and the raw message does not say
+              # where to fix it. Every preview fails identically until somebody clears the date.
+              case "$out" in
+                *"expiration date"*)
+                  echo "BLOCKED — needs human"
+                  echo "Need:     the expiration date removed from the \"$PARENT\" branch"
+                  echo "Where:    Neon → project → Branches → $PARENT → remove expiry"
+                  echo "Why:      Neon cannot create a child of an expiring branch, so no pull"
+                  echo "          request can get a preview database until this is cleared."
+                  ;;
+                *"not found"*)
+                  echo "BLOCKED — needs human"
+                  echo "Need:     a \"$PARENT\" branch in the Neon project"
+                  echo "Where:    Neon → project → Branches → New branch"
+                  echo "Why:      previews branch from sanitised data, never from raw staging"
+                  echo "          (ADR-006). W0-T20 owns what sanitised means."
+                  ;;
+              esac
+              exit 1
+            fi
+            echo "$out"
+          fi
+          url="$(neonctl connection-string "$DB_BRANCH" --project-id "$NEON_PROJECT_ID")"
+          echo "::add-mask::$url"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
         env:
           DB_BRANCH: ${{ needs.preflight.outputs.db-branch }}
+          PARENT: sanitised-staging
           NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
           NEON_PROJECT_ID: ${{ secrets.NEON_PROJECT_ID }}
 
+      # `|| true` here reported success while creating nothing, and the next step then failed with
+      # "app not found" — the real error, `unauthorized`, never reached the log. Same shape as the
+      # neonctl swallow above: an existing app is the one tolerable outcome, so it is the one
+      # tested for. AC31 keeps blanket fallbacks out of this file.
       - name: Create the Fly app if it does not exist
-        run: flyctl apps create "$APP" --org personal || true
+        run: |
+          set -euo pipefail
+          if out="$(flyctl apps create "$APP" --org "$FLY_ORG" 2>&1)"; then
+            echo "$out"
+          else
+            echo "$out"
+            case "$out" in
+              *"already been taken"* | *"already exists"*)
+                echo "Reusing the existing Fly app for this pull request."
+                ;;
+              *nauthorized*)
+                echo "BLOCKED — needs human"
+                echo "Need:     a FLY_API_TOKEN that may create apps in the \"$FLY_ORG\" org"
+                echo "Where:    fly tokens create org $FLY_ORG"
+                echo "          → Settings → Environments → preview → FLY_API_TOKEN"
+                echo "Why:      a Fly *deploy* token is scoped to one app that already exists and"
+                echo "          cannot create the per-PR app this workflow needs. An org token can."
+                exit 1
+                ;;
+              *)
+                exit 1
+                ;;
+            esac
+          fi
         env:
           APP: ${{ needs.preflight.outputs.app }}
+          FLY_ORG: personal
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
 
       # Preview databases are branched, not migrated from empty, but the branch may be behind this
       # PR's migrations. Running them here is what makes the preview reflect the change.
+      # A failed migration is recorded in `_prisma_migrations`, and Prisma then refuses every later
+      # run with P3009 — which is a tombstone from an earlier failure, never the failure itself. The
+      # workflow reuses the branch, so without this the pull request shows P3009 for ever and the
+      # real error is unreachable.
+      #
+      # Recreating is safe *here* and nowhere else in this pipeline: a preview database is
+      # disposable and branched from sanitised data. The retry is capped at one, so a genuinely
+      # broken migration fails on a clean branch with its own error rather than spinning.
       - name: Migrate the preview database
-        run: pnpm db:migrate:deploy
+        id: migrate
+        run: |
+          set -euo pipefail
+          if pnpm db:migrate:deploy; then
+            echo "url=$DATABASE_URL" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "Migration failed. Recreating $DB_BRANCH from $PARENT and trying once more."
+          neonctl branches delete "$DB_BRANCH" --project-id "$NEON_PROJECT_ID"
+          neonctl branches create \
+            --project-id "$NEON_PROJECT_ID" \
+            --name "$DB_BRANCH" \
+            --parent "$PARENT"
+
+          DATABASE_URL="$(neonctl connection-string "$DB_BRANCH" --project-id "$NEON_PROJECT_ID")"
+          echo "::add-mask::$DATABASE_URL"
+          export DATABASE_URL
+
+          if ! pnpm db:migrate:deploy; then
+            echo "The migration failed on a freshly branched database, so this is the migration"
+            echo "itself and not a poisoned branch. The error above is the real one."
+            exit 1
+          fi
+          echo "url=$DATABASE_URL" >> "$GITHUB_OUTPUT"
         env:
-          DATABASE_URL: ${{ secrets.PREVIEW_DATABASE_URL }}
+          DATABASE_URL: ${{ steps.db.outputs.url }}
+          DB_BRANCH: ${{ needs.preflight.outputs.db-branch }}
+          PARENT: sanitised-staging
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          NEON_PROJECT_ID: ${{ secrets.NEON_PROJECT_ID }}
+
+      # After the migration, not before: the step above may have recreated the branch, and staging
+      # the pre-migration URL would point the deployed API at a database that no longer exists.
+      # `--stage` holds it for the deploy that follows rather than restarting the app twice.
+      - name: Give the preview API its own database
+        run: flyctl secrets set DATABASE_URL="$DATABASE_URL" --app "$APP" --stage
+        env:
+          APP: ${{ needs.preflight.outputs.app }}
+          DATABASE_URL: ${{ steps.migrate.outputs.url }}
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
 
       - name: Deploy the API
-        run: flyctl deploy --app "$APP" --config infra/fly/api.preview.toml --remote-only --wait-timeout 300
+        # --ha=false: Fly provisions two machines by default for availability. A preview is one
+        # reviewer clicking a link, and the second machine is pure cost on every open PR.
+        run: flyctl deploy --app "$APP" --config infra/fly/api.preview.toml --remote-only --ha=false --wait-timeout 300
         env:
           APP: ${{ needs.preflight.outputs.app }}
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
@@ -123,22 +242,63 @@ jobs:
         env:
           VITE_API_URL: https://${{ needs.preflight.outputs.app }}.fly.dev
 
-      - uses: cloudflare/wrangler-action@v3.14.1
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy apps/web/dist --project-name marketplace-web --branch ${{ needs.preflight.outputs.pages-branch }}
+      # Run wrangler directly rather than through cloudflare/wrangler-action. The action bootstraps
+      # its own tool with `pnpm add wrangler@…` at the workspace root, which pnpm refuses without
+      # `-w`; and declaring wrangler as a root devDependency instead pulled esbuild 0.17 into a
+      # workspace whose vite 8 wants ^0.27, which broke the *API image build* — a package the web
+      # deploy needs has no business in the API's dependency graph. `npx` with an exact version
+      # needs neither. AC34.
+      # The URL is read back from wrangler, never constructed. `*.pages.dev` subdomains are globally
+      # unique, so a project named `marketplace-web` can be served from `marketplace-web-ane.pages.dev`
+      # — and the hostname this workflow used to guess was simply wrong, giving every reviewer a
+      # dead link. Prefer the branch alias (stable across pushes to this PR) over the immutable
+      # per-deployment URL.
+      - name: Deploy the web app to Cloudflare Pages
+        id: pages
+        run: |
+          set -euo pipefail
+          npx --yes wrangler@3.90.0 pages deploy apps/web/dist \
+            --project-name marketplace-web \
+            --branch "$PAGES_BRANCH" 2>&1 | tee pages-deploy.log
+
+          # `sed -n …p` rather than `grep`: grep exits 1 on no match, which under `set -e` means
+          # either an aborted job or a `|| true` that AC31 rightly forbids. sed exits 0 either way,
+          # and the emptiness is handled explicitly below.
+          urls="$(sed -nE 's|.*(https://[a-zA-Z0-9.-]+\.pages\.dev).*|\1|p' pages-deploy.log)"
+
+          # The branch alias is stable across pushes to this PR; the per-deployment URL is not.
+          alias_url=""
+          for candidate in $urls; do
+            case "$candidate" in
+              "https://$PAGES_BRANCH."*)
+                alias_url="$candidate"
+                break
+                ;;
+            esac
+          done
+          deployment_url="$(printf '%s\n' "$urls" | head -1)"
+          url="${alias_url:-$deployment_url}"
+
+          if [ -z "$url" ]; then
+            echo "wrangler printed no *.pages.dev URL — refusing to comment a guessed one." >&2
+            exit 1
+          fi
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+        env:
+          PAGES_BRANCH: ${{ needs.preflight.outputs.pages-branch }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
       - name: Comment the URLs
         uses: actions/github-script@v7.0.1
         with:
           script: |
             const app = process.env.APP;
-            const branch = process.env.PAGES_BRANCH;
+            const web = process.env.WEB_URL;
             const body = [
               '### Preview environment',
               '',
-              `- Web: https://${branch}.marketplace-web.pages.dev`,
+              `- Web: ${web}`,
               `- API: https://${app}.fly.dev/health`,
               '',
               'Destroyed automatically when this pull request closes.',
@@ -151,4 +311,4 @@ jobs:
             });
         env:
           APP: ${{ needs.preflight.outputs.app }}
-          PAGES_BRANCH: ${{ needs.preflight.outputs.pages-branch }}
+          WEB_URL: ${{ steps.pages.outputs.url }}

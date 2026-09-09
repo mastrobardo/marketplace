@@ -363,3 +363,349 @@ describe('AC26 — a deploy is never a required check', () => {
     );
   });
 });
+
+/* ------------------------------------------------------------------------------------------- *
+ * Activation — AC28, AC29 (W0-T24)
+ * ------------------------------------------------------------------------------------------- */
+
+/** The target a workflow's preflight guards, read from the `check.ts` invocation itself. */
+function guardTarget(file: string): string | undefined {
+  return /scripts\/deploy\/check\.ts\s+(\w+)/.exec(script(jobs(file)['preflight'] ?? {}))?.[1];
+}
+
+/** The names in `REQUIRED[target]`, read from the guard's own source. */
+function required(target: string): string[] {
+  const source = readFileSync(join(root, 'scripts/deploy/config.ts'), 'utf8');
+  const block = new RegExp(`${target}:\\s*\\[([\\s\\S]*?)\\]`).exec(source);
+  expect(block, `REQUIRED has no ${target} entry`).not.toBeNull();
+  return [...(block?.[1] ?? '').matchAll(/'([A-Z][A-Z0-9_]*)'/g)].map((m) => m[1] as string);
+}
+
+/**
+ * The defect this exists for, and it is not hypothetical: `PREVIEW_DATABASE_URL` was added to
+ * `REQUIRED` and never added to the preflight step's `env:`. The guard read `undefined`, reported
+ * it missing, and every preview deploy and every teardown skipped — permanently, and regardless of
+ * what a human set in GitHub.
+ *
+ * `tests/env-example.test.ts` could not catch it. That suite unions `secrets.*` across the whole
+ * workflow directory, so a single read anywhere satisfied it: it proves a secret is consumed
+ * somewhere, not that the guard deciding on it is handed it.
+ */
+describe('AC28 — the guard is handed every secret it checks for', () => {
+  for (const file of DEPLOY_WORKFLOWS) {
+    it(`${file}'s preflight passes all of REQUIRED into the guard step`, () => {
+      const target = guardTarget(file);
+      expect(target, `${file}: cannot tell which target its preflight guards`).toBeDefined();
+
+      const guard = steps(jobs(file)['preflight'] ?? {}).find((step) =>
+        (step.run ?? '').includes('check.ts'),
+      );
+      expect(guard, `${file} has no guard step`).toBeDefined();
+
+      const passed = Object.keys(guard?.env ?? {});
+      for (const name of required(target as string)) {
+        expect(passed, `${file}: the guard checks ${name} but is never given it`).toContain(name);
+      }
+    });
+  }
+});
+
+/**
+ * A CLI that was never installed fails with `command not found` — and both preview workflows end
+ * their `neonctl` calls with `|| echo …` or `|| true`, which turns that into a green step. The
+ * deploy would report success having created no database branch; the teardown would report success
+ * having deleted nothing, and leak it.
+ */
+describe('AC29 — every CLI a workflow runs is installed first', () => {
+  /** On the runner already, or shipped by a step every job here has. */
+  const PROVIDED = new Set(['git', 'echo', 'node', 'npm', 'npx', 'pnpm', 'docker', 'curl', 'jq']);
+
+  /** Shell grammar, not commands. `sha=…` is an assignment; `fi` closes an `if`. */
+  const SHELL = new Set([
+    'if',
+    'then',
+    'elif',
+    'else',
+    'fi',
+    'for',
+    'while',
+    'do',
+    'done',
+    'case',
+    'esac',
+    'break',
+    'continue',
+    'exit',
+    'set',
+    'cd',
+    'export',
+    'local',
+    'return',
+    'read',
+    'shift',
+    'trap',
+    'true',
+    'false',
+  ]);
+
+  for (const file of DEPLOY_WORKFLOWS) {
+    it(`${file} sets up every command it invokes`, () => {
+      for (const [name, job] of Object.entries(jobs(file))) {
+        const commands = new Set(
+          steps(job)
+            .flatMap((step) => (step.run ?? '').split('\n'))
+            .map((line) => line.replace(/(^|\s)#.*$/, '').trim())
+            // `NAME=value cmd` and a bare assignment both start with a word and an `=`.
+            .filter((line) => !/^[A-Za-z_][A-Za-z0-9_]*=/.test(line))
+            .map((line) => /^([a-z][a-z0-9-]*)\b/.exec(line)?.[1])
+            .filter((command): command is string => command !== undefined)
+            .filter((command) => !PROVIDED.has(command) && !SHELL.has(command)),
+        );
+
+        const setup = script(job);
+        for (const command of commands) {
+          expect(setup, `${file}:${name} runs "${command}" without installing it`).toMatch(
+            new RegExp(
+              `(setup-${command}|install.*${command}|${command}.*action|add -g.*${command})`,
+              'i',
+            ),
+          );
+        }
+      }
+    });
+  }
+});
+
+/**
+ * `DATABASE_URL` is `z.url()` with no default in `apps/api/src/config.ts`, so the API exits on
+ * boot without it. All three deploy workflows set it as a *workflow* variable for the migration
+ * command and never on the Fly app itself — the migration would run, the deploy would report
+ * success, and the container would crash-loop on a variable nothing had given it.
+ */
+describe('AC30 — a deployed app is given the variables it requires', () => {
+  /** Every variable `EnvSchema` demands and provides no default for. */
+  function requiredByTheApi(): string[] {
+    const source = readFileSync(join(root, 'apps/api/src/config.ts'), 'utf8');
+    const block = /const EnvSchema = z\.object\(\{([\s\S]*?)\n\}\);/.exec(source);
+    expect(block, 'EnvSchema is no longer a z.object literal').not.toBeNull();
+    return [...(block?.[1] ?? '').matchAll(/^\s{2}([A-Z][A-Z0-9_]*):\s*(.+?),\s*$/gm)]
+      .filter((declaration) => !(declaration[2] ?? '').includes('.default('))
+      .map((declaration) => declaration[1] as string);
+  }
+
+  for (const file of [PREVIEW, STAGING, RELEASE]) {
+    it(`${file} sets them on the app, not only on the migration step`, () => {
+      const deploy = deployJobs(file)
+        .map(([, job]) => job)
+        .filter((job) => /flyctl deploy/.test(script(job)));
+      expect(deploy.length, `${file} has no job that deploys to Fly`).toBeGreaterThan(0);
+
+      for (const job of deploy) {
+        const setSecrets = steps(job)
+          .filter((step) => /flyctl secrets set/.test(step.run ?? ''))
+          .map((step) => [step.run ?? '', JSON.stringify(step.env ?? {})].join('\n'))
+          .join('\n');
+
+        for (const name of requiredByTheApi()) {
+          expect(setSecrets, `${file} never sets ${name} on the Fly app`).toMatch(
+            new RegExp(`\\b${name}\\b`),
+          );
+        }
+      }
+    });
+  }
+});
+
+/**
+ * Three separate failures on this task were the same shape: a real error ending in a blanket
+ * fallback, so the step went green having done nothing.
+ *
+ *   neonctl branches create … || echo "branch already exists"   # command not found
+ *   neonctl branches delete … || true                           # leaked the branch
+ *   flyctl apps create … || true                                # unauthorized; app never created
+ *
+ * The last one reported success and the *next* step failed with "app not found", which is worse
+ * than a crash: the log names a consequence and hides the cause.
+ *
+ * Teardown is the documented exception — a destroy that fails because the resource is already gone
+ * must not abort the destroys that follow it — and it is exempted by file, in one place, rather
+ * than by scattering opt-outs.
+ */
+describe('AC31 — a deploy step never swallows the error it just caused', () => {
+  for (const file of [PREVIEW, STAGING, RELEASE]) {
+    it(`${file} tolerates named outcomes, not every outcome`, () => {
+      for (const [name, job] of Object.entries(jobs(file))) {
+        for (const step of steps(job)) {
+          const run = (step.run ?? '')
+            .split('\n')
+            .map((line) => line.replace(/(^|\s)#.*$/, ''))
+            .join('\n');
+          expect(
+            run,
+            `${file}:${name} "${step.name ?? ''}" ends a command in \`|| true\``,
+          ).not.toMatch(/\|\|\s*true\b/);
+          expect(
+            run,
+            `${file}:${name} "${step.name ?? ''}" hides a failure behind \`|| echo\``,
+          ).not.toMatch(/\|\|\s*echo\b/);
+        }
+      }
+    });
+  }
+
+  it('leaves the teardown its deliberate fallbacks, and says why', () => {
+    expect(text(TEARDOWN)).toMatch(/\|\|\s*true/);
+    expect(text(TEARDOWN), 'the exception is undocumented').toMatch(/deliberate/i);
+  });
+});
+
+/**
+ * A preview branch whose migration fails is poisoned: Prisma records the failure in
+ * `_prisma_migrations` and refuses every later run with P3009, while the workflow happily reuses
+ * the branch. No re-run can recover, and the PR shows P3009 forever — a tombstone, never the real
+ * error.
+ *
+ * A preview database is disposable and branched from sanitised data, so recreating it is safe in a
+ * way it would not be on staging or production. Retrying on a fresh branch also surfaces the
+ * *actual* migration failure instead of the P3009 masking it.
+ */
+describe('AC32 — a failed preview migration is recoverable without a human', () => {
+  function migrateStep(): Step {
+    const job = jobs(PREVIEW)['deploy'] ?? {};
+    const step = steps(job).find((candidate) => /db:migrate:deploy/.test(candidate.run ?? ''));
+    expect(step, 'deploy-preview.yml has no migrate step').toBeDefined();
+    return step as Step;
+  }
+
+  it('recreates the branch and retries when the migration fails', () => {
+    const run = migrateStep().run ?? '';
+    expect(run, 'the migrate step cannot recover — one command, no retry').toMatch(
+      /branches delete|branches create/,
+    );
+    expect(run, 'nothing re-runs the migration after recreating the branch').toMatch(
+      /db:migrate:deploy[\s\S]*db:migrate:deploy/,
+    );
+  });
+
+  it('gives up after one attempt rather than looping', () => {
+    const run = migrateStep().run ?? '';
+    const attempts = [...run.matchAll(/db:migrate:deploy/g)].length;
+    expect(attempts, 'more than one retry — a broken migration should fail, not spin').toBe(2);
+  });
+
+  it('never recreates a database it did not branch itself', () => {
+    // The recovery is scoped to the per-PR branch name. Anything that could name the parent, or a
+    // branch this workflow did not create, is a data-loss bug rather than a retry.
+    const run = migrateStep().run ?? '';
+    expect(run, 'the recovery could target the sanitised parent').not.toMatch(
+      /branches delete\s+"?\$?\{?PARENT/,
+    );
+    expect(run).toMatch(/\$DB_BRANCH|\$\{DB_BRANCH\}/);
+  });
+});
+
+/**
+ * The self-heal in AC32 can change the database URL midway through the job. Staging the
+ * pre-migration URL onto the Fly app would then point the deployed API at a branch that was just
+ * deleted — a container talking to nothing, after a deploy that reported success.
+ */
+describe('AC33 — the app is pointed at the database the migration actually used', () => {
+  it('takes DATABASE_URL from the migrate step, not the branch-creation step', () => {
+    const deploy = jobs(PREVIEW)['deploy'] ?? {};
+    const secret = steps(deploy).find((step) => /flyctl secrets set/.test(step.run ?? ''));
+    expect(secret, 'no step sets DATABASE_URL on the preview app').toBeDefined();
+    expect(
+      secret?.env?.['DATABASE_URL'],
+      'the app is given the pre-migration URL, which the retry may have invalidated',
+    ).toMatch(/steps\.migrate\.outputs/);
+  });
+
+  it('sets the secret after the migration, so the value cannot be stale', () => {
+    const names = steps(jobs(PREVIEW)['deploy'] ?? {}).map((step) => step.run ?? '');
+    const migrated = names.findIndex((run) => /db:migrate:deploy/.test(run));
+    const staged = names.findIndex((run) => /flyctl secrets set/.test(run));
+    expect(migrated, 'no migrate step').toBeGreaterThan(-1);
+    expect(staged, 'no secrets step').toBeGreaterThan(-1);
+    expect(
+      staged,
+      'the app is configured before the migration that may replace the branch',
+    ).toBeGreaterThan(migrated);
+  });
+});
+
+/**
+ * Two ways to get wrangler into a pnpm monorepo, and both were wrong:
+ *
+ *   cloudflare/wrangler-action  → bootstraps with `pnpm add wrangler@…` at the workspace root,
+ *                                 which pnpm refuses without `-w` (ERR_PNPM_ADDING_TO_ROOT).
+ *   a root devDependency        → drags esbuild 0.17 into a workspace whose vite 8 requires
+ *                                 ^0.27, and the API image build re-resolves and dies on
+ *                                 ERR_PNPM_PEER_DEP_ISSUES. A tool the *web* deploy needs has no
+ *                                 business in the API's dependency graph.
+ *
+ * So wrangler is invoked with an exact version and installed by neither. This asserts the version
+ * stays pinned — an unpinned `npx wrangler` silently follows latest, which is the supply-chain
+ * property AC23 protects for actions.
+ */
+describe('AC34 — wrangler is pinned, and is not a dependency of this workspace', () => {
+  const manifest = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')) as {
+    dependencies?: Record<string, string>;
+    devDependencies?: Record<string, string>;
+  };
+
+  it('is absent from the root manifest, so it cannot reach the API image', () => {
+    expect(
+      manifest.devDependencies?.['wrangler'],
+      'wrangler is a root devDependency again',
+    ).toBeUndefined();
+    expect(manifest.dependencies?.['wrangler']).toBeUndefined();
+  });
+
+  for (const file of [PREVIEW, STAGING]) {
+    it(`${file} pins the wrangler it runs`, () => {
+      const invocations = Object.values(jobs(file))
+        .flatMap((job) => steps(job))
+        .filter((step) => /wrangler/.test((step.run ?? '') + (step.uses ?? '')));
+      expect(invocations.length, `${file} never deploys to Pages`).toBeGreaterThan(0);
+
+      for (const step of invocations) {
+        expect(step.run ?? '', `${file}: wrangler is invoked without an exact version`).toMatch(
+          /wrangler@\d+\.\d+\.\d+/,
+        );
+      }
+    });
+  }
+});
+
+/**
+ * The comment step used to build `https://<branch>.marketplace-web.pages.dev` from the project
+ * name. `*.pages.dev` subdomains are globally unique, so a project called `marketplace-web` is
+ * served from `marketplace-web-ane.pages.dev` when the plain name is taken — and every reviewer
+ * got a dead link. A URL a reviewer is asked to click must come from the tool that created it.
+ */
+describe('AC35 — the preview URL is read back, never constructed', () => {
+  const comment = steps(jobs(PREVIEW)['deploy'] ?? {}).find((step) =>
+    /createComment/.test(String(step.with?.['script'] ?? '')),
+  );
+
+  it('comments a URL that came out of the deploy step', () => {
+    expect(comment, 'nothing comments the preview URLs').toBeDefined();
+    expect(
+      JSON.stringify(comment?.env ?? {}),
+      'the web URL is not taken from the Pages deploy step',
+    ).toMatch(/steps\.pages\.outputs\.url/);
+  });
+
+  it('hardcodes no pages.dev hostname anywhere in the workflow', () => {
+    expect(code(PREVIEW), 'a pages.dev hostname is spelled out in the workflow').not.toMatch(
+      /[a-z0-9-]+\.pages\.dev/,
+    );
+  });
+
+  it('fails rather than commenting a guess when wrangler prints no URL', () => {
+    const deploy = steps(jobs(PREVIEW)['deploy'] ?? {}).find((step) =>
+      /wrangler/.test(step.run ?? ''),
+    );
+    expect(deploy?.run ?? '', 'an empty URL is commented instead of failing').toMatch(/exit 1/);
+  });
+});

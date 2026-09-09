@@ -90,7 +90,10 @@ jobs:
           cache: pnpm
           cache-dependency-path: pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile
-      - uses: superfly/flyctl-actions/setup-flyctl@v1.5
+      # `1.5`, not `v1.5`: superfly/flyctl-actions tags its releases without the prefix, and
+      # `v1.5` does not exist. It resolved to nothing and failed the job at "Set up job" —
+      # invisible until now, because this job had never once got past the preflight gate.
+      - uses: superfly/flyctl-actions/setup-flyctl@1.5
 
       # No `docker build` anywhere in this file. If staging never pushed an image for this commit,
       # the release stops here — which is the point.
@@ -107,6 +110,14 @@ jobs:
         run: pnpm db:migrate:deploy
         env:
           DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL }}
+
+      # The API exits on boot without DATABASE_URL (`z.url()`, no default), and setting it on the
+      # migrate step alone leaves the container without it. `--stage` holds it for the deploy below.
+      - name: Give the API its database
+        run: flyctl secrets set DATABASE_URL="$DATABASE_URL" --app marketplace-api-production --stage
+        env:
+          DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL }}
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
 
       - name: Promote the tested image
         run: flyctl deploy --app marketplace-api-production --config infra/fly/api.production.toml --image "$IMAGE"
