@@ -1,0 +1,149 @@
+# W0-T06 — the gate every pull request passes before a human spends attention on it.
+#
+# Six checks, one per failure class, each its own job so a red PR says *which* gate failed without
+# anyone opening a log. The names are a contract: `W0-T13` requires them by name in branch
+# protection, and GitHub matches by name — renaming a job here silently removes a required check
+# and reports nothing. Rename one, update branch protection in the same change.
+#
+# Every gate runs the same `pnpm` script an agent runs locally. That is deliberate: a CI-only
+# variant command is how "green on my laptop" and "green in CI" become two different things to
+# satisfy, and then two different things to debug.
+
+name: CI
+
+on:
+  # Every pull request, whatever it targets. Restricting to `base: main` would leave a stacked PR
+  # — one feature branch reviewed on top of another — with no checks at all, which is exactly when
+  # a reviewer most wants them. `push` stays limited to `main`, so a branch push is checked once,
+  # by its pull request, rather than twice.
+  pull_request:
+  push:
+    branches: [main]
+
+# Read-only, and nothing here needs more. A workflow with a write token or a secret cannot safely
+# run on a pull request from a fork.
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  # Superseded PR runs are cancelled; `main` is not. A cancelled `main` build leaves `main`
+  # unverified, which is the one state this workflow exists to prevent.
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  typecheck:
+    name: typecheck
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+
+  lint:
+    name: lint
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      # Formatting is the same class of failure — "the code is not shaped right" — so it belongs in
+      # the same check rather than costing another runner.
+      - run: pnpm format:check
+
+  unit:
+    name: unit
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test
+
+  build:
+    name: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+
+  database:
+    name: database
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+
+      # The project's own compose stack, not a bespoke service container. One Postgres definition,
+      # one version, one code path — and it means the compose file is itself exercised on every PR
+      # instead of drifting until the next developer's `pnpm stack:up` fails.
+      - name: Start the local stack
+        run: pnpm stack:up
+
+      - name: Apply migrations
+        run: pnpm db:migrate:deploy
+        env:
+          DATABASE_URL: postgres://marketplace:marketplace_local@127.0.0.1:5432/marketplace
+
+      # The criteria W0-T02 and W0-T05 could only assert against a running stack. Without this job
+      # they are skipped everywhere, forever, and the suite quietly measures less than it claims.
+      - name: Run the live suites
+        run: |
+          pnpm vitest run tests/local-stack.test.ts
+          pnpm --filter @marketplace/api exec vitest run tests/db.test.ts
+        env:
+          STACK_LIVE: '1'
+          DATABASE_URL: postgres://marketplace:marketplace_local@127.0.0.1:5432/marketplace
+
+      # Not `pnpm stack:logs` — that script follows, which would hang the job until its timeout.
+      - name: Stack logs
+        if: failure()
+        run: docker compose logs --no-color --tail=200
+
+  workflows:
+    name: workflows
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+      # CI that cannot lint itself is CI nobody can change safely: a typo in a `uses:` or an
+      # unquoted expression fails at run time, on someone else's pull request.
+      - name: actionlint
+        uses: docker://rhysd/actionlint:1.7.7
+        with:
+          args: -color

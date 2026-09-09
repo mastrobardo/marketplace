@@ -197,6 +197,35 @@ Your page owns its own single `<h1>`; the layout has none.
 > TypeScript is pinned to `~5.9.3` on purpose. TS 7 breaks `typescript-eslint` and declaration
 > emit — see `memory/repo/gotchas.md` MEM-2026-09-08-01 for the condition to unpin.
 
+## CI
+
+Every pull request runs six checks. They are separate jobs on purpose: a red PR should say *which*
+class of thing broke without anyone opening a log.
+
+| Check | Runs | |
+|---|---|---|
+| `typecheck` | `pnpm typecheck` | |
+| `lint` | `pnpm lint` + `pnpm format:check` | |
+| `unit` | `pnpm test` | the daemon-free suite |
+| `build` | `pnpm build` | |
+| `database` | `pnpm stack:up`, migrations, then every `STACK_LIVE=1` suite | the only job needing Docker |
+| `workflows` | `actionlint` | CI that cannot lint itself is CI nobody can change safely |
+
+**These six names are the contract.** `W0-T13` requires them in branch protection, GitHub matches
+required checks *by name*, and a check that simply never arrives is reported as nothing at all —
+so renaming a job silently unblocks merges. Rename one, update branch protection in the same change.
+
+Each gate runs the same `pnpm` script you run locally. A CI-only variant command is how "green on
+my laptop" and "green in CI" become two different things to satisfy, and then two things to debug.
+
+The `database` job brings up **this repo's own `docker-compose.yml`** rather than a bespoke service
+container, so there is one Postgres definition to keep in step and the compose file is exercised on
+every PR. It is also the only place the `STACK_LIVE=1` criteria from `W0-T02` and `W0-T05` actually
+run — without it they are skipped everywhere and the suite measures less than it claims.
+
+Superseded PR runs are cancelled; runs on `main` are not, because a cancelled `main` build leaves
+`main` unverified. Nothing in the workflow reads a secret, and its token is `contents: read`.
+
 ## Layout
 
 | Path | What |
@@ -205,6 +234,7 @@ Your page owns its own single `<h1>`; the layout has none.
 | `apps/web` | Vite + React SPA — router, layout shell, ES/EN i18n, theme tokens. |
 | `packages/config` | The one place TypeScript, ESLint, Prettier and Vitest are configured. |
 | `docker-compose.yml`, `docker/` | The local stack: Postgres + PostGIS, mail catcher, object storage. |
+| `.github/workflows` | The CI gates every pull request passes. |
 | `agents/` | Charters, prompt templates and policies for the agents building this. |
 | `memory/` | What agents know across sessions. |
 | `docs/adr`, `docs/specs` | Decisions, and one spec + run record per feature. |
