@@ -158,7 +158,39 @@ regenerated is indistinguishable from a run that changed nothing.
   thirteen times ever, down from once per task. Sorted one-per-line so two such branches usually
   merge anyway. Stated in the spec's risks rather than left for a reviewer to find.
 
-## 8. Handoff
+## 8. One thing fixed that was not this task
+
+CI's `lint` job failed on the first push while `pnpm lint` was green locally, twice.
+
+`packages/config/eslint.config.js` imports `./dist/eslint.js` — it must, because ESLint loads its
+config as JavaScript and cannot read the TypeScript source. `turbo.json` gave `lint`
+`"dependsOn": ["^build"]`, and the caret means *upstream* packages: `@marketplace/config` has no
+upstream, so nothing ordered its lint after its own build. `@marketplace/config#lint` could start
+before `dist/eslint.js` existed.
+
+It only fails on a **cold** cache, which is why it had never been seen. The trigger was this branch
+adding four `scripts` entries to the root `package.json` — part of turbo's global hash, so the whole
+cache missed at once. The bug is older than this PR; the cache miss is what made it visible.
+
+Reproduced deterministically rather than assumed:
+
+```
+$ rm -rf packages/config/dist .turbo packages/config/.turbo && pnpm lint
+@marketplace/config:lint: Error [ERR_MODULE_NOT_FOUND]: Cannot find module
+  '…/packages/config/dist/eslint.js' imported from …/packages/config/eslint.config.js
+ Tasks:    0 successful, 2 total
+```
+
+Fixed with a package-specific override — `"@marketplace/config#lint": { "dependsOn": ["build"] }`,
+no caret — plus two assertions in `tests/config-package.test.ts` anchored to the *reason*, so the
+override is removed if `eslint.config.js` ever stops importing `dist/`. `pnpm verify` now passes
+from a cold cache. Promoted as `MEM-2026-09-09-32`.
+
+Out of scope for `W0-T23` and disclosed rather than folded in silently: it blocked the PR, it is
+four lines, and leaving a known cold-cache failure for the next agent to rediscover would have cost
+more than it saved.
+
+## 9. Handoff
 
 - **Every agent must run `./scripts/setup-git.sh` once**, and `pnpm memory:render` after writing a
   record. `agents/AGENTS.md` §3, `agents/policies/memory.md` and `agents/prompts/09-memory-write.md`

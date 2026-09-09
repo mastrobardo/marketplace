@@ -17,6 +17,11 @@
     "test": {
       "dependsOn": ["^build"],
       "outputs": []
+    },
+
+    "@marketplace/config#lint": {
+      "dependsOn": ["build"],
+      "outputs": []
     }
   }
 }

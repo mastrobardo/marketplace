@@ -49,6 +49,7 @@ table of terms rather than a record per file, because a term is one line and coi
 - [A CI gate on a shallow clone reports green because it cannot see](repo/gotchas/MEM-2026-09-09-27.md) — `actions/checkout` defaults to `fetch-depth: 1`.
 - [A vitest JSON report file can be stale, and a stale report is indistinguishable from no change](repo/gotchas/MEM-2026-09-09-28.md) — Re-reading `.vitest/json/output.json` after a second run returned byte-identical results — including assertions that had just been made to pass — so a fixed suite still read as 25 failures.
 - [`satisfies` stops catching excess keys the moment the object is built from spreads](repo/gotchas/MEM-2026-09-09-29.md) — TypeScript's excess-property check applies to **direct object literals** only.
+- [Turbo's `^build` is upstream-only, so a package that consumes its own `dist/` is unordered](repo/gotchas/MEM-2026-09-09-32.md) — `"dependsOn": ["^build"]` orders a task after the builds of a package's **dependencies**, never after its own.
 
 ### Per-slice
 
@@ -72,7 +73,7 @@ table of terms rather than a record per file, because a term is one line and coi
 
 _None._
 
-_44 records. Generated — run `pnpm memory:render`._
+_45 records. Generated — run `pnpm memory:render`._
 <!-- END GENERATED -->
 
 ## Rules
