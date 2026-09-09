@@ -227,6 +227,15 @@ is the whole of `W0-T24`. CI itself: six gates green
      was still untracked when `pnpm verify` ran, and failed the moment it was committed. Excluded
      by path with a comment, rather than by obfuscating the patterns.
 
+8. **`PREVIEW_DATABASE_URL` was read by `deploy-preview.yml` and absent from the guard's
+   `REQUIRED` set.** The guard would have reported `configured: true`, created a Fly app and a Neon
+   branch, and only then failed at the migrate step against an empty `DATABASE_URL` — precisely the
+   half-built state the guard exists to prevent, and it would have cost a leaked Fly app per
+   attempt. Found while writing `.env.example`, by diffing every `${{ secrets.* }}` the workflows
+   read against `REQUIRED`. Now enforced: `tests/env-example.test.ts` asserts those two sets are
+   equal, so no credential can be consumed without being checked for. (`W0-T16` replaces this one
+   with the URL `neonctl branches create` returns, at which point it stops being a secret.)
+
 ## Notes for the reviewer
 
 - **This lands inert, and the PR body says so.** Do not read six green checks as evidence that a

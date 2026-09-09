@@ -26,6 +26,11 @@ export const REQUIRED: Record<DeployTarget, readonly string[]> = {
     'CLOUDFLARE_ACCOUNT_ID',
     'NEON_API_KEY',
     'NEON_PROJECT_ID',
+    // Used by the preview's migrate step. Without it here the guard would report "configured",
+    // create a Fly app and a Neon branch, and only then fail — which is the exact half-built state
+    // this guard exists to prevent. `W0-T16` replaces it with the URL `neonctl branches create`
+    // returns, at which point it stops being a secret and this entry goes away.
+    'PREVIEW_DATABASE_URL',
   ],
   staging: [
     'FLY_API_TOKEN',

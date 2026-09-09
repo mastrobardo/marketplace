@@ -105,7 +105,7 @@ No code surface. The public surface is the workflow files, the environments and 
 
 | GitHub Environment | Protection | Secrets it holds |
 | --- | --- | --- |
-| `preview` | none | `FLY_API_TOKEN`, `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `NEON_API_KEY`, `NEON_PROJECT_ID` |
+| `preview` | none | `FLY_API_TOKEN`, `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `NEON_API_KEY`, `NEON_PROJECT_ID`, `PREVIEW_DATABASE_URL` |
 | `staging` | none | the same five, plus `STAGING_DATABASE_URL` |
 | `production` | **required reviewer**, tag `v*` only | `FLY_API_TOKEN`, `PRODUCTION_DATABASE_URL` |
 
@@ -201,7 +201,8 @@ Actions. This task does not use it. Fork PRs get the `unconfigured` path, and th
 21. **Given** every deploy job, **when** it is read, **then** it is gated on the guard's output, so
     a missing secret produces a reported skip and not a crash mid-deploy.
 22. **Given** the repository, **when** it is searched, **then** no secret value appears in any
-    tracked file.
+    tracked file — and **every** `secrets.*` a workflow reads is declared in the guard's `REQUIRED`
+    set for that target, so no credential can be consumed without being checked for first.
 23. **Given** every `uses:` in every deploy workflow, **when** its ref is read, **then** it is
     pinned to a fixed version.
 24. **Given** every deploy job, **when** it is read, **then** it has a `timeout-minutes`.

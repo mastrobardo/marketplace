@@ -12,8 +12,15 @@ to work is [`agents/AGENTS.md`](agents/AGENTS.md), and it is worth reading befor
 pnpm install
 ```
 
-That is the whole setup. It links every workspace member and builds `@marketplace/config`, which the
-lint and test configs import at load time.
+That is the whole setup. It links every workspace member, builds `@marketplace/config` — which the
+lint and test configs import at load time — and generates the Prisma client.
+
+```bash
+cp .env.example .env
+```
+
+Optional: every variable in it already carries the default the code uses, and the connection string
+already matches the local stack. Edit it when a port on your machine is taken.
 
 ```bash
 pnpm verify   # typecheck · lint · format:check · test · build — the local gate
@@ -83,7 +90,14 @@ connects lazily on the first query.
 | `APP_VERSION` | `0.0.0-dev` | set by the deploy pipeline; surfaced by `/health` |
 
 Every variable lives in `EnvSchema` in `apps/api/src/config.ts` or it does not exist. Reaching for
-`process.env` inside a module is a review failure. (`.env.example` itself is `W0-T09`.)
+`process.env` inside a module is a review failure.
+
+Every one of them is in [`.env.example`](.env.example), alongside the local stack's port
+overrides — `cp .env.example .env` and the API boots against `pnpm stack:up` unedited.
+`tests/env-example.test.ts` fails the build if that file drifts from `EnvSchema` or from the
+variables `docker-compose.yml` reads, so the example cannot quietly go stale. Deploy credentials
+are **not** in it: they are GitHub Environment secrets, and listing them there would suggest
+otherwise — see *What a human has to set*.
 
 `GET /health` answers from process state alone and opens no connection. Every response carries an
 `x-request-id`, and every error — including 404 — arrives in one shape:
@@ -255,6 +269,12 @@ A deploy is never a required check. An unconfigured deploy must not block a merg
 
 Each secret goes in **Settings → Environments → *(environment)* → Add secret**. Agents write these
 names; no agent may ever create, read or commit a value.
+
+The same list is inventoried in [`.env.example`](.env.example), commented out and empty.
+`tests/env-example.test.ts` cross-checks three places against each other — every
+`${{ secrets.* }}` the workflows read, `REQUIRED` in `scripts/deploy/config.ts`, and that file —
+and fails if any of them disagree, so a credential cannot be consumed without the guard checking
+for it first.
 
 | Environment | Secrets | Blocked on |
 |---|---|---|
