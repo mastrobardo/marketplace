@@ -90,7 +90,10 @@ jobs:
           cache: pnpm
           cache-dependency-path: pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile
-      - uses: superfly/flyctl-actions/setup-flyctl@v1.5
+      # `1.5`, not `v1.5`: superfly/flyctl-actions tags its releases without the prefix, and
+      # `v1.5` does not exist. It resolved to nothing and failed the job at "Set up job" —
+      # invisible until now, because this job had never once got past the preflight gate.
+      - uses: superfly/flyctl-actions/setup-flyctl@1.5
 
       # No `docker build` anywhere in this file. If staging never pushed an image for this commit,
       # the release stops here — which is the point.

@@ -60,7 +60,10 @@ jobs:
     timeout-minutes: 10
     environment: preview
     steps:
-      - uses: superfly/flyctl-actions/setup-flyctl@v1.5
+      # `1.5`, not `v1.5`: superfly/flyctl-actions tags its releases without the prefix, and
+      # `v1.5` does not exist. It resolved to nothing and failed the job at "Set up job" —
+      # invisible until now, because this job had never once got past the preflight gate.
+      - uses: superfly/flyctl-actions/setup-flyctl@1.5
 
       # Installed for the same reason as in deploy-preview.yml, and it matters more here: paired
       # with the deliberate `|| true` below, a missing neonctl made every teardown green while the
