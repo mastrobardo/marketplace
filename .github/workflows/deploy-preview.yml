@@ -106,16 +106,39 @@ jobs:
           if neonctl branches get "$DB_BRANCH" --project-id "$NEON_PROJECT_ID" >/dev/null 2>&1; then
             echo "Reusing the existing branch for this pull request."
           else
-            neonctl branches create \
+            if ! out="$(neonctl branches create \
               --project-id "$NEON_PROJECT_ID" \
               --name "$DB_BRANCH" \
-              --parent sanitised-staging
+              --parent "$PARENT" 2>&1)"; then
+              echo "$out"
+              # Neon refuses to branch off a parent that expires, and the raw message does not say
+              # where to fix it. Every preview fails identically until somebody clears the date.
+              case "$out" in
+                *"expiration date"*)
+                  echo "BLOCKED — needs human"
+                  echo "Need:     the expiration date removed from the \"$PARENT\" branch"
+                  echo "Where:    Neon → project → Branches → $PARENT → remove expiry"
+                  echo "Why:      Neon cannot create a child of an expiring branch, so no pull"
+                  echo "          request can get a preview database until this is cleared."
+                  ;;
+                *"not found"*)
+                  echo "BLOCKED — needs human"
+                  echo "Need:     a \"$PARENT\" branch in the Neon project"
+                  echo "Where:    Neon → project → Branches → New branch"
+                  echo "Why:      previews branch from sanitised data, never from raw staging"
+                  echo "          (ADR-006). W0-T20 owns what sanitised means."
+                  ;;
+              esac
+              exit 1
+            fi
+            echo "$out"
           fi
           url="$(neonctl connection-string "$DB_BRANCH" --project-id "$NEON_PROJECT_ID")"
           echo "::add-mask::$url"
           echo "url=$url" >> "$GITHUB_OUTPUT"
         env:
           DB_BRANCH: ${{ needs.preflight.outputs.db-branch }}
+          PARENT: sanitised-staging
           NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
           NEON_PROJECT_ID: ${{ secrets.NEON_PROJECT_ID }}
 
