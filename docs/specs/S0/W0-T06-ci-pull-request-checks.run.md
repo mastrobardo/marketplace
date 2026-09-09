@@ -147,6 +147,13 @@ skipped everywhere, and the suite measured less than it claimed.
    MEM-2026-09-09-18. Caught by reading the script, not by a test — the static suite cannot tell a
    blocking command from a returning one.
 
+5. **The `pull_request` trigger was restricted to `base: main`, and that was wrong.** Found by
+   observation, not by a test: after opening this PR, `gh run list` returned `[]`. The PR is
+   stacked on `W0-T05-database-toolchain`, so its base is not `main` and the filter excluded it —
+   the first stacked PR in the repo would have had **no checks at all**, silently, which is exactly
+   when a reviewer most wants them. The trigger now filters on nothing. `push` stays limited to
+   `main` so a branch push is checked once, by its pull request, rather than twice. AC1 rewritten.
+
 ## Notes for the reviewer
 
 - **This PR tests itself.** A `pull_request` workflow added by a branch in this repository runs on

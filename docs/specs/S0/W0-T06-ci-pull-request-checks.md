@@ -48,7 +48,7 @@ The stateful thing is a **PR's check status**.
 
 | from | event | to | guard | side effect |
 | --- | --- | --- | --- | --- |
-| *none* | PR opened / synchronised | `queued` | — | a run starts; any in-flight run for the same PR is cancelled |
+| *none* | PR opened / synchronised | `queued` | any base branch | a run starts; any in-flight run for the same PR is cancelled |
 | `queued` | runner picks it up | `running` | — | setup, install, restore cache |
 | `running` | every job succeeds | `success` | — | checks reported green; merge unblocked (once `W0-T13` lands) |
 | `running` | any job fails | `failure` | — | the failing job's log is the answer; merge blocked |
@@ -104,8 +104,11 @@ requests `write`, and no job references `secrets.*`.
 
 **Triggers and lifecycle**
 
-1. **Given** the workflow, **when** its triggers are read, **then** it runs on `pull_request`
-   targeting `main` and on `push` to `main`, and on nothing else.
+1. **Given** the workflow, **when** its triggers are read, **then** it runs on **every**
+   `pull_request` regardless of base branch, and on `push` to `main` only, and on nothing else.
+   Restricting the pull-request trigger to `base: main` leaves a stacked PR — one feature branch
+   reviewed on top of another — with no checks at all; limiting `push` to `main` stops a branch
+   push being checked twice, once by the push and once by its PR.
 2. **Given** two pushes to one branch in quick succession, **when** the second starts, **then**
    `concurrency` cancels the first — the group is per-ref and `cancel-in-progress` is true.
 3. **Given** the `push` trigger on `main`, **when** a run happens there, **then** it is **not**

@@ -66,15 +66,21 @@ const raw = (): string => readFileSync(CI, 'utf8');
  * Triggers and lifecycle — AC1..AC3
  * ------------------------------------------------------------------------------------------- */
 
-describe('AC1 — the workflow runs on pull requests and on main, and nothing else', () => {
+describe('AC1 — the workflow runs on every pull request, and on main, and nothing else', () => {
   it('declares exactly the two triggers', () => {
     expect(Object.keys(workflow().on ?? {}).sort()).toEqual(['pull_request', 'push']);
   });
 
-  it('targets main from both', () => {
-    const on = workflow().on ?? {};
-    expect(on['pull_request']).toMatchObject({ branches: ['main'] });
-    expect(on['push']).toMatchObject({ branches: ['main'] });
+  it('filters the pull-request trigger by nothing — a stacked PR is still a PR', () => {
+    const trigger = (workflow().on ?? {})['pull_request'];
+    expect(
+      trigger,
+      'restricting to base: main leaves a PR stacked on another branch with no checks',
+    ).toBeNull();
+  });
+
+  it('limits push to main, so a branch push is not checked twice', () => {
+    expect((workflow().on ?? {})['push']).toMatchObject({ branches: ['main'] });
   });
 });
 

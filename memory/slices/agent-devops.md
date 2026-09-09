@@ -153,3 +153,20 @@ Keep it to facts that changed how you would work. Task-specific detail stays in 
   the last `:`. Reject `main`, `master` and `latest` in both shapes.
 - **evidence**: `tests/ci-workflow.test.ts` AC13
 - **status**: active
+
+### `pull_request: branches: [main]` gives a stacked PR no checks at all
+- **id**: MEM-2026-09-09-20
+- **scope**: slice:S0
+- **fact**: A `pull_request` trigger filtered by `branches:` matches the PR's **base**, not its
+  head. A PR from `B` into `A` (both feature branches) does not match `branches: [main]`, so it
+  runs nothing — and reports nothing, which reads as "no checks configured" rather than as a
+  failure. Observed the moment the first stacked PR was opened: `gh run list` returned `[]`.
+- **why**: The filter is near-universal boilerplate and looks like a safety measure. It is really a
+  scope restriction, and its blind spot is the review situation with the *most* moving parts.
+  Restricting `push` to `main` is correct and separate — it stops a branch push being checked
+  twice, once by the push and once by its PR.
+- **apply**: Leave `pull_request:` unfiltered. Filter `push:` to `main`. After opening a PR that
+  adds or changes a workflow, run `gh run list --branch <branch>` and confirm it is not empty — an
+  empty list is the failure mode, and it is invisible in the PR UI.
+- **evidence**: PR #155; `docs/specs/S0/W0-T06-ci-pull-request-checks.run.md` (deviation 5)
+- **status**: active

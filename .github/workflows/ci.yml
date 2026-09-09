@@ -12,8 +12,11 @@
 name: CI
 
 on:
+  # Every pull request, whatever it targets. Restricting to `base: main` would leave a stacked PR
+  # — one feature branch reviewed on top of another — with no checks at all, which is exactly when
+  # a reviewer most wants them. `push` stays limited to `main`, so a branch push is checked once,
+  # by its pull request, rather than twice.
   pull_request:
-    branches: [main]
   push:
     branches: [main]
 
