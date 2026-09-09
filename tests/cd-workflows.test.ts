@@ -632,37 +632,44 @@ describe('AC33 — the app is pointed at the database the migration actually use
 });
 
 /**
- * `cloudflare/wrangler-action` installs its own tool when it cannot find one — with
- * `pnpm add wrangler@<version>`, which pnpm refuses at a workspace root without `-w`:
+ * Two ways to get wrangler into a pnpm monorepo, and both were wrong:
  *
- *   ERR_PNPM_ADDING_TO_ROOT  Running this command will add the dependency to the workspace root
+ *   cloudflare/wrangler-action  → bootstraps with `pnpm add wrangler@…` at the workspace root,
+ *                                 which pnpm refuses without `-w` (ERR_PNPM_ADDING_TO_ROOT).
+ *   a root devDependency        → drags esbuild 0.17 into a workspace whose vite 8 requires
+ *                                 ^0.27, and the API image build re-resolves and dies on
+ *                                 ERR_PNPM_PEER_DEP_ISSUES. A tool the *web* deploy needs has no
+ *                                 business in the API's dependency graph.
  *
- * So in a pnpm monorepo the action cannot bootstrap itself, and the repo has to declare the tool.
- * This is AC29's rule — install what you invoke — for a binary an *action* runs rather than a
- * `run:` block, which is why AC29 could not see it.
+ * So wrangler is invoked with an exact version and installed by neither. This asserts the version
+ * stays pinned — an unpinned `npx wrangler` silently follows latest, which is the supply-chain
+ * property AC23 protects for actions.
  */
-describe('AC34 — an action that shells out to a tool finds one already installed', () => {
+describe('AC34 — wrangler is pinned, and is not a dependency of this workspace', () => {
   const manifest = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')) as {
+    dependencies?: Record<string, string>;
     devDependencies?: Record<string, string>;
   };
 
-  for (const file of DEPLOY_WORKFLOWS) {
-    const uses = steps(jobs(file)['deploy'] ?? {}).filter((step) =>
-      (step.uses ?? '').startsWith('cloudflare/wrangler-action'),
-    );
-    if (uses.length === 0) continue;
+  it('is absent from the root manifest, so it cannot reach the API image', () => {
+    expect(
+      manifest.devDependencies?.['wrangler'],
+      'wrangler is a root devDependency again',
+    ).toBeUndefined();
+    expect(manifest.dependencies?.['wrangler']).toBeUndefined();
+  });
 
-    it(`${file} does not ask the action to install wrangler`, () => {
-      const declared = manifest.devDependencies?.['wrangler'];
-      expect(declared, 'wrangler is not a root devDependency').toBeDefined();
+  for (const file of [PREVIEW, STAGING]) {
+    it(`${file} pins the wrangler it runs`, () => {
+      const invocations = Object.values(jobs(file))
+        .flatMap((job) => steps(job))
+        .filter((step) => /wrangler/.test((step.run ?? '') + (step.uses ?? '')));
+      expect(invocations.length, `${file} never deploys to Pages`).toBeGreaterThan(0);
 
-      for (const step of uses) {
-        const pinned = String(step.with?.['wranglerVersion'] ?? '');
-        expect(pinned, `${file}: wranglerVersion is not pinned`).not.toBe('');
-        expect(
-          pinned,
-          `${file}: wranglerVersion ${pinned} disagrees with the installed ${String(declared)}`,
-        ).toBe(declared);
+      for (const step of invocations) {
+        expect(step.run ?? '', `${file}: wrangler is invoked without an exact version`).toMatch(
+          /wrangler@\d+\.\d+\.\d+/,
+        );
       }
     });
   }
