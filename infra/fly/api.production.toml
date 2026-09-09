@@ -1,0 +1,29 @@
+# Production. Never built from source here — the image is promoted from staging by digest.
+app = "marketplace-api-production"
+primary_region = "cdg" # Paris — Fly has no Spain region (ADR-006); ~25ms from Madrid
+
+[build]
+  dockerfile = "../docker/api.Dockerfile"
+
+[env]
+  NODE_ENV = "production"
+  LOG_LEVEL = "info"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  # Two machines minimum (ADR-006): a single machine makes a deploy an outage.
+  auto_stop_machines = "off"
+  auto_start_machines = true
+  min_machines_running = 2
+
+  [[http_service.checks]]
+    interval = "15s"
+    timeout = "2s"
+    grace_period = "10s"
+    method = "GET"
+    path = "/health"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "1gb"

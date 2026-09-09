@@ -12,8 +12,15 @@ to work is [`agents/AGENTS.md`](agents/AGENTS.md), and it is worth reading befor
 pnpm install
 ```
 
-That is the whole setup. It links every workspace member and builds `@marketplace/config`, which the
-lint and test configs import at load time.
+That is the whole setup. It links every workspace member, builds `@marketplace/config` — which the
+lint and test configs import at load time — and generates the Prisma client.
+
+```bash
+cp .env.example .env
+```
+
+Optional: every variable in it already carries the default the code uses, and the connection string
+already matches the local stack. Edit it when a port on your machine is taken.
 
 ```bash
 pnpm verify   # typecheck · lint · format:check · test · build — the local gate
@@ -83,7 +90,14 @@ connects lazily on the first query.
 | `APP_VERSION` | `0.0.0-dev` | set by the deploy pipeline; surfaced by `/health` |
 
 Every variable lives in `EnvSchema` in `apps/api/src/config.ts` or it does not exist. Reaching for
-`process.env` inside a module is a review failure. (`.env.example` itself is `W0-T09`.)
+`process.env` inside a module is a review failure.
+
+Every one of them is in [`.env.example`](.env.example), alongside the local stack's port
+overrides — `cp .env.example .env` and the API boots against `pnpm stack:up` unedited.
+`tests/env-example.test.ts` fails the build if that file drifts from `EnvSchema` or from the
+variables `docker-compose.yml` reads, so the example cannot quietly go stale. Deploy credentials
+are **not** in it: they are GitHub Environment secrets, and listing them there would suggest
+otherwise — see *What a human has to set*.
 
 `GET /health` answers from process state alone and opens no connection. Every response carries an
 `x-request-id`, and every error — including 404 — arrives in one shape:
@@ -226,6 +240,54 @@ run — without it they are skipped everywhere and the suite measures less than 
 Superseded PR runs are cancelled; runs on `main` are not, because a cancelled `main` build leaves
 `main` unverified. Nothing in the workflow reads a secret, and its token is `contents: read`.
 
+## Deployment
+
+Four workflows, and **none of them has ever run.** Every credential they need is a human task and
+none exists yet — see the table below. Until `W0-T24` is closed, this pipeline is code, not
+capability, and every deploy job reports what is missing and skips.
+
+| Workflow | Fires | Does |
+|---|---|---|
+| `deploy-preview.yml` | PR opened / pushed to / reopened | Fly app + Neon branch + Cloudflare Pages preview for that PR, URLs commented on it |
+| `deploy-preview-teardown.yml` | PR closed (merged **or** abandoned) | destroys all three |
+| `deploy-staging.yml` | push to `main` | builds the image **once**, tags it with the commit SHA, migrates, deploys staging |
+| `release-production.yml` | a `v*` tag | promotes that exact image to production, behind an approval |
+
+Three properties are load-bearing and expensive to retrofit, so they are enforced by tests:
+
+- **Production has no build step.** It deploys the image staging already pushed for that commit, so
+  "it worked on staging" is a claim about the same bytes (ADR-006). A tag on a commit `main` never
+  saw, or one staging never built, fails before anything is touched.
+- **Migrations are their own step, before the deploy, never on start-up.** A bad migration should
+  be a failed step somebody can see, not a service that will not boot.
+- **No `pull_request_target`.** It runs the base branch's workflow with full secrets against
+  untrusted code, and it is the only way to deploy a fork's PR. Fork PRs get no preview instead.
+
+A deploy is never a required check. An unconfigured deploy must not block a merge.
+
+### What a human has to set
+
+Each secret goes in **Settings → Environments → *(environment)* → Add secret**. Agents write these
+names; no agent may ever create, read or commit a value.
+
+The same list is inventoried in [`.env.example`](.env.example), commented out and empty.
+`tests/env-example.test.ts` cross-checks three places against each other — every
+`${{ secrets.* }}` the workflows read, `REQUIRED` in `scripts/deploy/config.ts`, and that file —
+and fails if any of them disagree, so a credential cannot be consumed without the guard checking
+for it first.
+
+| Environment | Secrets | Blocked on |
+|---|---|---|
+| `preview` | `FLY_API_TOKEN`, `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `NEON_API_KEY`, `NEON_PROJECT_ID`, `PREVIEW_DATABASE_URL` | `OPS-07`, `OPS-08`, `OPS-09` |
+| `staging` | `FLY_API_TOKEN`, `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `STAGING_DATABASE_URL` | `OPS-07`, `OPS-08`, `OPS-09` |
+| `production` | `FLY_API_TOKEN`, `PRODUCTION_DATABASE_URL` | `OPS-07`, `OPS-08` |
+
+`production` deliberately holds the shortest list: no Cloudflare or Neon API key, so a release
+cannot create or destroy a database branch. Blast radius is a function of what the token can reach.
+
+The `production` environment also needs a **required reviewer** and a branch/tag rule limiting it to
+`v*`. That is a GitHub settings change, not a file in this repo — `W0-T24` again.
+
 ## Layout
 
 | Path | What |
@@ -234,7 +296,9 @@ Superseded PR runs are cancelled; runs on `main` are not, because a cancelled `m
 | `apps/web` | Vite + React SPA — router, layout shell, ES/EN i18n, theme tokens. |
 | `packages/config` | The one place TypeScript, ESLint, Prettier and Vitest are configured. |
 | `docker-compose.yml`, `docker/` | The local stack: Postgres + PostGIS, mail catcher, object storage. |
-| `.github/workflows` | The CI gates every pull request passes. |
+| `.github/workflows` | The CI gates every pull request passes, and the deploy pipeline. |
+| `infra/` | Fly app configuration and the API image definition. |
+| `scripts/deploy` | The deploy guard — which credentials a target needs, and the names of its per-PR resources. |
 | `agents/` | Charters, prompt templates and policies for the agents building this. |
 | `memory/` | What agents know across sessions. |
 | `docs/adr`, `docs/specs` | Decisions, and one spec + run record per feature. |

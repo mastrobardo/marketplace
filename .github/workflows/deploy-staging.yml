@@ -1,0 +1,101 @@
+# W0-T07 — main on staging, and the one place an image is built.
+#
+# ADR-006: a production release promotes the artifact staging tested, so the image is built exactly
+# once, here, and tagged with the commit SHA. `release-production.yml` then deploys that digest and
+# has no build step at all — "it worked on staging" is only a meaningful sentence if it is a claim
+# about the same bytes.
+#
+# THIS WORKFLOW HAS NEVER RUN — see deploy-preview.yml and W0-T24.
+
+name: Deploy staging
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  deployments: write
+
+concurrency:
+  group: staging
+  cancel-in-progress: false # deploys queue; cancelling one mid-flight leaves staging indeterminate
+
+jobs:
+  preflight:
+    name: preflight
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    environment: staging
+    outputs:
+      configured: ${{ steps.guard.outputs.configured }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - id: guard
+        run: pnpm exec tsx scripts/deploy/check.ts staging
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          STAGING_DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+
+  deploy:
+    name: deploy
+    needs: preflight
+    if: needs.preflight.outputs.configured == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    environment: staging
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+
+      - uses: superfly/flyctl-actions/setup-flyctl@v1.5
+
+      # Built once, named by commit. Everything downstream refers to this digest and never to a
+      # branch or a moving tag.
+      - name: Build and push the API image
+        run: |
+          flyctl auth docker
+          docker build --file infra/docker/api.Dockerfile --tag "$IMAGE" .
+          docker push "$IMAGE"
+        env:
+          IMAGE: registry.fly.io/marketplace-api-staging:${{ github.sha }}
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
+      # Its own step, before the deploy, and never on application start-up. A bad migration should
+      # be a failed step somebody can see, not a service that will not boot (ADR-006).
+      - name: Migrate staging
+        run: pnpm db:migrate:deploy
+        env:
+          DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+
+      - name: Deploy the API
+        run: flyctl deploy --app marketplace-api-staging --config infra/fly/api.staging.toml --image "$IMAGE"
+        env:
+          IMAGE: registry.fly.io/marketplace-api-staging:${{ github.sha }}
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
+      - name: Build the web app
+        run: pnpm --filter @marketplace/web build
+        env:
+          VITE_API_URL: https://marketplace-api-staging.fly.dev
+
+      - uses: cloudflare/wrangler-action@v3.14.1
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy apps/web/dist --project-name marketplace-web --branch main
