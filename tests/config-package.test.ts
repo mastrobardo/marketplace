@@ -115,8 +115,8 @@ describe('AC10 — the shared Vitest preset is usable', () => {
  * *upstream* packages, and `@marketplace/config` has no upstream.
  *
  * The result was a race that only appeared on a cold turbo cache — which is any change to the root
- * `package.json`, since that is part of turbo's global hash. It failed CI on PR #161 having passed
- * on every warm-cache run before it.
+ * `package.json`, since that is part of turbo's global hash. Found on PR #161 and deliberately kept
+ * when that PR was reverted: the bug is older than it and unrelated to what was reverted.
  */
 describe('the shared config can lint itself on a cold cache', () => {
   const turbo = JSON.parse(readFileSync(join(root, 'turbo.json'), 'utf8')) as {

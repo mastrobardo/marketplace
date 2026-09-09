@@ -7,8 +7,24 @@ as the branch name, e.g. `docs/specs/S6/W4-T03-quote-submission.md`.
 
 ---
 
+## Before you write a line: is the restructuring worth it?
+
+If the task **reorganises existing source files for a non-functional benefit** — fewer merge
+conflicts, tidier layout, consistency — stop and get the trade-off agreed with the operator first.
+Put the standing cost in the message, concretely: *"this turns 2 translation files into 14, and
+every agent editing copy pays that every day, to avoid a conflict a human resolves in a minute."*
+
+An acceptance criterion can prove the benefit arrived and say nothing about whether it was worth
+buying. `W0-T23` passed every one of its own and was reverted whole
+(`docs/interventions/2026-09-09-W0-T23-01.md`). A spec that treats the direction as settled because
+an issue proposed it has skipped the only question that mattered.
+
+This applies to the direction, not to the details. Ordinary design choices inside an agreed
+direction are yours.
+
+
 Write the spec for **<TASK-ID>**. Before writing, read: your charter, `memory/LONG_TERM.md`,
-`memory/slices/<you>/`, the domain model in `TODO.md` §3, and any adjacent existing spec.
+`memory/slices/<you>.md`, the domain model in `TODO.md` §3, and any adjacent existing spec.
 
 Produce exactly these sections:
 

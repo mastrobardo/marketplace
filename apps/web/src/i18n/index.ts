@@ -1,7 +1,7 @@
 import i18next, { type i18n as I18n } from 'i18next';
 import { initReactI18next } from 'react-i18next';
-import { en } from './locales/en/index.js';
-import { es, type TranslationKey } from './locales/es/index.js';
+import { en } from './locales/en.js';
+import { es, type TranslationKey } from './locales/es.js';
 
 /** Spain first. The order matters: the first entry is the default and the fallback. */
 export const LOCALES = ['es', 'en'] as const;
