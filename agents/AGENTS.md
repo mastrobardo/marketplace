@@ -91,15 +91,19 @@ Full contract in `policies/memory.md`. The short version:
 
 | Layer | Path | Lifetime | Who writes |
 |---|---|---|---|
-| **Long-term, repo-wide** | `memory/repo/*.md` | forever, committed | any agent, via PR |
-| **Long-term, slice** | `memory/slices/<agent>.md` | forever, committed | only the owning agent |
+| **Long-term, repo-wide** | `memory/repo/<kind>/MEM-….md` | forever, committed | any agent, via PR |
+| **Long-term, slice** | `memory/slices/<agent>/MEM-….md` | forever, committed | only the owning agent |
 | **Session** | `memory/sessions/<date>-<agent>-<TASK-ID>.md` | one task; archived after merge | the session's agent |
 
-**Start of task**: read long-term + your slice + any open session file for this task ID.
+**One record per file**, copied from `memory/_RECORD_TEMPLATE.md` and named for its id. A new record
+is a new file, so promoting a learning can never conflict with another agent promoting one
+(`W0-T23`). `memory/LONG_TERM.md` is generated from them — run `pnpm memory:render`, never edit it.
+
+**Start of task**: read `LONG_TERM.md` + `slices/<you>/` + any open session file for this task ID.
 **During**: append to the session file as you learn things — decisions taken, dead ends, commands
 that worked, what you'd tell your successor if you were cut off right now.
 **End of task**: close the session file with a `## Handoff` block, and **promote** anything that
-outlives the task into `memory/repo/` or `memory/slices/<you>.md`.
+outlives the task into `memory/repo/<kind>/` or `memory/slices/<you>/`.
 
 Assume you will be interrupted. A session file that only makes sense to you is a bug.
 

@@ -215,7 +215,7 @@ Add a route as a **child** of the layout route in `src/app/routes.tsx` so it inh
 Your page owns its own single `<h1>`; the layout has none.
 
 > TypeScript is pinned to `~5.9.3` on purpose. TS 7 breaks `typescript-eslint` and declaration
-> emit — see `memory/repo/gotchas.md` MEM-2026-09-08-01 for the condition to unpin.
+> emit — see `memory/repo/gotchas/MEM-2026-09-08-01.md` for the condition to unpin.
 
 ## CI
 
