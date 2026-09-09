@@ -8,7 +8,7 @@ as the branch name, e.g. `docs/specs/S6/W4-T03-quote-submission.md`.
 ---
 
 Write the spec for **<TASK-ID>**. Before writing, read: your charter, `memory/LONG_TERM.md`,
-`memory/slices/<you>.md`, the domain model in `TODO.md` §3, and any adjacent existing spec.
+`memory/slices/<you>/`, the domain model in `TODO.md` §3, and any adjacent existing spec.
 
 Produce exactly these sections:
 

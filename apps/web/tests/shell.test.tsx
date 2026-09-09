@@ -2,8 +2,8 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { cleanup, render, screen, within } from '@testing-library/react';
 import { App } from '../src/app/App.js';
 import { changeLanguage, i18next, setupI18n } from '../src/i18n/index.js';
-import { es } from '../src/i18n/locales/es.js';
-import { en } from '../src/i18n/locales/en.js';
+import { es } from '../src/i18n/locales/es/index.js';
+import { en } from '../src/i18n/locales/en/index.js';
 
 beforeEach(async () => {
   await setupI18n();

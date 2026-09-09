@@ -10,10 +10,16 @@ to work is [`agents/AGENTS.md`](agents/AGENTS.md), and it is worth reading befor
 
 ```bash
 pnpm install
+./scripts/setup-git.sh
 ```
 
-That is the whole setup. It links every workspace member, builds `@marketplace/config` — which the
-lint and test configs import at load time — and generates the Prisma client.
+`pnpm install` links every workspace member, builds `@marketplace/config` — which the lint and test
+configs import at load time — and generates the Prisma client.
+
+`setup-git.sh` configures this clone: the identity guard hook that keeps a work account off a
+personal repo, and the merge drivers for the three generated files in `.gitattributes`. Skipping it
+costs you a manual conflict resolution, never a bad merge — see [Files nobody merges by
+hand](#files-nobody-merges-by-hand).
 
 ```bash
 cp .env.example .env
@@ -185,16 +191,22 @@ pnpm --filter @marketplace/web dev        # http://127.0.0.1:5173
 
 ### Strings
 
-Spanish is the **source of truth**. Add a key to `src/i18n/locales/es.ts`; `en.ts` then fails to
-compile until it is translated, and `t('typo.here')` fails to compile anywhere. That is what
-"no hardcoded strings" (`TODO.md` §5.3) is enforced by — not review.
+Spanish is the **source of truth**. Add a key to `src/i18n/locales/es/<namespace>.ts`; the matching
+`en/<namespace>.ts` then fails to compile until it is translated, and `t('typo.here')` fails to
+compile anywhere. That is what "no hardcoded strings" (`TODO.md` §5.3) is enforced by — not review.
 
-Keys are flat and dotted (`nav.home` is one key, not `home` under `nav`), which is why
-`keySeparator` and `nsSeparator` are `false` in `src/i18n/index.ts`. **Do not remove them**: at
-i18next's defaults every lookup would miss and render the raw key to the user.
+**One file per namespace**, so seven slice agents adding keys in parallel touch seven different
+files rather than queueing on two (`W0-T23`). A new namespace is two new files plus one sorted
+import and one spread in each `index.ts` barrel; adding a key to a namespace that already exists
+touches one file per language.
 
-The enforcement itself is tested. `apps/web/tests/fixtures/` holds three tiny TypeScript projects —
-one that must compile and two that must not — and `tests/i18n.test.ts` asserts `tsc`'s exit code
+Keys stay flat and dotted (`nav.home` is one key, not `home` under `nav`) — the namespace is the
+*file*, not a level of nesting. That is why `keySeparator` and `nsSeparator` are `false` in
+`src/i18n/index.ts`. **Do not remove them**: at i18next's defaults every lookup would miss and
+render the raw key to the user.
+
+The enforcement itself is tested. `apps/web/tests/fixtures/` holds four tiny TypeScript projects —
+one that must compile and three that must not — and `tests/i18n.test.ts` asserts `tsc`'s exit code
 for each.
 
 ### Colour and spacing
@@ -209,7 +221,7 @@ Add a route as a **child** of the layout route in `src/app/routes.tsx` so it inh
 Your page owns its own single `<h1>`; the layout has none.
 
 > TypeScript is pinned to `~5.9.3` on purpose. TS 7 breaks `typescript-eslint` and declaration
-> emit — see `memory/repo/gotchas.md` MEM-2026-09-08-01 for the condition to unpin.
+> emit — see `memory/repo/gotchas/MEM-2026-09-08-01.md` for the condition to unpin.
 
 ## CI
 
@@ -321,18 +333,25 @@ gain it retroactively. Delete the stale branch and let the next run recreate it.
 
 ## Layout
 
+One row per workspace member, generated from that member's own `package.json` `description` —
+so documenting your app is a change to a file only you touch (`W0-T23`). Run `pnpm readme:render`.
+
+<!-- BEGIN GENERATED — scripts/render-readme.ts. Do not hand-edit. -->
+
 | Path | What |
 |---|---|
-| `apps/api` | Fastify API — health, config, error envelope, request-id, logging, Prisma. |
-| `apps/web` | Vite + React SPA — router, layout shell, ES/EN i18n, theme tokens. |
-| `packages/config` | The one place TypeScript, ESLint, Prettier and Vitest are configured. |
+| `apps/api` | Fastify API — health, config, error envelope, request-id, structured logging and Prisma. |
+| `apps/web` | Vite + React SPA — router, layout shell, ES/EN i18n and theme tokens. |
+| `packages/config` | The one place TypeScript, ESLint, Prettier and Vitest are configured. Owned by agent-devops (slice S0). |
 | `docker-compose.yml`, `docker/` | The local stack: Postgres + PostGIS, mail catcher, object storage. |
 | `.github/workflows` | The CI gates every pull request passes, and the deploy pipeline. |
 | `infra/` | Fly app configuration and the API image definition. |
-| `scripts/deploy` | The deploy guard — which credentials a target needs, and the names of its per-PR resources. |
+| `scripts/` | Deploy guard, CI gates, and the renderers for every generated file. |
 | `agents/` | Charters, prompt templates and policies for the agents building this. |
-| `memory/` | What agents know across sessions. |
+| `memory/` | What agents know across sessions — one record per file. |
 | `docs/adr`, `docs/specs` | Decisions, and one spec + run record per feature. |
+
+<!-- END GENERATED -->
 
 ## Adding a workspace package
 

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parse as parseYaml } from 'yaml';
@@ -115,5 +116,32 @@ describe('AC4/AC5 — one shared TypeScript base, extended not copied', () => {
     const base = readJson<TsConfig>(join(root, 'packages/config/tsconfig/base.json'));
     expect(base.compilerOptions?.['strict']).toBe(true);
     expect(base.compilerOptions?.['noUncheckedIndexedAccess']).toBe(true);
+  });
+});
+
+/**
+ * `W0-T23`. The README Layout table has one row per workspace member and every task edited its own
+ * row, which is why it conflicted twice in the #150/#151/#152 session. Each row now comes from that
+ * member's own `package.json` — a file nobody else touches — and the table is generated from them.
+ */
+describe('W0-T23 — the Layout table is generated, not hand-edited', () => {
+  it('gives every workspace member a description to be described by', () => {
+    for (const dir of workspaceDirs()) {
+      const manifest = readJson<{ name?: string; description?: string }>(join(dir, 'package.json'));
+      expect(
+        manifest.description?.trim(),
+        `${relative(root, dir)}/package.json has no "description" — it is the source of that ` +
+          "member's row in the README Layout table",
+      ).toBeTruthy();
+    }
+  });
+
+  it('matches a fresh render', () => {
+    const result = spawnSync(
+      process.execPath,
+      ['--experimental-strip-types', 'scripts/render-readme.ts', '--check'],
+      { cwd: root, encoding: 'utf8' },
+    );
+    expect(result.status, `${result.stderr}${result.stdout}`).toBe(0);
   });
 });

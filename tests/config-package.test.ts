@@ -107,3 +107,33 @@ describe('AC10 — the shared Vitest preset is usable', () => {
     expect(baseVitestConfig.test.environment).toBe('node');
   });
 });
+
+/**
+ * `packages/config/eslint.config.js` imports `./dist/eslint.js` — it has to, because ESLint loads
+ * the config as JavaScript and cannot read the TypeScript source. So config's own `lint` needs
+ * config's own `build`, and `"dependsOn": ["^build"]` does not provide it: `^build` means
+ * *upstream* packages, and `@marketplace/config` has no upstream.
+ *
+ * The result was a race that only appeared on a cold turbo cache — which is any change to the root
+ * `package.json`, since that is part of turbo's global hash. It failed CI on PR #161 having passed
+ * on every warm-cache run before it.
+ */
+describe('the shared config can lint itself on a cold cache', () => {
+  const turbo = JSON.parse(readFileSync(join(root, 'turbo.json'), 'utf8')) as {
+    tasks: Record<string, { dependsOn?: string[] }>;
+  };
+
+  it('makes @marketplace/config#lint depend on its own build', () => {
+    expect(
+      turbo.tasks['@marketplace/config#lint']?.dependsOn,
+      'without this, `pnpm lint` on a cold cache fails with ERR_MODULE_NOT_FOUND on dist/eslint.js',
+    ).toContain('build');
+  });
+
+  it('still has the config package build its dist before anything consumes it', () => {
+    // If eslint.config.js ever stops importing dist/, the override above is dead weight and should
+    // go — so the assertion is anchored to the reason, not just to the file.
+    const config = readFileSync(join(root, 'packages/config/eslint.config.js'), 'utf8');
+    expect(config).toContain('./dist/eslint.js');
+  });
+});

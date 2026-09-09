@@ -6,9 +6,10 @@ the build" rather than assert it in prose.
 
 | Fixture | Must | Because |
 |---|---|---|
-| `valid` | compile | otherwise the other two prove nothing — a check that always fails is not a check |
+| `valid` | compile | otherwise the other three prove nothing — a check that always fails is not a check |
 | `unknown-key` | fail | `t()` with a key no catalogue defines |
-| `incomplete-catalogue` | fail | a catalogue omitting a key `es.ts` defines |
+| `incomplete-catalogue` | fail | a catalogue omitting a key `es/` defines |
+| `excess-key` | fail | a namespace translating a key Spanish never defined — the direction that lets the catalogues drift without either being *missing* anything |
 
 They are excluded from `apps/web/tsconfig.json`, so `pnpm typecheck` does not try to compile the
-two that are supposed to fail.
+three that are supposed to fail.

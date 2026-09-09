@@ -1,6 +1,6 @@
-import { type Translations } from '../../../src/i18n/locales/es.js';
+import { type Translations } from '../../../src/i18n/locales/es/index.js';
 
-// Every key from es.ts except 'footer.rights' — which is exactly the mistake this must catch.
+// Every key from es/ except 'footer.rights' — which is exactly the mistake this must catch.
 export const incomplete = {
   'app.name': 'Marketplace',
   'app.tagline': 'Renovations, home maintenance and emergencies',

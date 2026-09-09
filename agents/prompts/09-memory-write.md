@@ -19,28 +19,40 @@ different task?**
 
 | Answer | Where it goes |
 |---|---|
-| Yes, and it affects everyone | `memory/repo/{decisions,conventions,gotchas,glossary}.md` |
-| Yes, but only my slice | `memory/slices/<you>.md` |
+| Yes, and it affects everyone | `memory/repo/{decisions,conventions,gotchas}/MEM-….md` |
+| Yes, but only my slice | `memory/slices/<you>/MEM-….md` |
+| A domain term | a row in `memory/repo/glossary.md` |
 | No — task-specific | leave it in the session file; it archives |
 
-Entry format:
+**One record per file.** Copy `memory/_RECORD_TEMPLATE.md` and name the file for its id — that is
+what lets you and twelve other agents each write a record today without anyone waiting on a merge.
+
 ```markdown
-### <short title>
-- **id**: MEM-<date>-<n>
-- **scope**: repo | slice:S9 | flow:auctions
-- **fact**:
-- **why**:
-- **apply**:
-- **evidence**: <PR / file:line / ADR / intervention id>
-- **status**: active
+---
+id: MEM-<date>-<nn>
+kind: gotcha | convention | decision | slice
+scope: repo | slice:S9 | flow:auctions
+status: active
+evidence: <PR / file:line / ADR / intervention id — one line, never empty>
+---
+
+# <short title — the claim, not the topic>
+
+**Fact.** …
+
+**Why.** …
+
+**Apply.** …
 ```
 
-Then add a one-line pointer in `memory/LONG_TERM.md`. Never put content in the index.
+Pick an id nobody has used — ids are **global**, so check `memory/LONG_TERM.md` before claiming one.
+Then run `pnpm memory:render` to update the index. **Never edit the index by hand**: it is generated
+from the records, and CI fails when it is stale.
 
 ## Rules
-- One fact per entry. A diary is not memory.
+- One fact per record, one record per file. A diary is not memory.
 - Don't duplicate what the repo already states — link to the ADR, spec or code instead.
-- Superseding an entry: set the old one to `superseded-by`, don't delete it.
+- Superseding a record: set the old one's `status` to `superseded-by MEM-…`, don't delete the file.
 - **Never** write secrets, tokens, personal data or customer content. Memory is committed.
 - Close the session file with `## Handoff` and `status: closed`; move it to `sessions/ARCHIVE/`
   after merge.
