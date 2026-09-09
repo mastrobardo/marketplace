@@ -359,7 +359,19 @@ describe('AC26 — a deploy is never a required check', () => {
   it('leaves the W0-T06 gates untouched', () => {
     const ci = parseYaml(readFileSync(join(WORKFLOWS, 'ci.yml'), 'utf8')) as Workflow;
     expect(Object.keys(ci.jobs ?? {}).sort()).toEqual(
-      ['build', 'database', 'lint', 'typecheck', 'unit', 'workflows'].sort(),
+      [
+        'build',
+        'database',
+        'lint',
+        'typecheck',
+        'unit',
+        'workflows',
+        // W0-T12 added four; none of them is a deploy, which is what this criterion guards.
+        'spec-present',
+        'intervention-logged',
+        'author-identity',
+        'agents-drift',
+      ].sort(),
     );
   });
 });

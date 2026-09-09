@@ -213,7 +213,7 @@ Your page owns its own single `<h1>`; the layout has none.
 
 ## CI
 
-Every pull request runs six checks. They are separate jobs on purpose: a red PR should say *which*
+Every pull request runs ten checks. They are separate jobs on purpose: a red PR should say *which*
 class of thing broke without anyone opening a log.
 
 | Check | Runs | |
@@ -224,8 +224,20 @@ class of thing broke without anyone opening a log.
 | `build` | `pnpm build` | |
 | `database` | `pnpm stack:up`, migrations, then every `STACK_LIVE=1` suite | the only job needing Docker |
 | `workflows` | `actionlint` | CI that cannot lint itself is CI nobody can change safely |
+| `spec-present` | the branch changes its spec **and** its run record | skips a branch with no task ID |
+| `intervention-logged` | an `intervention:*` label needs an entry in `docs/interventions/` | `TODO.md` §5.6 |
+| `author-identity` | every commit author *and* committer is the personal address | `docs/board/IDENTITY.md` |
+| `agents-drift` | `.claude/agents/` still matches `agents/roles/` | generated files, never hand-edited |
 
-**These six names are the contract.** `W0-T13` requires them in branch protection, GitHub matches
+The last four are `W0-T12`. Each had been described as enforced — in `AGENTS.md`, `TODO.md` §5.5
+and `IDENTITY.md` — for as long as it did not exist, which is the worst state for a gate to be in:
+reviewers stop checking a thing themselves precisely because CI is believed to be checking it.
+
+None of them carries an `if:`. A conditional job reports "skipped", and GitHub counts a skipped
+required check as satisfied, so a gate that can vanish is not a gate. On a push to `main` they run
+and report "not a pull request" instead of disappearing.
+
+**These ten names are the contract.** `W0-T13` requires them in branch protection, GitHub matches
 required checks *by name*, and a check that simply never arrives is reported as nothing at all —
 so renaming a job silently unblocks merges. Rename one, update branch protection in the same change.
 

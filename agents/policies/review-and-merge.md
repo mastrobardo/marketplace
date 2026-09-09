@@ -21,9 +21,18 @@ File findings, hand back. You are reviewing, not taking over. If you catch yours
 yourself, that is a `MANUAL_FIX` intervention and needs a ledger entry.
 
 ## Merge requirements
-All gates green: `spec-present` · `intervention-logged` · `typecheck` · `lint` · `migrate diff` ·
-`unit` · `contract` · `e2e smoke` · `build` · `secret scan` · `dep audit` · `agents-drift`.
-Required approvals present. Squash merge. Subject: `feat(quotes): submit quote [W4-T03]`.
+All gates green. Required approvals present. Squash merge.
+Subject: `feat(quotes): submit quote [W4-T03]`.
+
+**Running today** (`W0-T12`): `spec-present` · `intervention-logged` · `author-identity` ·
+`agents-drift` · `typecheck` · `lint` · `unit` · `build` · `database` · `workflows`.
+
+**Still to build**, and listed here so nobody assumes otherwise: `migrate diff` · `contract`
+(OpenAPI ⇄ impl) · `e2e smoke` · `secret scan` · `dep audit (high+)`. Each needs machinery this
+repo does not have yet. Do not cite one of these as having checked something.
+
+Note that none of the gates is *required* in branch protection until `W0-T13` (#45) lands: they
+report on every PR, but GitHub will still let a red one merge.
 
 ## Rejection is data
 Closing an agent PR without merging requires a ledger entry in `docs/interventions/`. It is the
