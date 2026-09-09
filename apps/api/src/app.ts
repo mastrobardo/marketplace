@@ -6,8 +6,7 @@ import {
   codeForStatus,
   errorEnvelope,
   INTERNAL_ERROR_MESSAGE,
-  type ErrorCode,
-} from './lib/errors.js';
+} from '@marketplace/contracts';
 import { generateRequestId, REQUEST_ID_HEADER, requestIdHook } from './plugins/request-id.js';
 import { healthRoutes } from './routes/health.js';
 
@@ -64,10 +63,10 @@ export function buildApp({ config, logDestination }: BuildAppOptions): FastifyIn
   app.setErrorHandler((error: FastifyError, request, reply) => {
     if (error instanceof AppError) {
       // Intended by the route: the message and details are safe, and this is not a defect.
+      // `toEnvelope` rather than `errorEnvelope` — the code/details pairing was type-checked at the
+      // throw site, and here `code` is only known at runtime (W1-T01 §4.5).
       request.log.info({ err: error, code: error.code }, error.message);
-      void reply
-        .status(error.statusCode)
-        .send(errorEnvelope(error.code, error.message, request.id, error.details));
+      void reply.status(error.statusCode).send(error.toEnvelope(request.id));
       return;
     }
 
@@ -75,9 +74,19 @@ export function buildApp({ config, logDestination }: BuildAppOptions): FastifyIn
     // client caused them, so its own message is safe to return.
     const status = error.statusCode ?? 500;
     if (status >= 400 && status < 500) {
-      const code: ErrorCode =
-        codeForStatus(status) === 'INTERNAL_ERROR' ? 'VALIDATION_FAILED' : codeForStatus(status);
-      request.log.info({ err: error, code }, error.message);
+      const { code, matched } = codeForStatus(status);
+      if (matched) {
+        request.log.info({ err: error, code }, error.message);
+      } else {
+        // The registry has no code for this status, so `code` is a fallback, not a mapping. Warn
+        // and name the status: W0-T03 made the same substitution silently, and its run record
+        // called it "a guess dressed as a mapping". A gap should be visible to us, not reported to
+        // a client as a validation failure it was not.
+        request.log.warn(
+          { err: error, code, status },
+          `No error code is registered for HTTP ${status}; falling back to ${code}`,
+        );
+      }
       void reply.status(status).send(errorEnvelope(code, error.message, request.id));
       return;
     }

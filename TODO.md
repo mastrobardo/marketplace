@@ -404,7 +404,7 @@ for data), so no feature is blocked waiting for an account that is not needed ye
 - `W0-T24` `[H]` **Activate and verify the deploy pipeline**: set the `preview`/`staging`/`production` secrets, then prove one preview deploy, one teardown, one staging deploy and one tagged production release actually run. `W0-T07` lands the pipeline **inert** — no deploy job can execute on its own PR, and `release-production.yml` is not even *triggered* until a tag exists *(issue #156; needs `OPS-04`, `OPS-07`, `OPS-08`, `OPS-09`, `W0-T09`)*
 
 ### W1 — Contracts & domain foundation (`agent-contracts`)
-- `W1-T01` `[A]` Error envelope + error-code registry
+- `W1-T01` `[A]` ✅ Error envelope + error-code registry — frozen in `packages/contracts` as a zod schema, `details` typed per code, explicit HTTP status→code table *(issue #55)*
 - `W1-T02` `[A]` Pagination, sorting, filtering conventions
 - `W1-T03` `[A]` zod → OpenAPI generation + typed client codegen
 - `W1-T04` `[A]` Contract-test harness (spin API, assert every route matches OpenAPI)

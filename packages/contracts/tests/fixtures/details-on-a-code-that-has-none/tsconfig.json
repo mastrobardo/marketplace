@@ -1,0 +1,5 @@
+{
+  "extends": "@marketplace/config/tsconfig/node.json",
+  "compilerOptions": { "types": [], "noEmit": true },
+  "include": ["*.ts", "../../src/**/*.ts"]
+}
