@@ -177,6 +177,13 @@ describe('AC9/AC10/AC11/AC12 — prorate is one of the two rounding sites', () =
     expect(() => prorate(money(100), 1.5, 2)).toThrow(MoneyError);
     expect(() => prorate(money(100), 1, 2.5)).toThrow(MoneyError);
   });
+
+  it('refuses a ratio whose product would round before the division', () => {
+    // amountCents × numerator is a double: exact only below 2^53. Beyond it the division would
+    // operate on an already-rounded product and lose cents with no error anywhere.
+    expect(() => prorate(money(2_000_000_000), 1_000_000_000, 1_000_000_000)).toThrow(MoneyError);
+    expect(() => prorate(money(2_000_000_000), 1_000_000_000, 1_000_000_000)).toThrow(/cents/);
+  });
 });
 
 describe('AC13/AC14/AC15/AC16 — allocate never creates or destroys a cent', () => {
@@ -281,13 +288,20 @@ describe('AC20 — the invariants hold across a seeded range, not just at the ex
   it('keeps every prorate result an integer inside Int32', () => {
     for (const draw of seeded(500)) {
       const amount = (draw % 4_000_001) - 2_000_000;
-      const numerator = draw % 10_001;
       const denominator = (draw % 9_973) + 1;
+      // A numerator bounded by the denominator: a ratio that scales *down*, which is what every
+      // caller — fee, refund, share of a total — actually asks for. Ratios above 1 are legal and
+      // exercised by the examples above; here the point is the invariant, and "never exceeds the
+      // input" only holds for a fraction.
+      const numerator = draw % (denominator + 1);
       const result = cents(prorate(money(amount), numerator, denominator));
       expect(Number.isInteger(result), `prorate(${amount}, ${numerator}, ${denominator})`).toBe(
         true,
       );
-      expect(Math.abs(result)).toBeLessThanOrEqual(Math.abs(amount));
+      expect(
+        Math.abs(result),
+        `prorate(${amount}, ${numerator}, ${denominator})`,
+      ).toBeLessThanOrEqual(Math.abs(amount));
     }
   });
 
