@@ -45,6 +45,7 @@ const SLICE_OF: Record<string, [string, string]> = {
   W8: ['S4', 'agent-trust'],
   W9: ['S12', 'agent-admin'],
   W10: ['S11', 'agent-qa'],
+  W11: ['S13', 'agent-devops'],
 };
 const MILESTONE_OF: Record<string, string> = {
   W0: 'M0 Walking skeleton',
@@ -58,6 +59,20 @@ const MILESTONE_OF: Record<string, string> = {
   W8: 'M5 Trust',
   W9: 'M9 Beta-ready',
   W10: 'M9 Beta-ready',
+  W11: 'M10 Agent autonomy',
+};
+
+/**
+ * A handful of ids belong to a milestone their workstream does not imply: the agent-system setup
+ * tickets are `OPS`, which is otherwise blanket-M0, and `W0-T26` is a W0 task that exists only
+ * because `M10` cannot start while the `database` gate fails open.
+ */
+const MILESTONE_OVERRIDE: Record<string, string> = {
+  'OPS-19': 'M10 Agent autonomy',
+  'OPS-20': 'M10 Agent autonomy',
+  'OPS-21': 'M10 Agent autonomy',
+  'OPS-22': 'M10 Agent autonomy',
+  'W0-T26': 'M10 Agent autonomy',
 };
 
 const issues: Issue[] = [];
@@ -74,7 +89,7 @@ for (const m of md.matchAll(/^\|\s*`(OPS-\d+)`\s*\|\s*(.+?)\s*\|\s*(.+?)\s*\|\s*
       `Identity rule: \`docs/board/IDENTITY.md\` — personal account only.\n` +
       `Context: \`TODO.md\` §6 OPS table.`,
     labels: ['type:ops', 'exec:H', 'priority:early-deploy'],
-    milestone: 'M0 Walking skeleton',
+    milestone: MILESTONE_OVERRIDE[id] ?? 'M0 Walking skeleton',
   });
 }
 
@@ -122,7 +137,7 @@ for (const m of md.matchAll(/^- `(W(\d+)-T\d+)`((?:\s*`\[[HMAB]\]`)+)\s*(.+)$/gm
         : '') +
       `\nContext: \`TODO.md\` §6.`,
     labels,
-    milestone: MILESTONE_OF[`W${wnum}`],
+    milestone: MILESTONE_OVERRIDE[id] ?? MILESTONE_OF[`W${wnum}`],
   });
 }
 

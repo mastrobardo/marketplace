@@ -154,6 +154,7 @@ files inside another slice's folders; cross-slice needs go through a contract ch
 | S10 Design system | `agent-ui` | `packages/ui`, tokens, i18n, a11y |
 | S11 Quality | `agent-qa` | e2e suite, seed data, contract-test harness, flake watch |
 | S12 Admin/Ops | `agent-admin` | back-office: verification review, disputes, refunds, moderation |
+| S13 Agent autonomy | `agent-devops` | `services/orchestrator`, worker images, model routing, egress gates |
 
 Shared files (`prisma/schema.prisma`, `packages/contracts`, CI config) are **append-only by request**:
 a slice agent opens a change proposal, `agent-contracts` applies it. This is the main collision risk.
@@ -366,6 +367,10 @@ visible rather than assumed. All are `[H]` — an agent must never attempt them.
 | `OPS-16` | Domain + DNS pointed at Cloudflare | staging hostname resolves | `W0-T07` |
 | `OPS-17` | Per-environment encryption data keys generated and stored in Fly secrets | keys present, never in repo | `W0-T18` |
 | `OPS-18` | **Stripe live** account + KYC + bank details — *only before M9* | live keys in `production` env | launch |
+| `OPS-19` | **GitHub App** for the agent system: installed on this repo only, Issues/PRs/contents write, webhook secret. Commits stay authored `mastrobardo@gmail.com` — push auth and commit authorship are deliberately different identities | app installed, webhook delivering | `W11-T01`, `W11-T10` |
+| `OPS-20` | **Neon** project `marketplace-agents` for graph state — a separate project, never a branch of the product database | connection string in the agent environment | `W11-T01` |
+| `OPS-21` | **Fly** org token scoped to the agent worker app + the always-on orchestrator app | `fly machine run` works from the orchestrator | `W11-T02` |
+| `OPS-22` | **Inference provider** for the open-weight coder: account, **stated no-retention terms**, prompt-caching support confirmed — *phase B only, not before* | terms recorded on the ticket | `W11-T12` |
 
 **The walking skeleton needs four services and nothing else**: Fly.io, Neon, Cloudflare, Sentry.
 
@@ -403,6 +408,7 @@ for data), so no feature is blocked waiting for an account that is not needed ye
 - `W0-T23` `[A]` Stop parallel agents colliding on shared append-only files — namespaced i18n catalogues, one-record-per-file memory, README fragments *(issue #153)*
 - `W0-T24` `[H]` **Activate and verify the deploy pipeline**: set the `preview`/`staging`/`production` secrets, then prove one preview deploy, one teardown, one staging deploy and one tagged production release actually run. `W0-T07` lands the pipeline **inert** — no deploy job can execute on its own PR, and `release-production.yml` is not even *triggered* until a tag exists *(issue #156; needs `OPS-04`, `OPS-07`, `OPS-08`, `OPS-09`, `W0-T09`)*
 - `W0-T25` `[A]` Name every per-branch resource after the **task ID**, not the PR number — `marketplace-api-w1t02`, `preview/w1t02`, `w1t02.<project>.pages.dev`, derived from the branch name that `AGENTS.md` L2 already guarantees. Teardown must derive the same name, and two open PRs on one task share one environment *(issue #166; needs `W0-T24`)*
+- `W0-T26` `[A]` **Make the `database` job discover its own live suites.** It names them file by file, so a new test file is skipped and the run still reports green — a gate that fails open. Tolerable while a human reads every diff; **load-bearing the moment an agent treats "CI green" as its success signal**, so this blocks `M10` *(prerequisite for `W11-T06`)*
 
 ### W1 — Contracts & domain foundation (`agent-contracts`)
 - `W1-T01` `[A]` ✅ Error envelope + error-code registry — frozen in `packages/contracts` as a zod schema, `details` typed per code, explicit HTTP status→code table *(issue #55)*
@@ -505,6 +511,40 @@ for data), so no feature is blocked waiting for an account that is not needed ye
 - `W10-T08` `[A]` Runbooks: payout failure, Stripe outage, webhook backlog, rollback
 - `W10-T09` `[M]` Beta launch checklist + rollback plan *(human: go/no-go)*
 
+### W11 — Agent autonomy (`agent-devops`, `agent-qa`) — *the pipeline builds itself*
+
+Tickets executed unattended, spec to merged PR. Design: `docs/adr/ADR-008` (orchestration) and
+`docs/adr/ADR-009` (model tiering + redaction). **Three phases, in order — each is a separate trust
+decision, and none of them starts until `W0-T26` closes the fail-open `database` gate.**
+
+**Phase A — Claude Code everywhere.** One harness, one vendor, the real repo. Proves the graph, the
+interrupts and the gates before any of them has to survive a second model or a redactor.
+
+- `W11-T01` `[A]` LangGraph orchestrator skeleton: graph, state, Postgres checkpointer, `POST /tickets`, HMAC-verified `POST /webhooks/github` *(needs `OPS-19`, `OPS-20`)*
+- `W11-T02` `[M]` Fly apps `marketplace-agents` (always on) + `marketplace-agent-worker` (machines on demand), deploy workflow, **pinned** `WORKER_IMAGE_TAG` *(human: `OPS-21`)*
+- `W11-T03` `[A]` The worker contract — fixed in/out interface — and `worker-claude`, its first implementation
+- `W11-T04` `[A]` Deterministic context pack (no RAG) **plus a per-source trust manifest**: four of its sources are prose naming real people and incidents
+- `W11-T05` `[A]` Spec phase → draft PR → `spec:approved` label interrupt → escalation answers as an addendum commit
+- `W11-T06` `[A]` Machine-verified `tdd_red` (the suite **must** exit non-zero), `decompose`, and the per-criterion green loop *(needs `W0-T26`)*
+- `W11-T07` `[A]` CI and review interrupts: `check_suite`, comments, and PR-close routed to the `ledger` node so `L7` is written by the graph, not by discipline
+- `W11-T08` `[A]` Budget per ticket, attempt ladder, kill switch, `/threads` view and a stale-interrupt alert
+- `W11-T09` `[A]` Per-phase run record: `agents/prompts/08-run-record.md` grows a model/tier/attempts/tokens/cost table, and `ROLLUP.md` reports by tier
+- `W11-T10` `[M]` `agent-dispatch.yml` + the `agent:go` label *(human: install the App from `OPS-19`)*
+
+**Phase B — a second model.** Only after phase A has run tickets end to end.
+
+- `W11-T11` `[A]` `services/orchestrator/models.toml`: phase → layer → tier routing, and the promotion ladder
+- `W11-T12` `[M]` `worker-openweights`: OpenAI-compatible endpoint behind the same contract *(human: `OPS-22` — and the egress decision below)*
+- `W11-T13` `[A]` Harness-neutrality audit of `agents/prompts/**` — skills, `.claude/agents/` and hooks do not port
+- `W11-T14` `[A]` Cost **per completed task** and promotion rate per tier; A/B the cheap tier on real tickets before trusting it
+
+**Phase C — redaction.** `ghostc` (`micro1hackaton`) at the trust boundary.
+
+- `W11-T15` `[A]` `ghostc screen` as a `PostToolUse` hook — a chokepoint on tool output, fail closed. Testable in phase A's harness with no third party involved
+- `W11-T16` `[A]` `worker-ghost`: `compile` → work in ghost space → `verify` → `apply-patch`, as a third implementation of the `W11-T03` contract
+- `W11-T17` `[A]` Extend the leak corpus to **agentic traffic** — context pack, `git log`, stack traces, CI logs. A repo snapshot is a different distribution from what a loop actually emits
+- `W11-T18` `[M]` `[B]` Per-source egress decision for the context pack and the ghost workspace *(human: approve each destination; `screen` must never run on the tier it is screening)*
+
 ---
 
 ## 7. Testing strategy
@@ -553,6 +593,7 @@ fixture set — no ad-hoc data creation in tests except via shared factories in 
 | **M7** | Emergency | W7 | Broadcast + first-accept-wins proven under a concurrency test |
 | **M8** | Monetisation | W5-T05…T11, W8-T04 | Subscriptions, fees, refunds, badges, reconciliation clean |
 | **M9** | Beta-ready | W9, W10 | Security + a11y + load pass, runbooks written, rollback rehearsed |
+| **M10** | Agent autonomy | `W0-T26`, `OPS-19`–`22`, W11 | **Phase A**: an `[A]` ticket goes from `agent:go` to merged PR with no human keystroke but the spec approval and the review. **Phase B**: the cheap tier closes a majority of tickets unaided, measured per completed task. **Phase C**: zero leaks on the agentic-traffic corpus, `verify` fail-closed in the loop |
 
 **Critical path**: human blockers (§6) → M0 → M1 → M3 (money). Everything else parallelises after M1.
 Staff `agent-money` from M0 so Stripe Connect onboarding is already in review when M2 finishes.
