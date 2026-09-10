@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parse as parseYaml } from 'yaml';
@@ -719,5 +719,53 @@ describe('AC35 — the preview URL is read back, never constructed', () => {
       /wrangler/.test(step.run ?? ''),
     );
     expect(deploy?.run ?? '', 'an empty URL is commented instead of failing').toMatch(/exit 1/);
+  });
+});
+
+/**
+ * `W1-T01`. The image lists workspace manifests by hand and builds workspace packages by hand.
+ * Both lists are easy to forget when a package is added, and the failure is invisible until a
+ * container boots: `@marketplace/contracts` shipped without its `dist/` resolves to a package with
+ * no entry point, the process exits, and Fly reports only "timeout reached waiting for health
+ * checks". That is what happened on PR #164.
+ */
+describe('the image knows about every workspace package', () => {
+  const dockerfile = readFileSync(join(root, 'infra/docker/api.Dockerfile'), 'utf8');
+
+  const members = ['apps', 'packages'].flatMap((group) =>
+    readdirSync(join(root, group), { withFileTypes: true })
+      .filter(
+        (entry) => entry.isDirectory() && existsSync(join(root, group, entry.name, 'package.json')),
+      )
+      .map((entry) => `${group}/${entry.name}`),
+  );
+
+  it('copies every member manifest into the install layer', () => {
+    expect(members.length).toBeGreaterThan(1);
+    const missing = members.filter(
+      (member) => !dockerfile.includes(`COPY ${member}/package.json ${member}/`),
+    );
+    expect(missing, 'these workspace members are not COPYed into the image').toEqual([]);
+  });
+
+  it('builds every workspace package the API needs at run time', () => {
+    // A *runtime* dependency must have been built before the prune. A devDependency need not:
+    // @marketplace/config is build-time only and is dropped by `pnpm deploy --prod`.
+    const api = JSON.parse(readFileSync(join(root, 'apps/api/package.json'), 'utf8')) as {
+      dependencies?: Record<string, string>;
+    };
+    const workspaceRuntimeDeps = Object.keys(api.dependencies ?? {}).filter((name) =>
+      name.startsWith('@marketplace/'),
+    );
+
+    const prune = dockerfile.indexOf('deploy --legacy');
+    for (const name of workspaceRuntimeDeps) {
+      const built = dockerfile.indexOf(`pnpm --filter ${name} build`);
+      expect(built, `${name} is a runtime dependency the image never builds`).toBeGreaterThan(-1);
+      expect(
+        built,
+        `${name} is built after the prune, so its dist never reaches the image`,
+      ).toBeLessThan(prune);
+    }
   });
 });

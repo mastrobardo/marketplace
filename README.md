@@ -325,6 +325,7 @@ gain it retroactively. Delete the stale branch and let the next run recreate it.
 |---|---|
 | `apps/api` | Fastify API — health, config, error envelope, request-id, logging, Prisma. |
 | `apps/web` | Vite + React SPA — router, layout shell, ES/EN i18n, theme tokens. |
+| `packages/contracts` | The shared seam — zod schemas and the types both apps build against. Only `agent-contracts` writes here. |
 | `packages/config` | The one place TypeScript, ESLint, Prettier and Vitest are configured. |
 | `docker-compose.yml`, `docker/` | The local stack: Postgres + PostGIS, mail catcher, object storage. |
 | `.github/workflows` | The CI gates every pull request passes, and the deploy pipeline. |

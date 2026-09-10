@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { Writable } from 'node:stream';
 import { type FastifyInstance } from 'fastify';
 import { buildApp } from '../src/app.js';
-import { AppError, ERROR_CODES } from '../src/lib/errors.js';
+import { AppError, ERROR_CODES } from '@marketplace/contracts';
 import { loadConfig } from '../src/config.js';
 
 const ENV = {
@@ -48,7 +48,17 @@ beforeEach(async () => {
     throw new AppError('FORBIDDEN', 'nope');
   });
   app.get('/boom/with-details', () => {
-    throw new AppError('VALIDATION_FAILED', 'bad', { field: 'email' });
+    // W1-T01 gave VALIDATION_FAILED a typed `details` shape. Nothing in the app emits one yet, so
+    // this route is where it is exercised; `{ field: 'email' }` no longer compiles, by design.
+    throw new AppError('VALIDATION_FAILED', 'bad', {
+      issues: [{ path: 'email', message: 'must be an email' }],
+    });
+  });
+  app.get('/boom/unmapped-status', () => {
+    // A 4xx no code in the registry claims. Fastify produces statuses like this (418 stands in for
+    // whatever the registry has not caught up with) and W1-T01 makes the fallback say so.
+    const framework = Object.assign(new Error('teapot'), { statusCode: 418 });
+    throw framework;
   });
   app.get('/boom/unexpected', () => {
     throw new Error('connection string postgres://user:pw@host/db refused');
@@ -137,7 +147,31 @@ describe('AC11/AC12/AC13 — one error shape, one machine-readable code', () => 
   it('passes structured details through untouched', async () => {
     const response = await app.inject({ method: 'GET', url: '/boom/with-details' });
     expect(response.statusCode).toBe(400);
-    expect(response.json<Envelope>().error.details).toEqual({ field: 'email' });
+    expect(response.json<Envelope>().error.details).toEqual({
+      issues: [{ path: 'email', message: 'must be an email' }],
+    });
+  });
+});
+
+describe('W1-T01 AC7 — an unmapped 4xx falls back, and says that it did', () => {
+  it('keeps the client’s status and answers in the envelope', async () => {
+    const response = await app.inject({ method: 'GET', url: '/boom/unmapped-status' });
+    expect(response.statusCode).toBe(418);
+    expect(response.json<Envelope>().error.code).toBe('VALIDATION_FAILED');
+  });
+
+  it('warns, naming the status, rather than substituting the code silently', async () => {
+    await app.inject({ method: 'GET', url: '/boom/unmapped-status' });
+    const warned = sink.entries().filter((entry) => entry['level'] === 40);
+    expect(warned.length, 'the fallback was not logged at warn level').toBeGreaterThan(0);
+    expect(JSON.stringify(warned)).toContain('418');
+  });
+
+  it('does not warn when the status genuinely maps', async () => {
+    // Otherwise the warning is noise and stops meaning anything. /boom/app-error is a FORBIDDEN,
+    // which the registry does claim.
+    await app.inject({ method: 'GET', url: '/boom/app-error' });
+    expect(sink.entries().filter((entry) => entry['level'] === 40)).toEqual([]);
   });
 });
 
