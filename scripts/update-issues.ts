@@ -40,6 +40,7 @@ const SLICE: Record<string, [string, string]> = {
   W8: ['S4', 'agent-trust'],
   W9: ['S12', 'agent-admin'],
   W10: ['S11', 'agent-qa'],
+  W11: ['S13', 'agent-devops'],
 };
 
 const EPICS: [string, string, string][] = [
@@ -107,6 +108,11 @@ const EPICS: [string, string, string][] = [
     'W10',
     'Quality and launch',
     'End-to-end journeys, load, accessibility, security and the runbooks needed to launch.',
+  ],
+  [
+    'W11',
+    'Agent autonomy',
+    'Letting a ticket run itself from spec to merged pull request. Three phases in order: Claude Code on the real repository, then a cheaper second model, then redaction at the boundary. Design lives in docs/adr/ADR-008 and ADR-009.',
   ],
 ];
 
