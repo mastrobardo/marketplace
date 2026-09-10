@@ -1,9 +1,9 @@
 {
-  "name": "@marketplace/contracts",
+  "name": "@marketplace/testing",
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "The shared seam \u2014 zod schemas and the types both apps build against. Owned by agent-contracts (slice S1).",
+  "description": "Shared test factories — the only source of test data in this repo. Owned by agent-contracts (slice S1).",
   "main": "dist/index.js",
   "exports": {
     ".": {
@@ -22,12 +22,8 @@
     "lint": "eslint .",
     "test": "vitest run"
   },
-  "dependencies": {
-    "zod": "^4.5.4"
-  },
   "devDependencies": {
     "@marketplace/config": "workspace:*",
-    "@marketplace/testing": "workspace:*",
     "@types/node": "^24.7.2",
     "eslint": "^10.10.0",
     "tsup": "^8.5.1",
