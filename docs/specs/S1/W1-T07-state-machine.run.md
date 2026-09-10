@@ -167,13 +167,19 @@ hand-patched development database.
 ### Full local gate
 
 ```
-pnpm typecheck   Tasks: 6 successful, 6 total
-pnpm lint        ESLint: No issues found
-pnpm test        Test Files 10 passed (10) · Tests 224 passed | 6 skipped (230)
-pnpm build       Tasks: 4 successful, 4 total
+pnpm typecheck     Tasks: 6 successful, 6 total
+pnpm lint          ESLint: No issues found
+pnpm format:check  All matched files use Prettier code style!
+pnpm test          Test Files 10 passed (10) · Tests 224 passed | 6 skipped (230)
+pnpm build         Tasks: 4 successful, 4 total
 
 prisma migrate diff --from-url <migrated dev db> --to-schema-datamodel  →  No difference detected.
 ```
+
+`pnpm format:check` is in that list **after the fact**: the first CI run failed `lint` on two
+unformatted test files, because the `lint` job runs `pnpm lint` *and* `pnpm format:check` and the
+local self-review had only run the first. Fixed in a follow-up commit; both suites re-run green
+after formatting. The lesson is in the self-assessment below.
 
 The drift check is run `--from-url` against the migrated development database rather than
 `--from-migrations` with a `--shadow-database-url`. Prisma resets the shadow database before
@@ -229,7 +235,13 @@ added by someone who may touch that file, or #174 landed first.
    `prisma migrate reset` drops the schema and replays, and row-level triggers do not fire on
    `TRUNCATE`. Both reset paths are unaffected.
 
+4. **Nothing, in the diff of the second commit.** It is `prettier --write` output only.
+
 **What I would tell the next agent working in this slice.**
+
+The `lint` CI job is two commands, not one: `pnpm lint` *and* `pnpm format:check`. Running only the
+first is how this branch burned a CI cycle. `pnpm typecheck && pnpm lint && pnpm format:check &&
+pnpm test && pnpm build` is the actual local gate.
 
 Declare your machine once, at module scope, so `defineMachine`'s checks run at boot rather than per
 request — that is the whole reason the validation lives at definition time. Do not write to
