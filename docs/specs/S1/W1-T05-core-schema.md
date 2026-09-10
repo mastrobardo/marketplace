@@ -7,7 +7,7 @@
 | Slice | S1 Contracts |
 | Owner | `agent-contracts` |
 | Branch | `W1-T05-core-schema` |
-| Status | **awaiting approval of §13** — no Prisma written until the entity tables in §5 are signed off |
+| Status | **approved 2026-09-10** — all five questions in §13 answered; contract freeze follows |
 
 ---
 
@@ -89,7 +89,12 @@ The naive answers and why they lose:
   drift detection stays quiet (P4). Every write of an address would have to be `$executeRaw`,
   including `W2-T04`'s ordinary profile form. That pushes raw SQL into four slices to serve one.
 
-**The proposal: writable `latitude`/`longitude`, plus a *generated* geography column.**
+**The design: writable `latitude`/`longitude`, plus a *generated* geography column — in one table.**
+
+Decision Q2 puts every location in the platform in `address` and nowhere else: a client's default
+location is a pointer to one of their addresses, and a provider's base of operations is a pointer
+to one of theirs. So the machinery below is written **once**, for one table, and one GIST index
+serves every proximity query in the product.
 
 ```sql
 ALTER TABLE "address"
@@ -108,26 +113,30 @@ CREATE INDEX "address_location_gist" ON "address" USING GIST ("location");
 - It appears in `schema.prisma` as `location Unsupported("geography(Point, 4326)")?` purely to
   satisfy P4.
 
-**The risk, stated plainly: this may produce permanent Prisma drift, and I have not yet proved it
-does not.** Prisma's introspection has historically not understood `GENERATED ALWAYS AS … STORED`,
+**The risk, stated plainly: this may produce permanent Prisma drift, and it is not yet proved that
+it does not.** Prisma's introspection has historically not understood `GENERATED ALWAYS AS … STORED`,
 and if `prisma migrate dev` reports drift on every run afterward, we have trained every agent to
 ignore drift warnings — the exact outcome `W0-T05` §8 wrote its `SeedRun` rationale to avoid.
-Acceptance criterion **AC-12** exists to prove this before the schema is merged, and §13 Q4 carries
-the fallback if it fails.
+Acceptance criterion **AC-13** exists to prove this before the schema is merged, and §13 Q4 carries
+the agreed fallback if it fails. Confining the column to one table also confines that risk: if the
+fallback is needed, it is one column and one index that change.
 
 **Longitude before latitude.** `ST_MakePoint` takes `(x, y)` — longitude first. Swapping them puts
-every Spanish address in Somalia. It is written once, in one migration, and AC-11 checks a known
+every Spanish address in Somalia. It is written once, in one migration, and AC-12 checks a known
 point.
 
 **Metres, not kilometres.** `ProviderProfile.serviceRadiusMetres` is an integer of metres because
 `ST_DWithin` on `geography` takes metres. A `radiusKm` column would put a `* 1000` at every call
-site and a unit bug in whichever one forgets.
+site and a unit bug in whichever one forgets. Note the shape this gives `W3-T05`: the radius is on
+`provider_profile` and the point is on `address`, so the search joins the two and compares
+`ST_DWithin(a.location, $point, p.service_radius_metres)` — a per-provider radius, which is what
+"I travel 15 km" actually means.
 
 ### 4.2 A `User` is an account. What kind of person they are lives on the profile
 
 `TODO.md` §3 sketches `User — … role(s) CLIENT | MANITAS | PRO | ADMIN` and, two lines later,
-`ProviderProfile — kind MANITAS | PRO`. That is the same fact in two columns, and this spec
-proposes to change it (§13 **Q1**).
+`ProviderProfile — kind MANITAS | PRO`. That is the same fact in two columns. **Q1 approved
+changing it**, which is a departure from a frozen document and carries an ADR (§13).
 
 Two things are wrong with the sketch as written:
 
@@ -140,7 +149,7 @@ Two things are wrong with the sketch as written:
    a provider *and* a client. If `role` is singular, that person needs two accounts and two logins
    and their reviews split across both.
 
-**Proposal:** `User.roles UserRole[]` where `UserRole = CLIENT | PROVIDER | ADMIN`, and
+**Decided:** `User.roles UserRole[]` where `UserRole = CLIENT | PROVIDER | ADMIN`, and
 `MANITAS | PRO` exists **only** as `ProviderProfile.kind`. The rule that follows is checkable:
 *a user has the `PROVIDER` role if and only if a `ProviderProfile` row exists for them* — AC-04
 asserts it in both directions.
@@ -160,7 +169,7 @@ Postgres 17 core (it lands in 18) so it would mean an extension or generating id
 application, and P6 does not need it — the `W1-T02` cursor uses `id` as a **tiebreaker**, which
 requires stability and uniqueness, not sortability. Insert locality is a real cost at a scale this
 product does not have, and changing the key type later is a migration this schema does not
-otherwise need. Recorded so it is a deferral rather than an oversight (§13 **Q3**).
+otherwise need. Recorded so it is a deferral rather than an oversight; **Q3 approved it** (§13).
 
 `Category.slug` is the exception: it has a genuine natural key, humans type it into URLs, and
 `W3-T01` seeds it from a fixed list. It gets a `uuid` primary key anyway and a `UNIQUE` on `slug`,
@@ -200,7 +209,7 @@ The account. One row per person who can log in, whatever they use the platform f
 | Column | Type | N | Default | Notes |
 | --- | --- | --- | --- | --- |
 | `id` | `uuid` | | `gen_random_uuid()` | PK |
-| `email` | `citext` | | | **UNIQUE.** `citext` so `Ana@…` and `ana@…` cannot both sign up (§13 Q5) |
+| `email` | `text` | | | unique on `lower(email)`, not on the column — see the index table. Q5 |
 | `email_verified_at` | `timestamptz` | ✓ | `null` | set by `W2-T01`; null means unverified |
 | `phone` | `text` | ✓ | `null` | **UNIQUE** when present. E.164. Required for providers by `W2-T06`, not by this table |
 | `phone_verified_at` | `timestamptz` | ✓ | `null` | set by `W2-T06` |
@@ -214,7 +223,7 @@ The account. One row per person who can log in, whatever they use the platform f
 
 | Index | Columns | Why |
 | --- | --- | --- |
-| `user_email_key` | `email` UNIQUE | login lookup, and the identity constraint |
+| `user_email_lower_key` | `lower(email)` UNIQUE | **functional** index (Q5). Makes `Ana@…` and `ana@…` the same account. Every lookup must query `lower(email) = lower($1)` or it will not use this index |
 | `user_phone_key` | `phone` UNIQUE | partial: `WHERE phone IS NOT NULL`, so many users may have none |
 | `user_created_at_id_idx` | `created_at DESC, id DESC` | P6 — `W9-T02` lists users newest-first; `id` is the appended tiebreaker |
 | `user_status_idx` | `status` | `WHERE status = 'ACTIVE'` on effectively every query |
@@ -252,9 +261,7 @@ Who a person is when they are working. The row `W3` builds on and `W3-T05` searc
 | `kind` | `provider_kind` | | | `MANITAS \| PRO`. The only place this distinction is stored (§4.2) |
 | `display_name` | `text` | | | trading name; shown in search results |
 | `bio` | `text` | ✓ | `null` | `W3-T02` owns length limits |
-| `latitude` | `numeric(9,6)` | ✓ | `null` | base of operations. `numeric`, not `float` — exact, and ~11 cm at 6 dp |
-| `longitude` | `numeric(9,6)` | ✓ | `null` | |
-| `location` | `geography(Point,4326)` | ✓ | *generated* | `GENERATED ALWAYS AS … STORED` from the two above (§4.1) |
+| `base_address_id` | `uuid` | ✓ | `null` | FK → `address.id`, `ON DELETE SET NULL`. Where they work from (Q2). Null until set, and a provider with no base is not searchable |
 | `service_radius_metres` | `integer` | ✓ | `null` | metres (§4.1). `CHECK (> 0 AND <= 200000)` |
 | `hourly_rate_cents` | `integer` | ✓ | `null` | P5. `CHECK (>= 0)`. Null = quote-only |
 | `rating_avg` | `numeric(3,2)` | ✓ | `null` | denormalised; **S4 owns writing it**. Null = no reviews yet, which is not the same as 0.00 |
@@ -265,9 +272,27 @@ Who a person is when they are working. The row `W3` builds on and `W3-T05` searc
 | Index | Columns | Why |
 | --- | --- | --- |
 | `provider_profile_user_id_key` | `user_id` UNIQUE | one-to-one |
-| `provider_profile_location_gist` | `location` GIST | **the reason this task exists.** `ST_DWithin` in `W3-T05` |
+| `provider_profile_base_address_idx` | `base_address_id` | **the search join.** `W3-T05` reaches the geography through this FK; without it the join is a scan |
 | `provider_profile_rating_id_idx` | `rating_avg DESC NULLS LAST, id DESC` | P6 — "best rated" list, with the tiebreaker |
 | `provider_profile_kind_idx` | `kind` | licence gating (`W3-T08`) filters on it |
+
+**No geography column here.** Q2 put every location in `address` (§4.1). The consequence for
+`W3-T05` is that proximity search joins:
+
+```sql
+SELECT p.* FROM provider_profile p
+  JOIN address a ON a.id = p.base_address_id
+  JOIN provider_category pc ON pc.provider_profile_id = p.id
+ WHERE pc.category_id = $1
+   AND ST_DWithin(a.location, $2::geography, p.service_radius_metres);
+```
+
+**The privacy rule this creates, and it is a rule not a note.** A base address is very often the
+provider's home. The table stores `line1`/`line2` because it is the same table a client uses; the
+API must **never** return them for a base address. What a provider's public profile may show is
+`city` and `province`, and the map may show the **service area** — the circle — not the point at
+its centre. `W3-T02` and `W3-T07` inherit this constraint, and it is the first entry on the list of
+permission denies those tasks must each write a test for (§8).
 
 `ratingAvg` and `ratingCount` are here on rule (c) and nothing else: `W3-T05` sorts search results
 by rating, and P6 means the sort field and its index must pre-exist the endpoint. Nothing in `W1`
@@ -275,8 +300,10 @@ writes them.
 
 ### 5.4 `Address` → `address`
 
-A place. Belongs to a user, not to a profile, so an account that is both client and provider keeps
-one address book.
+A place, and **the only table in the schema with a geography column** (§4.1). It belongs to a
+user, not to a profile, so an account that is both client and provider keeps one address book — and
+after Q2 it serves both sides: a client's default location and a provider's base of operations are
+both pointers into it.
 
 | Column | Type | N | Default | Notes |
 | --- | --- | --- | --- | --- |
@@ -298,11 +325,17 @@ one address book.
 | Index | Columns | Why |
 | --- | --- | --- |
 | `address_user_id_idx` | `user_id` | list a user's addresses |
-| `address_location_gist` | `location` GIST | job-side proximity (`W4-T07` matches jobs by radius) |
+| `address_location_gist` | `location` GIST | **the only proximity index in the product.** Provider search (`W3-T05`), job matching (`W4-T07`), emergency broadcast (`W7-T02`) all reach it |
 
-Latitude and longitude are **NOT NULL** here and nullable on `ProviderProfile`: an address the user
-picked off a map always has coordinates, whereas a provider may complete a profile before setting
-a service area.
+Latitude and longitude are **NOT NULL**: an address is created by picking a place off a map
+(Google Places, `TODO.md` §1), so an address without coordinates is a bug, not a state. A provider
+who has not yet set a service area has `base_address_id IS NULL` — the absence is modelled on the
+profile, where it belongs, rather than as a half-filled address row.
+
+**One consequence to be aware of, accepted rather than solved:** a provider's base address is a row
+in their own address book, so a user who is both client and provider will see it in "my addresses".
+That is arguably correct — it is their address — and adding a `kind` column to separate them would
+be machinery serving a UI question `W2-T04` has not asked yet.
 
 ### 5.5 `Category` → `category`
 
@@ -381,6 +414,7 @@ erDiagram
     USER ||--o| PROVIDER_PROFILE : "has at most one"
     USER ||--o{ ADDRESS : "keeps an address book"
     CLIENT_PROFILE }o--o| ADDRESS : "defaults to"
+    PROVIDER_PROFILE }o--o| ADDRESS : "is based at"
     PROVIDER_PROFILE ||--o{ PROVIDER_CATEGORY : "offers"
     CATEGORY ||--o{ PROVIDER_CATEGORY : "is offered by"
     CATEGORY ||--o{ CATEGORY : "parent of"
@@ -395,16 +429,22 @@ failure names its own cause.
 | --- | --- | --- |
 | `0002_core_enums` | the four enums in §5.7 | `DROP TYPE` each, reverse order |
 | `0003_core_identity` | `user`, `client_profile`, `provider_profile`, `address` + their FKs and B-tree indexes | `DROP TABLE` in FK-safe order |
-| `0004_geography_columns` | the generated `location` columns and both GIST indexes | `DROP INDEX`, `DROP COLUMN` |
+| `0004_address_geography` | the generated `location` column on `address` and its GIST index | `DROP INDEX`, `DROP COLUMN` |
 | `0005_category_tree` | `category`, `provider_category` | `DROP TABLE` in FK-safe order |
 
-`0004` is separate because it is the one that can fail in a way we have not yet proved (§4.1,
-AC-12). If it does, it is the only folder that changes.
+`0004` is separate because it is the one that can fail in a way that is not yet proved (§4.1,
+AC-13). If it does, it is the only folder that changes — which is the whole reason for splitting it
+out rather than folding one `ALTER TABLE` into `0003`.
 
-**`citext`** (§5.1) needs `CREATE EXTENSION citext`, which by P2 the application role cannot do.
-That makes it a devops precondition on the same footing as PostGIS, and it is §13 **Q5** rather
-than an assumption — the alternative is `text` with a `lower(email)` unique index and application
-discipline, which needs no extension.
+**Ordering note.** `provider_profile.base_address_id` and `client_profile.default_address_id` both
+point at `address`, and `address.user_id` points back at `user`. All four tables therefore land in
+`0003` together; splitting them further would mean a migration that leaves a dangling FK.
+
+**No new extension.** Q5 chose `text` + `CREATE UNIQUE INDEX ON "user" (lower(email))` over
+`citext`, precisely so this task adds no precondition of the kind P2 makes a human step. The cost
+is application discipline: a lookup written as `WHERE email = $1` compiles, passes a naive test
+against lowercase fixtures, and silently fails to use the index — so `W2-T01`'s tests must include
+a mixed-case login. That obligation is recorded in §9 rather than left in a migration comment.
 
 The Prisma mapping is mechanical and not reproduced here; §5's tables are the source of truth and
 `schema.prisma` follows them. The one non-mechanical part is the generated column, which appears as:
@@ -451,6 +491,11 @@ matrix that would normally live here belongs to the tasks that expose these tabl
 Recorded explicitly because the spec template asks for both sections and an empty heading reads
 like an omission rather than a decision.
 
+**One deny is created by this task and inherited rather than invented by those tasks:** no response
+may include `line1` or `line2` of a provider's `base_address_id` (§5.3). It is written here because
+the table that makes it possible is created here, and a constraint that only exists in the head of
+whoever wrote the schema is not a constraint.
+
 ## 9. Error cases
 
 No HTTP surface, so no error codes from `W1-T01`. The failures this task can produce are database
@@ -459,7 +504,7 @@ code later.
 
 | Constraint | Fires when | Postgres | Which task maps it |
 | --- | --- | --- | --- |
-| `user_email_key` | signup with a taken email | `23505` | `W2-T01` → `CONFLICT` |
+| `user_email_lower_key` | signup with a taken email, **in any case** | `23505` | `W2-T01` → `CONFLICT` |
 | `user_phone_key` | phone already verified elsewhere | `23505` | `W2-T06` → `CONFLICT` |
 | `client_profile_user_id_key` | second client profile for one user | `23505` | `W2-T04` → `CONFLICT` |
 | `provider_profile_user_id_key` | second provider profile | `23505` | `W2-T05` → `CONFLICT` |
@@ -468,6 +513,12 @@ code later.
 | `address_postal_code_check` | non-ES postal code | `23514` | `W2-T04` → `VALIDATION_FAILED` |
 | `provider_profile_radius_check` | radius ≤ 0 or > 200 km | `23514` | `W3-T02` → `VALIDATION_FAILED` |
 | FK `provider_category_category_id_fkey` | delete a category in use | `23503` | `W3-T01` → refuse, deactivate instead |
+
+**Not a constraint violation, and the more likely bug:** a query written `WHERE email = $1` is
+valid SQL that returns no row for `Ana@example.com` and does not use `user_email_lower_key`. The
+database cannot catch it. `W2-T01` owns a login test with a mixed-case email, and AC-17 proves the
+index behaves at this layer so that the failure, when it comes, is unambiguously in the query and
+not in the schema.
 
 ## 10. Acceptance criteria
 
@@ -479,7 +530,7 @@ red phase.
 2. **Given** the migrated database, **when** every `down.sql` from `0005` to `0002` is applied in
    reverse order, **then** each exits 0 and the schema returns to its `0001` state.
 3. **Given** an existing user with email `ana@example.com`, **when** a second user is inserted with
-   the same email, **then** the insert fails with `23505` on `user_email_key`.
+   the same email, **then** the insert fails with `23505` on `user_email_lower_key`.
 4. **Given** a user with a `ProviderProfile`, **then** `PROVIDER` ∈ `user.roles`; and **given** a
    user with `PROVIDER` ∈ `roles`, **then** a `ProviderProfile` row exists. Both directions.
 5. **Given** a user row, **when** a second `ClientProfile` is inserted for it, **then** the insert
@@ -489,29 +540,35 @@ red phase.
    remains in any table.
 7. **Given** a category referenced by a `provider_category` row, **when** the category is deleted,
    **then** the delete fails with `23503` (`ON DELETE RESTRICT`).
-8. **Given** an address with a `default_address_id` pointing at it from a client profile, **when**
-   the address is deleted, **then** the client profile survives with `default_address_id IS NULL`.
-9. **Given** an address insert with `postal_code = '2807'` (four digits), **then** it fails with
-   `23514`; **given** `'28001'`, **then** it succeeds.
-10. **Given** a provider profile insert with `service_radius_metres = 0`, **then** it fails with
+8. **Given** an address that a client profile points at as its default, **when** the address is
+   deleted, **then** the client profile survives with `default_address_id IS NULL`.
+9. **Given** an address that a provider profile points at as its base, **when** the address is
+   deleted, **then** the provider profile survives with `base_address_id IS NULL` — the provider
+   stops being searchable rather than disappearing.
+10. **Given** an address insert with `postal_code = '2807'` (four digits), **then** it fails with
+    `23514`; **given** `'28001'`, **then** it succeeds.
+11. **Given** a provider profile insert with `service_radius_metres = 0`, **then** it fails with
     `23514`; with `250000`, **then** it fails; with `15000`, **then** it succeeds.
-11. **Given** an address inserted with the coordinates of Puerta del Sol
+12. **Given** an address inserted with the coordinates of Puerta del Sol
     (`latitude = 40.416775`, `longitude = -3.703790`), **then**
     `ST_X(location::geometry)` returns ≈ `-3.703790` and `ST_Y(location::geometry)` ≈ `40.416775`
     — the axis-order check from §4.1.
-12. **Given** the full migration set applied, **when** `prisma migrate dev --create-only` runs
+13. **Given** the full migration set applied, **when** `prisma migrate dev --create-only` runs
     against that database, **then** it reports **no drift and generates no new migration**. This is
     the criterion that proves §4.1's generated-column approach is viable; if it fails, §13 Q4.
-13. **Given** two addresses 1 km apart, **when** `ST_DWithin(location, $point, 500)` is queried,
+14. **Given** an address row, **when** `latitude` is updated, **then** `location` changes to match
+    without any application code writing it — the column is generated, not merely populated once.
+15. **Given** two addresses 1 km apart, **when** `ST_DWithin(location, $point, 500)` is queried,
     **then** exactly one row is returned — proving the geography column is queryable, not merely
     present.
-14. **Given** the migrated database, **when** the index list is read from `pg_indexes`, **then**
-    both GIST indexes from §5.3 and §5.4 exist and their `indexdef` names `gist`.
-15. **Given** `EXPLAIN` on a `ST_DWithin` query over a table with enough rows to defeat a
-    sequential scan, **then** the plan uses `provider_profile_location_gist`. (The row count is a
-    test-fixture detail; the criterion is that the index is *used*, not merely present, since a
-    GIST index Postgres declines to use is the failure mode AC-14 cannot see.)
-16. **Given** the seeded category tree, **when** a child category is inserted whose parent already
+16. **Given** `EXPLAIN` on a `ST_DWithin` query over enough rows to defeat a sequential scan,
+    **then** the plan uses `address_location_gist`. (The row count is a test-fixture detail; the
+    criterion is that the index is *used*, not merely present, since a GIST index Postgres declines
+    to use is the failure mode a `pg_indexes` check cannot see.)
+17. **Given** a user stored as `ana@example.com`, **when** `SELECT … WHERE lower(email) =
+    lower('ANA@example.com')` runs, **then** the row is found — the Q5 case-insensitivity
+    guarantee, at the layer that actually provides it.
+18. **Given** the seeded category tree, **when** a child category is inserted whose parent already
     has a parent, **then** `W3-T01`'s application check rejects it. *(Declared here, tested there —
     §5.5 puts the rule in the application deliberately.)*
 
@@ -545,64 +602,66 @@ most of them.
 
 | Risk | Impact | Mitigation |
 | --- | --- | --- |
-| Prisma reports permanent drift on the generated columns | every agent learns to ignore drift | AC-12, before merge. Fallback in §13 Q4 |
-| `citext` unavailable in Neon or preview | migration `0003` fails everywhere | §13 Q5 — decide before writing `0003` |
-| Longitude/latitude transposed | every location in Spain is wrong by ~5000 km | AC-11 with a known point |
+| Prisma reports permanent drift on the generated column | every agent learns to ignore drift | AC-13, before merge. Fallback in §13 Q4, now one column and one index wide |
+| A query written `WHERE email = $1` misses `user_email_lower_key` | duplicate accounts differing only in case | Q5's accepted cost. AC-17 proves the schema side; `W2-T01` owns a mixed-case login test |
+| Longitude/latitude transposed | every location in Spain is wrong by ~5000 km | AC-12 with a known point |
 | Rating columns rot, unwritten for weeks | a sort field that is always null | accepted; rule (c) requires the column to pre-exist its endpoint. `W8-T05` fills them |
+| A provider's home street address is exposed by a later endpoint | a privacy incident, from a column this task created | the deny in §8, inherited by `W3-T02` and `W3-T07` as a test each |
 | Six tables land at once and a later slice wants one column different | an extra migration | accepted — the alternative is six PRs and six merge conflicts on one file |
 
 ## 13. Open questions
 
-Five, and the first two change the tables in §5 rather than a detail inside them. `TODO.md` §3 is
-described as frozen — *"Changes require an ADR"* — so Q1 and Q2 are contradictions of a frozen
-document and need an answer before implementation, not after.
+**All five closed by the operator on 2026-09-10.** Kept in full rather than deleted: Q1 and Q2
+contradict `TODO.md` §3, which is frozen, so the reasoning is the ADR's raw material and whoever
+reopens one needs to find the argument rather than the conclusion.
 
 ```
-ESCALATION
+ESCALATION — CLOSED 2026-09-10
 Task:      W1-T05
-Question:  Q1 — Does `MANITAS | PRO` move off `User.roles` and live only on
-           `ProviderProfile.kind`, with `UserRole = CLIENT | PROVIDER | ADMIN` as an array?
-Options:   A) as proposed in §4.2 — one source of truth, a user can be client and provider at once
-           B) keep `TODO.md` §3 as written — `role(s) CLIENT | MANITAS | PRO | ADMIN` duplicated
-              across two tables
-Recommend: A. B lets the two columns disagree, and the reader that suffers is `W3-T08` licence
-           gating, where the failure is an unlicensed handyman surfaced for a gas job. A also
-           costs an ADR against §3, which B does not.
-Blocked:   §5.1 and §5.3 as written.  Not blocked: everything else in §5.
 
-Question:  Q2 — Does `ClientProfile.defaultLocation` become a pointer to an `Address`
-           (`default_address_id`) rather than its own geo column?
-Options:   A) pointer, as §5.2 — geography lives only in `address`
-           B) its own lat/lng/location on `client_profile`, per the §3 sketch
-Recommend: A. B is a second copy of a location the address table already holds, needing a third
-           GIST index and a rule about which one wins when they disagree.
-Blocked:   §5.2.  Not blocked: the rest.
+Q1 — Does `MANITAS | PRO` move off `User.roles` and live only on `ProviderProfile.kind`,
+     with `UserRole = CLIENT | PROVIDER | ADMIN` as an array?
+Answer:    A — approved as proposed. One source of truth; a user may be client and provider at
+           once. Departs from `TODO.md` §3 and therefore carries an ADR.
 
-Question:  Q3 — UUIDv4 (`gen_random_uuid()`) as the primary key for every table, accepting random
-           index insert locality?
-Options:   A) v4 now, in core Postgres 17, no extension (§4.3)
-           B) time-ordered ids — UUIDv7 needs PG18 or an extension; `cuid2` means generating ids
-              in the application
-Recommend: A. P6 needs `id` stable and unique, not sortable. Insert locality is a real cost at a
-           scale this product does not have, and it is measurable later.
-Blocked:   nothing — A is the default if unanswered.
+Q2 — Does `ClientProfile.defaultLocation` become a pointer to an `Address`?
+Answer:    A, and **widened**. The operator accepted the pointer and added that a location must
+           always carry both a postal address and coordinates. Applying that consistently moved
+           `ProviderProfile`'s base off bare lat/lng onto `base_address_id` as well, so `address`
+           is now the only table in the schema with a geography column. See below.
 
-Question:  Q4 — If AC-12 shows `GENERATED ALWAYS AS … STORED` produces permanent Prisma drift,
-           which fallback?
-Options:   A) a `BEFORE INSERT OR UPDATE` trigger maintaining a plain geography column
-           B) drop the geography column; store lat/lng and use a functional GIST index over
-              `ST_MakePoint(...)` — no column for Prisma to see at all
-Recommend: B if it happens. It is the only option with nothing for Prisma to misunderstand; the
-           cost is that `ST_DWithin` must repeat the expression, which `W3-T05` writes once.
-Blocked:   nothing yet — this is contingent, and AC-12 decides it during the red phase.
+Q3 — UUIDv4 (`gen_random_uuid()`) primary keys, accepting random index insert locality?
+Answer:    A — approved. Revisit only with a measurement.
 
-Question:  Q5 — `citext` for `user.email`, which needs `CREATE EXTENSION citext` as a devops
-           precondition alongside PostGIS (P2)?
-Options:   A) `citext` — the database enforces case-insensitive uniqueness
-           B) `text` + `CREATE UNIQUE INDEX ON user (lower(email))` — no extension, same
-              guarantee, but every lookup must remember `lower()`
-Recommend: B, narrowly. A is cleaner, but P2 means the extension is a human step in four
-           environments, and `W0-T24` shows how long a human step takes to land. B needs nothing
-           from anyone.
-Blocked:   §5.1's `email` column type and migration `0003`.
+Q4 — Fallback if AC-13 shows `GENERATED ALWAYS AS … STORED` produces permanent Prisma drift?
+Answer:    B — drop the column, keep lat/lng, use a functional GIST index over
+           `ST_MakePoint(...)`. Nothing for Prisma to misunderstand. Contingent; AC-13 decides.
+
+Q5 — `citext` for `user.email`, needing a `CREATE EXTENSION` human step (P2)?
+Answer:    B — `text` + `CREATE UNIQUE INDEX ON "user" (lower(email))`. Same guarantee, no
+           precondition, at the cost of application discipline (§9, AC-17).
+
+Blocked:   nothing. Contract freeze proceeds.
 ```
+
+**Q2 was answered more broadly than it was asked, and the schema is better for it.** The question
+was about one column on `ClientProfile`. The answer — *both address and lat/lng* — is a rule about
+what a location **is**, and once it applies to providers as well, `ProviderProfile`'s lat/lng
+columns stop making sense: they were coordinates with no address, which is exactly what the rule
+forbids. Three things followed that were not in the original draft:
+
+- **One geography implementation instead of two.** One generated column, one GIST index, one
+  fallback to apply if AC-13 fails (§4.1).
+- **`city` and `province` for every provider**, which the coordinates could not give without a
+  reverse geocode — usable for display and for coarse filtering before the geo query runs.
+- **A privacy rule that did not exist before** (§5.3, §8). A base address is usually a home, and
+  storing `line1` obliges every later endpoint not to return it. This is a real cost of the
+  decision, not a footnote: the previous shape could not leak a street address because it did not
+  have one. It is accepted because `city`/`province` are worth more than the risk, provided the deny
+  in §8 is tested by `W3-T02` and `W3-T07` rather than assumed.
+
+**The one thing still genuinely open, and it belongs to `W3-T02`:** whether a provider's base
+address should be *selectable from their existing address book* or *entered separately*. The schema
+permits either — it is a nullable FK — and the difference is a UI decision about whether a plumber
+wants their home address offered as a work base. Recorded here so the answer is a deliberate choice
+rather than whatever the form happens to do.
