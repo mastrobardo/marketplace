@@ -24,7 +24,8 @@ interface UserContext {
 }
 
 const adminOnly = (ctx: UserContext) =>
-  ctx.actorIsAdmin || ({ reason: 'Only an administrator may do this.', code: 'FORBIDDEN' } as const);
+  ctx.actorIsAdmin ||
+  ({ reason: 'Only an administrator may do this.', code: 'FORBIDDEN' } as const);
 
 function userStatusDefinition(): MachineDefinition<UserState, UserEvent, UserContext> {
   return {
@@ -104,7 +105,9 @@ describe('AC1..AC6 — defineMachine refuses a table that does not describe a ma
       { from: 'ACTIVE' as UserState, on: 'SUSPEND' as UserEvent, to: 'DELETED' as UserState },
     ];
     expect(() => defineMachine({ ...broken, transitions })).toThrow(StateMachineDefinitionError);
-    expect(() => defineMachine({ ...broken, transitions })).toThrow(/ACTIVE.*SUSPEND|SUSPEND.*ACTIVE/s);
+    expect(() => defineMachine({ ...broken, transitions })).toThrow(
+      /ACTIVE.*SUSPEND|SUSPEND.*ACTIVE/s,
+    );
   });
 
   it('AC4 — refuses a state unreachable from initial, naming it', () => {
@@ -263,9 +266,10 @@ describe('AC15..AC21 — no path to a new state avoids the recorder', () => {
 
     const written = record.calls[0];
     expect(written).toEqual(result.audit);
-    expect(AuditRecordSchema.safeParse(written).success, 'the record does not match its schema').toBe(
-      true,
-    );
+    expect(
+      AuditRecordSchema.safeParse(written).success,
+      'the record does not match its schema',
+    ).toBe(true);
     expect(written).toMatchObject({
       entity: 'app_user',
       entityId: ENTITY_ID,

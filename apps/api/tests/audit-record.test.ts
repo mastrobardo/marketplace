@@ -42,7 +42,20 @@ function psql(database: string, sql: string): string {
 /** The message Postgres raised, or `NO_ERROR`. Asserting on our own RAISE text, not a SQLSTATE. */
 function failureOf(database: string, sql: string): string {
   try {
-    dc('exec', '-T', 'db', 'psql', '-U', 'marketplace', '-d', database, '-v', 'ON_ERROR_STOP=1', '-tAc', sql);
+    dc(
+      'exec',
+      '-T',
+      'db',
+      'psql',
+      '-U',
+      'marketplace',
+      '-d',
+      database,
+      '-v',
+      'ON_ERROR_STOP=1',
+      '-tAc',
+      sql,
+    );
     return 'NO_ERROR';
   } catch (error) {
     const failure = error as { stdout?: string; stderr?: string };
