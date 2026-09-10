@@ -406,7 +406,7 @@ for data), so no feature is blocked waiting for an account that is not needed ye
 
 ### W1 — Contracts & domain foundation (`agent-contracts`)
 - `W1-T01` `[A]` ✅ Error envelope + error-code registry — frozen in `packages/contracts` as a zod schema, `details` typed per code, explicit HTTP status→code table *(issue #55)*
-- `W1-T02` `[A]` Pagination, sorting, filtering conventions
+- `W1-T02` `[A]` ✅ Pagination, sorting, filtering conventions — cursor (keyset) paging only, a per-endpoint sortable allow-list with `id` appended as the tiebreaker, flat typed filters, and `{ items, page: { nextCursor, hasMore } }` with no `total`; the lexicographic keyset predicate lives in the seam as provider-neutral data *(issue #56)*
 - `W1-T03` `[A]` zod → OpenAPI generation + typed client codegen
 - `W1-T04` `[A]` Contract-test harness (spin API, assert every route matches OpenAPI)
 - `W1-T05` `[A]` Core Prisma schema: User, profiles, Category, geo columns + PostGIS indexes

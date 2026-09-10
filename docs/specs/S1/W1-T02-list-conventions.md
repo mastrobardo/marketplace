@@ -93,10 +93,16 @@ argument means that mistake is a type error at the point the route is declared, 
 row a client reports six months later.
 
 `limit` defaults to `PAGE_LIMIT_DEFAULT` (20) and rejects above `PAGE_LIMIT_MAX` (100) per decision
-G. `cursor` is an optional opaque string. `sort` is an optional string parsed by decision B's
-grammar into `readonly SortField[]`, which is the schema's **output** type — a route handler
-receives `[{ field: 'createdAt', direction: 'desc' }, { field: 'id', direction: 'asc' }]`, never a
-string it has to parse again.
+G. `sort` is an optional string parsed by decision B's grammar into `readonly SortField[]`, which is
+the schema's **output** type — a route handler receives
+`[{ field: 'createdAt', direction: 'desc' }, { field: 'id', direction: 'asc' }]`, never a string it
+has to parse again.
+
+`cursor` is the same on the way in: an opaque string on the wire, a **decoded `CursorPosition`** on
+the schema's output side. A handler that has to decode the cursor itself has to handle a failure the
+boundary has already ruled out, and would write `if (!decoded.ok)` around a branch that cannot be
+reached — so the transform does it once and a malformed cursor is a zod issue on the `cursor` path
+like any other bad parameter.
 
 `z.strictObject`, as everywhere in this package: `?limit=20&offset=40` is a client that has
 misunderstood decision A, and saying so is cheaper than serving it page 1 and letting it paginate
@@ -215,7 +221,7 @@ which keeps the seam acyclic.
 | `PAGE_LIMIT_DEFAULT` · `PAGE_LIMIT_MAX`           | `20` · `100`.                                                                                                 |
 | `MAX_SORT_FIELDS`                                 | `3`, before the appended `id`.                                                                                |
 | `RESERVED_QUERY_KEYS`                             | `['limit', 'cursor', 'sort']`.                                                                                |
-| `paginationQuery({ sortable, defaultSort })`      | The `limit`/`cursor`/`sort` schema. Output `sort` is a parsed, `id`-terminated `SortField[]`.                  |
+| `paginationQuery({ sortable, defaultSort })`      | The `limit`/`cursor`/`sort` schema. Output `sort` is a parsed, `id`-terminated `SortField[]`; output `cursor` is a decoded `CursorPosition`. |
 | `listQuery({ sortable, defaultSort, filters })`   | The above merged with per-endpoint filters, strict. Throws `PaginationError` on a reserved-key collision.      |
 | `pageEnvelope(itemSchema)`                        | `z.strictObject({ items, page: PageInfoSchema })`.                                                            |
 | `PageInfoSchema`                                  | `{ nextCursor: string \| null, hasMore: boolean }`.                                                            |
@@ -274,7 +280,7 @@ Each is a test in `packages/contracts/tests/pagination.test.ts` unless stated ot
 7. **Given** filters `{ status: z.enum([...]) }`, **when** parsing `?status=OPEN&limit=5`, **then** both are present and typed; **given** an unknown filter value, **then** it fails with the issue path on the filter.
 8. **Given** a filter named `limit`, `cursor` or `sort`, **when** `listQuery` is constructed, **then** it throws `PaginationError` naming the key.
 9. **Given** `sortable: []` or a `defaultSort` outside `sortable`, **when** constructed, **then** it throws `PaginationError`.
-10. **Given** a position `{ v: ['2026-01-01T00:00:00.000Z'], id: 'abc' }`, **when** `encodeCursor` then `decodeCursor`, **then** the position round-trips exactly and the encoded form is base64url (no `+`, `/` or `=`).
+10. **Given** a position `{ v: ['2026-01-01T00:00:00.000Z'], id: 'abc' }`, **when** `encodeCursor` then `decodeCursor`, **then** the position round-trips exactly and the encoded form is base64url (no `+`, `/` or `=`). **And** the same holds for an accented name, a name outside latin-1, a string containing a surrogate pair, a quote and a backslash, and values of one, two and three characters — the three base64 group lengths. (The codec is hand-rolled for the reason in §4.3; a hand-rolled base64 with no Unicode or padding coverage is the likeliest place for this change to be quietly wrong.)
 11. **Given** `'not-a-cursor'`, `''`, base64url of non-JSON, and base64url of `{"v":1}`, **when** `decodeCursor`, **then** each returns a failure result rather than throwing.
 12. **Given** a position whose `v` contains `null`, **when** `encodeCursor`, **then** it throws `PaginationError` naming the field index (§4.3).
 13. **Given** 21 rows and `limit: 20`, **when** `pageOf`, **then** 20 items, `hasMore: true`, and `nextCursor` decodes to the 20th row's position — **not** the 21st.

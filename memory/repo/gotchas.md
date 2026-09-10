@@ -280,3 +280,20 @@ come from real experience.
 - **evidence**: PR #165 run 34450639354 (`unit`);
   `packages/contracts/tests/money.test.ts`, `apps/web/tests/i18n.test.ts`
 - **status**: active
+
+### zod 4 accepts a function as `.refine`'s second argument and ignores it
+- **id**: MEM-2026-09-10-06
+- **scope**: repo
+- **fact**: `.refine(pred, (value) => ({ message: … }))` is accepted by the types and by the
+  runtime, and the resulting issue carries the generic `"Invalid input"` — the function is never
+  called. Only two forms produce a dynamic message: `.transform((v, ctx) => { ctx.addIssue({ code:
+  'custom', message }); return z.NEVER; })` and `.superRefine((v, ctx) => …)`.
+- **why**: The function form is what zod 3 habits and most examples produce, and it fails **open**:
+  validation still rejects the value, so every test asserting `success === false` passes. What is
+  lost is the reason, on every error the endpoint returns — `"sort" is not sortable here; allowed:
+  createdAt, priceCents` becomes `Invalid input`, and the client cannot tell the caller what to fix.
+- **apply**: Any zod issue whose message depends on the value goes through the `ctx` form. Assert on
+  `error.issues[0].message`, not only on `success`, or the regression is invisible.
+- **evidence**: probed against `zod@4.5.4` in `packages/contracts`;
+  `docs/specs/S1/W1-T02-list-conventions.run.md` §4
+- **status**: active
