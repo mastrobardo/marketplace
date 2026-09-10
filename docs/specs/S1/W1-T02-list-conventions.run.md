@@ -140,15 +140,32 @@ places an off-by-one in the padding logic hides. All pass; none of them did so b
 
 ## 7. Human input received
 
-Decisions A–D were put to the operator with the plan and a recommendation each; the reply was
-"start", so they stand as recorded (the same precedent `W1-T06` §8 set). E–H were derived while
-writing the spec and are flagged in §10 of it for objection before merge. No hand-edits, no
-overrides, so no ledger entry under L7.
+Two exchanges, both before merge, neither a hand-edit or an override — so no ledger entry under L7.
 
-The operator also asked, in the same instruction, for a ticket about naming environments after the
-task rather than the pull request. That is `W0-T25` / issue #166, `agent-devops`, and the only part
-of it in this branch is its line in `TODO.md` — the work itself is not this task's and not this
-slice's.
+**First:** decisions A–D were put to the operator with the plan and a recommendation each; the reply
+was "start", so they stood as recorded (the same precedent `W1-T06` §8 set). E–H were derived while
+writing the spec.
+
+**Second:** the operator asked for the open decisions to be listed back and reviewed them one at a
+time. **All eight stand**, on MVP grounds, including the two the spec flags as worth an argument
+(the unsigned cursor, and the three numbers frozen ahead of `W3-T05`'s measurements). Spec §10's
+ESCALATION is now closed rather than left open at merge, and the two flagged items are kept in §10
+as conditions-under-which-this-changes rather than as questions. The only genuinely open question
+left in this spec is offset paging for the back office, which belongs to `W9`.
+
+Nothing in `pagination.ts` changed as a result: the code already implemented what was approved.
+
+**On `W0-T25` (#166),** the ticket the operator asked for in the same original instruction — the
+only part of it in this branch is its line in `TODO.md`; the work is `agent-devops`'. Its two open
+questions were also closed in this exchange, and one of them corrected my recommendation:
+
+- *Two PRs on one task* — not solved for the MVP. No suffix, no teardown guard. The accepted
+  consequence is written into the ticket so it is legible later.
+- *A branch with no task ID* — I had recommended falling back to `pr-<n>`. The operator rejected the
+  premise: **every** branch carries a ticket, hotfixes included (possibly under a `hotfix/` folder),
+  so there is no fallback and the task ID is parsed from the branch's last path segment. This is the
+  better answer — a `pr-<n>` fallback would have quietly reintroduced the naming the task exists to
+  remove, on exactly the branches nobody watches.
 
 ## 8. Self-assessment
 

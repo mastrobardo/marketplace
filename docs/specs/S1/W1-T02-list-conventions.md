@@ -299,28 +299,34 @@ Each is a test in `packages/contracts/tests/pagination.test.ts` unless stated ot
 ## 10. Open questions
 
 ```
-ESCALATION
+ESCALATION — CLOSED 2026-09-10
 Task:      W1-T02
-Question:  Do decisions A–H in §2 stand as recorded?
-Options:   A) they stand — merge as specced
-           B) one changes — say which; it is a spec edit now, an ADR after this merges
-Recommend: A. A–D were put to you with the plan and the reply was to start. E–H are consequences
-           of A rather than new commitments, and the two worth a second look are called out below.
+Question:  Do decisions A-H in §2 stand as recorded?
+Answer:    A) they stand. The operator reviewed all eight and accepted them on MVP grounds,
+           including the two flagged below as worth an argument.
 Blocked:   nothing
-Not blocked: the whole task
 ```
 
-Two of them are worth a reviewer's attention rather than a nod:
+Both of the following were put to the operator explicitly and accepted. They are kept here not as
+open questions but because each carries a condition under which it stops being the right answer,
+and whoever hits that condition needs to find the reasoning rather than the conclusion:
 
 **Decision E — an unsigned cursor.** The argument in §4.3 is that a cursor carries nothing the
 client was not just shown. That holds for every list in the MVP as specced. It would stop holding
 if a list endpoint ever sorted by a field it does not return in the item body — an internal risk
 score, a moderation weight — because the cursor would then disclose that value. If such a list
 appears, the answer is to keep the field out of the allow-list, not to start signing cursors; that
-is a note for whoever writes `W9-T04`.
+is a note for whoever writes `W9-T04`, and it is the accepted position rather than an oversight.
 
 **Offset paging for the back office.** `W9-T04` and `W9-T05` may want page numbers and a total row
 count, which decision A and decision D both refuse. That is a real product question about internal
 tools, not a defect in this convention. Recorded here so that the answer, when it comes, is a
 deliberate second shape with its own name — not `offset` quietly appearing beside `cursor` in a
-schema that says it rejects it.
+schema that says it rejects it. This is the one question in this spec still genuinely open, and it
+belongs to `W9`, not here.
+
+**The three frozen numbers.** `PAGE_LIMIT_DEFAULT = 20`, `PAGE_LIMIT_MAX = 100` and
+`MAX_SORT_FIELDS = 3` were accepted knowing they are being fixed before `W3-T05` has measured a geo
+query. Each widens additively; none narrows without a consumer sweep. If `W3-T05` finds 100 rows of
+radius search is the wrong page size, raising the cap is a one-line change to this module and no
+change to any endpoint.
