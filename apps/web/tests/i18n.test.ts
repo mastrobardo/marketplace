@@ -36,9 +36,19 @@ describe('AC7/AC8 — the catalogues agree, and say something', () => {
  * "A missing translation key fails the build" is only true if it is compiled and observed. Each
  * fixture is a tiny package with its own tsconfig; the assertion is `tsc`'s exit code.
  */
+/**
+ * The local binary rather than `npx tsc`, which re-resolves the package on every call.
+ *
+ * Touched by `W1-T06` (`agent-contracts`), outside its slice and deliberately: adding two more
+ * fixture compilations to `packages/contracts` put enough load on turbo's parallel test tasks to
+ * push this suite past the 5s default, and `MEM-2026-09-09-02` already records that a test which
+ * shells out needs an explicit timeout in the options-object form. No behaviour changed.
+ */
+const tsc = fileURLToPath(new URL('../node_modules/.bin/tsc', import.meta.url));
+
 function typecheckFixture(name: string): { ok: boolean; output: string } {
   try {
-    execFileSync('npx', ['tsc', '-p', `tests/fixtures/${name}/tsconfig.json`], {
+    execFileSync(tsc, ['-p', `tests/fixtures/${name}/tsconfig.json`], {
       cwd: root,
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'pipe'],
@@ -51,21 +61,25 @@ function typecheckFixture(name: string): { ok: boolean; output: string } {
 }
 
 describe('AC9/AC10/AC11 — a missing translation is a build failure', () => {
-  it('compiles a fixture that uses only real keys', () => {
+  it('compiles a fixture that uses only real keys', { timeout: 120_000 }, () => {
     const result = typecheckFixture('valid');
     expect(result.ok, `the valid fixture did not compile:\n${result.output}`).toBe(true);
   });
 
-  it('refuses a component that translates a key nobody defined', () => {
+  it('refuses a component that translates a key nobody defined', { timeout: 120_000 }, () => {
     const result = typecheckFixture('unknown-key');
     expect(result.ok, 'an unknown translation key compiled').toBe(false);
     expect(result.output).toContain('this.key.does.not.exist');
   });
 
-  it('refuses a catalogue that is missing a key the source of truth defines', () => {
-    const result = typecheckFixture('incomplete-catalogue');
-    expect(result.ok, 'an incomplete catalogue compiled').toBe(false);
-  });
+  it(
+    'refuses a catalogue that is missing a key the source of truth defines',
+    { timeout: 120_000 },
+    () => {
+      const result = typecheckFixture('incomplete-catalogue');
+      expect(result.ok, 'an incomplete catalogue compiled').toBe(false);
+    },
+  );
 });
 
 describe('AC12 — an unknown key at runtime is loud, not silent', () => {

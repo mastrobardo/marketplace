@@ -326,9 +326,15 @@ describe('AC20 — the invariants hold across a seeded range, not just at the ex
  * harness as `errors.test.ts`; the positive sibling is not optional — `MEM-2026-09-09-09` records
  * a check that always failed and a check that always passed being indistinguishable without one.
  */
+/**
+ * The local binary, not `npx tsc`: `npx` re-resolves the package on every call, and this suite
+ * spawns it twice while turbo runs the other packages' suites in parallel.
+ */
+const tsc = fileURLToPath(new URL('../node_modules/.bin/tsc', import.meta.url));
+
 function typecheckFixture(name: string): { ok: boolean; output: string } {
   try {
-    execFileSync('npx', ['tsc', '-p', `tests/fixtures/${name}/tsconfig.json`], {
+    execFileSync(tsc, ['-p', `tests/fixtures/${name}/tsconfig.json`], {
       cwd: root,
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'pipe'],
@@ -341,12 +347,14 @@ function typecheckFixture(name: string): { ok: boolean; output: string } {
 }
 
 describe('AC21 — a currency other than EUR is a compile error', () => {
-  it('compiles a fixture that pairs Money with EUR', () => {
+  // Shelling out to a compiler on a two-core runner does not fit the 5s default, and
+  // `MEM-2026-09-09-02`: only the options-object form of the override is honoured by Vitest 5.
+  it('compiles a fixture that pairs Money with EUR', { timeout: 120_000 }, () => {
     const result = typecheckFixture('money-valid');
     expect(result.ok, `the valid money fixture did not compile:\n${result.output}`).toBe(true);
   });
 
-  it('refuses a fixture that names another currency', () => {
+  it('refuses a fixture that names another currency', { timeout: 120_000 }, () => {
     const result = typecheckFixture('money-wrong-currency');
     expect(result.ok, 'USD compiled as a Currency').toBe(false);
   });
