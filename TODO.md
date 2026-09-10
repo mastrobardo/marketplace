@@ -409,7 +409,7 @@ for data), so no feature is blocked waiting for an account that is not needed ye
 - `W1-T03` `[A]` zod → OpenAPI generation + typed client codegen
 - `W1-T04` `[A]` Contract-test harness (spin API, assert every route matches OpenAPI)
 - `W1-T05` `[A]` Core Prisma schema: User, profiles, Category, geo columns + PostGIS indexes
-- `W1-T06` `[A]` Money value object + currency/rounding rules + tests
+- `W1-T06` `[A]` ✅ Money value object — integer cents in `packages/contracts`, `prorate` and `allocate` the only two rounding sites, bounded at `Int32` because that is what Prisma `Int` is *(issue #60)*
 - `W1-T07` `[A]` State-machine helper (transition table + guard + audit log emit)
 - `W1-T08` `[M]` ADR template + first 5 ADRs (stack, contracts seam, money, geo, auth) *(human: sign off on the money + auth ADRs)*
 - `W1-T09` `[A]` Shared test factories + fixtures in `packages/testing` (TDD prerequisite for every slice)
