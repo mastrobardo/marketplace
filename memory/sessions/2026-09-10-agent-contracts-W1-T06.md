@@ -43,6 +43,14 @@ fixtures, nothing touched outside `packages/contracts`.
 - 10:00 `pnpm verify` clean from cold. Run record written with §5 explaining the changed assertion,
   since editing a test after watching it fail is the thing a reviewer should distrust.
 
+- 10:20 CI `unit` failed on two `tsc` fixture tests that pass locally — mine in `packages/contracts`
+  and `apps/web`'s i18n one, which this branch never touched. Not a flake: turbo runs package test
+  suites in parallel, and two extra cold compiler processes on a two-core runner pushed a
+  neighbouring suite past the 5s default. Fixed with the package-local `tsc` binary plus an explicit
+  options-object timeout on every fixture test in both packages. Promoted as `MEM-2026-09-10-05`.
+  Crossing into `apps/web/tests/` is outside this slice; done deliberately, reason written at the
+  call site, run record §9.
+
 ## Blocked / escalations
 
 ```

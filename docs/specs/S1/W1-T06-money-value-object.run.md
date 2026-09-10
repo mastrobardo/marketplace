@@ -18,8 +18,9 @@
 47 tests in `packages/contracts/tests/money.test.ts` plus two type-level fixtures. `pnpm verify`
 clean end to end — typecheck, lint, format, 224 tests across 10 files, both builds.
 
-Nothing outside `packages/contracts` was touched. `apps/api` has no money path yet, so there is no
-consumer to migrate; `W1-T05` adds the `Int` cents columns this value is bounded against.
+No source file outside `packages/contracts` was touched. `apps/api` has no money path yet, so there
+is no consumer to migrate; `W1-T05` adds the `Int` cents columns this value is bounded against. One
+**test** file outside the slice did change — `apps/web/tests/i18n.test.ts`, for the reason in §9.
 
 ## 2. The decisions were put before the spec, and only partly answered
 
@@ -143,7 +144,32 @@ The three decisions in §2 were shown to the operator with recommendations befor
 written; the reply was to start. No hand-edits, no overrides, so no ledger entry under L7. The
 mapping exercise that chose this task over W0-T20 and W1-T09 is in the session file.
 
-## 9. Self-assessment
+## 9. The gate caught something `pnpm verify` structurally could not
+
+CI's `unit` job failed on two tests that pass locally every time: AC21's fixture compile in
+`packages/contracts`, and `apps/web`'s i18n fixture compile — a suite this task never touched.
+Both timed out at Vitest's 5s default, and `main` was green, so the honest reading is that **this
+change caused the web failure**, not that it surfaced an unrelated flake.
+
+The mechanism: turbo runs each package's `test` task in parallel. This task added two more cold
+`tsc` processes to that set, and on a two-core runner the extra load pushed a neighbouring suite's
+compiler spawn past five seconds. Locally the same tests take ~450ms, on a machine with cores to
+spare — which is why a green `pnpm verify` could not have predicted it.
+
+Fixed at both ends: every fixture test now spawns the package-local `tsc` binary rather than
+`npx tsc` (which re-resolves the package on each call), and each carries an explicit
+`{ timeout: 120_000 }`. The options-object form is deliberate — `MEM-2026-09-09-02` records that
+Vitest 5 silently ignores the trailing-number form, and that memory's own `apply` line already said
+a test which shells out needs an explicit timeout. Three tests in `errors.test.ts` were in the same
+position and passing on luck; they now carry it too.
+
+**A boundary was crossed.** `apps/web/tests/i18n.test.ts` is not `agent-contracts`' file. The edit
+adds a timeout and changes no behaviour, the failure is attributable to this branch, and the
+alternative is handing the next PR a red gate it did not cause — so I made the edit and wrote the
+reason at the call site rather than escalating and leaving CI broken. A reviewer who disagrees
+should say so; it reverts in one line.
+
+## 10. Self-assessment
 
 - **Weakest part of this change.** `allocate`'s remainder distribution. The invariant is asserted
   over 500 seeded cases and every example in the spec, but the sort comparator carries two rules

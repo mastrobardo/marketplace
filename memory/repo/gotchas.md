@@ -261,3 +261,22 @@ come from real experience.
 - **evidence**: `docs/specs/S1/W1-T06-money-value-object.run.md`;
   `memory/sessions/2026-09-10-agent-contracts-W1-T06.md` log 09:10
 - **status**: active
+
+### Turbo runs package test tasks in parallel, so a slow test is a shared resource
+- **id**: MEM-2026-09-10-05
+- **scope**: repo
+- **fact**: `turbo run test` executes every package's suite concurrently. A test that spawns a
+  compiler or another heavy process therefore competes with the other packages' suites, and on a
+  two-core GitHub runner that contention is enough to push a *different* slice's test past Vitest's
+  5s default. `pnpm verify` on a developer machine cannot reproduce it — there are cores to spare.
+- **why**: `W1-T06` added two `tsc` fixture compilations to `packages/contracts` and CI failed on
+  `apps/web`'s i18n fixture test, which the branch never touched. It reads as an unrelated flake
+  and is not one: `main` was green, and the new processes are the cause.
+- **apply**: Any test that shells out gets the package-local binary (`node_modules/.bin/<tool>`,
+  never `npx <tool>`, which re-resolves per call) **and** an explicit
+  `it('…', { timeout: 120_000 }, fn)` — see `MEM-2026-09-09-02` for why the options-object form is
+  the only one that works. When CI fails on a suite your branch did not touch, check whether your
+  branch added a heavy process before calling it flaky.
+- **evidence**: PR #165 run 34450639354 (`unit`);
+  `packages/contracts/tests/money.test.ts`, `apps/web/tests/i18n.test.ts`
+- **status**: active
