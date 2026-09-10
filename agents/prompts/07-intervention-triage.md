@@ -1,8 +1,14 @@
 # Prompt 07 — intervention triage
 
-**Trigger**: a human rejected, overrode, or hand-edited agent work — **or** closed an agent PR
-without merging.
+**Trigger**: a human **corrected the agent** — rejected, overrode, hand-edited, redirected work
+already done, or closed an agent PR without merging.
 **Output**: `docs/interventions/<YYYY-MM-DD>-<TASK-ID>-<n>.md`, before merge.
+
+A re-prompt that redirects work already done **is** an intervention, and it is where almost all of
+them happen. A re-prompt that answers a question the agent asked is not — that is the pipeline
+working. The old trigger was "a human closed a PR"; it fired once in thirteen tasks while the
+session transcripts held ~125 operator turns, so the ledger was measuring the rarest failure mode
+and missing the common one (`docs/adr/ADR-010-agent-telemetry.md`).
 
 ---
 
@@ -42,6 +48,9 @@ requirement-changed
 Rules:
 - Root cause is exactly one value. If it feels like two, pick the earliest point where it could
   have been caught.
+- **Only `prompt-gap` and `spec-gap` require a corrective action.** The rest are counted. Lowering
+  the trigger multiplies entries roughly tenfold, and a ledger that demands a fix for every entry
+  is a ledger that gets abandoned inside a week.
 - `requirement-changed` is not a failure — but if it shows up repeatedly, specs are being written
   before the product is decided. That is a finding about the process.
 - Every entry with a `prompt-gap` or `spec-gap` cause **must** have a corrective action ticked.

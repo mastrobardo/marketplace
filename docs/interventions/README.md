@@ -10,9 +10,16 @@ moment the PR merges and the same class of failure is paid for again.
 
 ## When an entry is required
 
-If a human rejects, overrides, or hand-edits agent work on a branch, the PR carries an
-`intervention:*` label and the entry goes in this folder. **A closed-without-merge PR from an agent
-also requires one** — a rejection is the most informative signal we get.
+If a human **corrects the agent** — rejects, overrides, hand-edits, or redirects work already done —
+the PR carries an `intervention:*` label and the entry goes in this folder. **A closed-without-merge
+PR from an agent also requires one** — a rejection is the most informative signal we get.
+
+**A re-prompt that redirects work already done is an intervention.** That is where almost all of
+them happen, and it is what the old trigger missed: "a human closed a PR" fired once in thirteen
+tasks while the session transcripts held ~125 operator turns. A re-prompt that *answers* a question
+the agent asked is not an intervention — that is the pipeline working as designed. Only `prompt-gap`
+and `spec-gap` entries require a corrective action; the rest are counted. See
+[`ADR-010`](../adr/ADR-010-agent-telemetry.md).
 
 | Label | Verdict |
 |---|---|
@@ -24,6 +31,13 @@ also requires one** — a rejection is the most informative signal we get.
 
 CI gate `intervention-logged` fails a labelled PR that adds no matching file. `_TEMPLATE.md` and
 `ROLLUP.md` do not count — neither records anything that happened.
+
+## Backfilled entries
+
+An entry reconstructed from a session transcript rather than written at the time carries
+`backfilled: true` in its frontmatter. It is evidence, not measurement — retrospective
+self-assessment by the same model family that produced the work — and it must never be counted in a
+trend alongside contemporaneous entries.
 
 ## Rollup
 

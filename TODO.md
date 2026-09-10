@@ -257,8 +257,10 @@ Nightly on staging: full e2e suite, seed reset, Stripe webhook replay.
 
 ### 5.6 Human intervention ledger — *nothing manual goes unrecorded*
 
-If a human rejects, overrides, or hand-edits agent work, it gets written down. This is the
-dataset that tells us which agents and which prompts are weak.
+If a human **corrects the agent** — rejects, overrides, hand-edits, or redirects work already done —
+it gets written down. This is the dataset that tells us which agents and which prompts are weak.
+A re-prompt that redirects work already done is an intervention; one that answers a question the
+agent asked is not (`W11-T19`, `docs/adr/ADR-010`).
 
 **Location**: `docs/interventions/`, append-only, one file per intervention:
 `YYYY-MM-DD-<TASK-ID>-<n>.md`
@@ -294,6 +296,8 @@ requirement-changed
   if Y, link the ledger entry."*
 - A closed-without-merge PR from an agent **also** requires a ledger entry — a rejection is the
   most informative signal we get.
+- Only `prompt-gap` and `spec-gap` entries require a corrective action; the rest are counted.
+  An entry reconstructed from a transcript after the fact carries `backfilled: true`.
 
 **Rollup**: weekly, `agent-qa` summarises into `docs/interventions/ROLLUP.md` —
 interventions per agent, per root cause, per slice. Rising `prompt-gap` counts mean the templates
@@ -513,9 +517,10 @@ for data), so no feature is blocked waiting for an account that is not needed ye
 
 ### W11 — Agent autonomy (`agent-devops`, `agent-qa`) — *the pipeline builds itself*
 
-Tickets executed unattended, spec to merged PR. Design: `docs/adr/ADR-008` (orchestration) and
-`docs/adr/ADR-009` (model tiering + redaction). **Three phases, in order — each is a separate trust
-decision, and none of them starts until `W0-T26` closes the fail-open `database` gate.**
+Tickets executed unattended, spec to merged PR. Design: `docs/adr/ADR-008` (orchestration),
+`docs/adr/ADR-009` (model tiering + redaction) and `docs/adr/ADR-010` (telemetry). **Three phases,
+in order — each is a separate trust decision, and none of them starts until `W0-T26` closes the
+fail-open `database` gate.**
 
 **Phase A — Claude Code everywhere.** One harness, one vendor, the real repo. Proves the graph, the
 interrupts and the gates before any of them has to survive a second model or a redactor.
@@ -544,6 +549,11 @@ interrupts and the gates before any of them has to survive a second model or a r
 - `W11-T16` `[A]` `worker-ghost`: `compile` → work in ghost space → `verify` → `apply-patch`, as a third implementation of the `W11-T03` contract
 - `W11-T17` `[A]` Extend the leak corpus to **agentic traffic** — context pack, `git log`, stack traces, CI logs. A repo snapshot is a different distribution from what a loop actually emits
 - `W11-T18` `[M]` `[B]` Per-source egress decision for the context pack and the ghost workspace *(human: approve each destination; `screen` must never run on the tier it is screening)*
+
+**Today — needs none of the above.** The pipeline is already producing the data; nothing reads it.
+This runs against the human-driven pipeline and is what gives `W11-T09` and `W11-T14` a baseline.
+
+- `W11-T19` `[A]` **Close the learning loop** (`docs/adr/ADR-010`). Four signals — correction rate by root cause, run-record completeness, cost/attempts per finished task, memory hit rate. Lower the `intervention-logged` trigger from "a human closed a PR" to "a human corrected the agent"; extend `spec-present` to assert a run record's **sections**, not just its existence; backfill the ledger from the 15 session transcripts **before the harness prunes them** — they are 20 MB, outside git, and hold ~125 operator turns against a ledger of one
 
 ---
 

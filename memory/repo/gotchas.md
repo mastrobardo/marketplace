@@ -297,3 +297,24 @@ come from real experience.
 - **evidence**: probed against `zod@4.5.4` in `packages/contracts`;
   `docs/specs/S1/W1-T02-list-conventions.run.md` §4
 - **status**: active
+
+### A convention that is not a gate decays silently, and the better the writing gets the faster
+- **id**: MEM-2026-09-11-04
+- **scope**: repo
+- **fact**: `agents/prompts/08-run-record.md` requires a `## Prompts` section carrying verbatim
+  prompts and a corrections block. All eight `S0` run records carry it. **None of the five `S1`
+  records does** — `W1-T01`, `T02`, `T05`, `T06` are careful narrative essays about the code and
+  contain not one re-runnable prompt. The `spec-present` gate only ever checked that the file
+  exists, so nothing failed.
+- **why**: The decay was not laziness — each record was better *written* than the one before, and
+  the section was crowded out by prose that read as more valuable. That is the dangerous shape: a
+  format degrades fastest when the work is going well, and the verbatim prompts are the one part
+  that cannot be reconstructed afterwards. It cost the corpus its only prompt-tuning input across
+  the whole of `S1`.
+- **apply**: If a required artifact section is not asserted by a gate, assume it is already gone and
+  go and look. When adding a required section to any template, add the check in the same PR — see
+  `docs/adr/ADR-010-agent-telemetry.md` and `W11-T19`. The same reasoning is why `W0-T26` exists.
+- **evidence**: audit 2026-09-11 across 13 tasks; `docs/adr/ADR-010-agent-telemetry.md` §Context;
+  `docs/specs/S0/W0-T01-monorepo-skeleton.run.md` §Prompts vs
+  `docs/specs/S1/W1-T06-money-value-object.run.md` (no such section)
+- **status**: active
