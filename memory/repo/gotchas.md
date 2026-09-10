@@ -244,3 +244,20 @@ come from real experience.
 - **evidence**: PR #161 lint job; `turbo.json`, `tests/config-package.test.ts`
 - **status**: active
 
+
+### `origin/main` is only as fresh as your last fetch
+- **id**: MEM-2026-09-10-04
+- **scope**: repo
+- **fact**: `git ls-tree origin/main`, `git log origin/main` and `git status -sb` all read a
+  **local** ref. In a repo where PRs merge on GitHub, that ref is stale from the moment someone
+  else merges — including the human operator merging the branch you just handed over.
+- **why**: `W1-T06` opened by reporting that `packages/contracts` was missing from `main` and that
+  `W1-T01` had no PR. Both were false: #164 had merged, and `gh pr list` returned empty for the
+  same reason a stale ref did — the state had moved and nothing local had noticed. The report was
+  confident and wrong, and the operator had to supply the PR link to correct it.
+- **apply**: `git fetch origin --prune` **before** any claim about what is on `main`, and before
+  branching off it. In a repo where an agent's work is merged by a human between sessions, treat
+  every un-fetched ref as unknown rather than as absent.
+- **evidence**: `docs/specs/S1/W1-T06-money-value-object.run.md`;
+  `memory/sessions/2026-09-10-agent-contracts-W1-T06.md` log 09:10
+- **status**: active
