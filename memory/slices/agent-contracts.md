@@ -62,3 +62,39 @@ Keep it to facts that changed how you would work. Task-specific detail stays in 
   reviewer can then tell a vacuous pass from a criterion that was never tested.
 - **evidence**: `docs/specs/S1/W1-T06-money-value-object.run.md` §3
 - **status**: active
+
+### Paging goes through `pagination.ts` or it is wrong
+- **id**: MEM-2026-09-10-07
+- **scope**: slice:S1
+- **fact**: `W1-T02` froze cursor (keyset) paging for every list endpoint: `listQuery` for the
+  request, `pageEnvelope` for the response, `fetchLimit` + `pageOf` for the `limit + 1` trick, and
+  `keysetPredicate` for the "rows after this position" comparison. There is no `offset` anywhere and
+  `strictObject` rejects one. Every sort gets `id asc` appended, because keyset paging over a
+  non-total order drops or repeats rows at page boundaries.
+- **why**: The lexicographic expansion (`a < T OR (a = T AND id > X)`, generalised) is the part a
+  slice would reimplement per endpoint, and a subtly wrong version does not error — it silently
+  skips rows, on page two, under concurrent insert. Nine MVP endpoints return a list.
+- **apply**: If you are writing `skip`, `offset`, or `take: limit` without `fetchLimit`, stop. Map
+  `keysetPredicate`'s output onto Prisma with the three lines in spec §4.5 — do not hand-roll the
+  comparison a second time. Sortable columns must be **non-nullable**: the cursor encoder throws on
+  a null rather than encode an ordering that needs `NULLS FIRST/LAST` agreement.
+- **evidence**: `packages/contracts/src/pagination.ts`;
+  `docs/specs/S1/W1-T02-list-conventions.md` §4.5
+- **status**: active
+
+### The fixture projects are what keep `packages/contracts` runtime-agnostic
+- **id**: MEM-2026-09-10-08
+- **scope**: slice:S1
+- **fact**: Every `tests/fixtures/*/tsconfig.json` compiles `../../src/**/*.ts` with `"types": []`.
+  So any global from `@types/node` or the DOM — `Buffer`, `btoa`, `TextEncoder`, `process` — is a
+  compile error in `src`, discovered by a fixture test rather than by the web app's bundler.
+- **why**: This package is imported by both apps, including the browser bundle. `W1-T02` needed
+  base64url for the cursor and could reach for none of the obvious three; the codec is hand-rolled
+  over `charCodeAt` with the JSON pre-escaped to ASCII, which is why that function carries a
+  paragraph of comment.
+- **apply**: Before using a global in `src`, check it exists under `lib: ES2023` alone. If a future
+  task genuinely needs a platform API here, the honest move is a narrow injected dependency, not
+  widening a fixture's `types`.
+- **evidence**: `packages/contracts/src/pagination.ts` (`asciiJson`, `toBase64Url`);
+  `packages/contracts/tests/fixtures/valid/tsconfig.json`
+- **status**: active

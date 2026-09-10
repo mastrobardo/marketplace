@@ -402,10 +402,11 @@ for data), so no feature is blocked waiting for an account that is not needed ye
 - `W0-T22` `[A]` ✅ `scripts/seed-board.ts`: creates labels, milestones and one issue per OPS/W/BD id (135 issues; run with `--repo <owner>/<name>`)
 - `W0-T23` `[A]` Stop parallel agents colliding on shared append-only files — namespaced i18n catalogues, one-record-per-file memory, README fragments *(issue #153)*
 - `W0-T24` `[H]` **Activate and verify the deploy pipeline**: set the `preview`/`staging`/`production` secrets, then prove one preview deploy, one teardown, one staging deploy and one tagged production release actually run. `W0-T07` lands the pipeline **inert** — no deploy job can execute on its own PR, and `release-production.yml` is not even *triggered* until a tag exists *(issue #156; needs `OPS-04`, `OPS-07`, `OPS-08`, `OPS-09`, `W0-T09`)*
+- `W0-T25` `[A]` Name every per-branch resource after the **task ID**, not the PR number — `marketplace-api-w1t02`, `preview/w1t02`, `w1t02.<project>.pages.dev`, derived from the branch name that `AGENTS.md` L2 already guarantees. Teardown must derive the same name, and two open PRs on one task share one environment *(issue #166; needs `W0-T24`)*
 
 ### W1 — Contracts & domain foundation (`agent-contracts`)
 - `W1-T01` `[A]` ✅ Error envelope + error-code registry — frozen in `packages/contracts` as a zod schema, `details` typed per code, explicit HTTP status→code table *(issue #55)*
-- `W1-T02` `[A]` Pagination, sorting, filtering conventions
+- `W1-T02` `[A]` ✅ Pagination, sorting, filtering conventions — cursor (keyset) paging only, a per-endpoint sortable allow-list with `id` appended as the tiebreaker, flat typed filters, and `{ items, page: { nextCursor, hasMore } }` with no `total`; the lexicographic keyset predicate lives in the seam as provider-neutral data *(issue #56)*
 - `W1-T03` `[A]` zod → OpenAPI generation + typed client codegen
 - `W1-T04` `[A]` Contract-test harness (spin API, assert every route matches OpenAPI)
 - `W1-T05` `[A]` Core Prisma schema: User, profiles, Category, geo columns + PostGIS indexes
