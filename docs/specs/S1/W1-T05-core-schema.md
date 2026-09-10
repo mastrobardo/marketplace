@@ -63,7 +63,7 @@ a Stripe id, and S9 owns it).
 
 | Table | Why it is in | Rule |
 | --- | --- | --- |
-| `User` | the issue says users | (a) |
+| `User` → `app_user` | the issue says users | (a) |
 | `ClientProfile` | the issue says profiles | (a) |
 | `ProviderProfile` | the issue says profiles | (a) |
 | `Address` | `ClientProfile.addresses[]` in §3 sketch; carries a location | (a) |
@@ -113,13 +113,32 @@ CREATE INDEX "address_location_gist" ON "address" USING GIST ("location");
 - It appears in `schema.prisma` as `location Unsupported("geography(Point, 4326)")?` purely to
   satisfy P4.
 
-**The risk, stated plainly: this may produce permanent Prisma drift, and it is not yet proved that
-it does not.** Prisma's introspection has historically not understood `GENERATED ALWAYS AS … STORED`,
+**The risk was real, and it was measured. Resolved — see the note below.** Prisma's introspection has historically not understood `GENERATED ALWAYS AS … STORED`,
 and if `prisma migrate dev` reports drift on every run afterward, we have trained every agent to
 ignore drift warnings — the exact outcome `W0-T05` §8 wrote its `SeedRun` rationale to avoid.
-Acceptance criterion **AC-13** exists to prove this before the schema is merged, and §13 Q4 carries
-the agreed fallback if it fails. Confining the column to one table also confines that risk: if the
-fallback is needed, it is one column and one index that change.
+Acceptance criterion **AC-13** exists to prove this before the schema is merged, and §13 Q4 carried
+the agreed fallback. Confining the column to one table also confined the risk: if the fallback had
+been needed, it was one column and one index that changed.
+
+**Outcome: no fallback needed, and the reason is worth keeping.** AC-13 did fail on the first run,
+and what it reported was narrower than "Prisma cannot see generated columns":
+
+```
+[*] Altered column `location` (default changed from
+    `Some(DbGenerated(Some("(st_setsrid(st_makepoint(...), 4326))::geography")))` to `None`)
+```
+
+Prisma reads `GENERATED ALWAYS AS (…) STORED` as a **column default**, and wanted to drop it only
+because the datamodel declared none. Declaring the same expression closes the gap:
+
+```prisma
+location Unsupported("geography(Point, 4326)")?
+  @default(dbgenerated("(st_setsrid(st_makepoint((longitude)::double precision, (latitude)::double precision), 4326))::geography"))
+```
+
+AC-13 then passes, and so does `W0-T05`'s own whole-schema drift criterion. The generalisable part:
+a drift report naming *what* differs is a specification of the fix, not only a verdict. Reading it
+before applying the pre-agreed fallback saved the fallback.
 
 **Longitude before latitude.** `ST_MakePoint` takes `(x, y)` — longitude first. Swapping them puts
 every Spanish address in Somalia. It is written once, in one migration, and AC-12 checks a known
@@ -202,9 +221,16 @@ the next reader will find it rather than to guess at S2's answer.
 One table per entity, as requested. Legend: **N** = nullable. Types are Postgres types; the Prisma
 mapping is in §6.
 
-### 5.1 `User` → `user`
+### 5.1 `User` → `app_user`
 
 The account. One row per person who can log in, whatever they use the platform for.
+
+**Mapped to `app_user`, not `user`.** `user` is a Postgres keyword, and the failure mode was
+measured rather than assumed: `SELECT 1 FROM user LIMIT 1` against a database with a `"user"` table
+**succeeds and returns a row**, because the parser resolves the bare word to `current_user`. It does
+not error. A table name that turns a missing pair of quotes into wrong data rather than a loud
+failure is not worth the tidier spelling — and `W3-T05` writes raw SQL by necessity (§4.1). The
+Prisma model, the API and every document still say `User`; only the physical table differs.
 
 | Column | Type | N | Default | Notes |
 | --- | --- | --- | --- | --- |
@@ -219,14 +245,14 @@ The account. One row per person who can log in, whatever they use the platform f
 | `locale` | `locale` | | `ES` | `ES \| EN`. Drives every notification and the ES-first copy rule |
 | `deleted_at` | `timestamptz` | ✓ | `null` | soft delete, §4.5 |
 | `created_at` | `timestamptz` | | `now()` | |
-| `updated_at` | `timestamptz` | | `now()` | `@updatedAt` |
+| `updated_at` | `timestamptz` | | `now()` | Prisma `@updatedAt` **and** a database default — see §6 |
 
 | Index | Columns | Why |
 | --- | --- | --- |
-| `user_email_lower_key` | `lower(email)` UNIQUE | **functional** index (Q5). Makes `Ana@…` and `ana@…` the same account. Every lookup must query `lower(email) = lower($1)` or it will not use this index |
-| `user_phone_key` | `phone` UNIQUE | partial: `WHERE phone IS NOT NULL`, so many users may have none |
-| `user_created_at_id_idx` | `created_at DESC, id DESC` | P6 — `W9-T02` lists users newest-first; `id` is the appended tiebreaker |
-| `user_status_idx` | `status` | `WHERE status = 'ACTIVE'` on effectively every query |
+| `app_user_email_lower_key` | `lower(email)` UNIQUE | **functional** index (Q5). Makes `Ana@…` and `ana@…` the same account. Every lookup must query `lower(email) = lower($1)` or it will not use this index |
+| `app_user_phone_key` | `phone` UNIQUE | partial: `WHERE phone IS NOT NULL`, so many users may have none |
+| `app_user_created_at_id_idx` | `created_at DESC, id DESC` | P6 — `W9-T02` lists users newest-first; `id` is the appended tiebreaker |
+| `app_user_status_idx` | `status` | `WHERE status = 'ACTIVE'` on effectively every query |
 
 ### 5.2 `ClientProfile` → `client_profile`
 
@@ -432,15 +458,28 @@ failure names its own cause.
 | `0004_address_geography` | the generated `location` column on `address` and its GIST index | `DROP INDEX`, `DROP COLUMN` |
 | `0005_category_tree` | `category`, `provider_category` | `DROP TABLE` in FK-safe order |
 
-`0004` is separate because it is the one that can fail in a way that is not yet proved (§4.1,
-AC-13). If it does, it is the only folder that changes — which is the whole reason for splitting it
-out rather than folding one `ALTER TABLE` into `0003`.
+`0004` is separate because it was the one that could fail in a way nothing had yet proved (§4.1,
+AC-13). It did fail, once, and the split is what kept the fix to one folder — which is the whole
+reason for not folding one `ALTER TABLE` into `0003`.
 
 **Ordering note.** `provider_profile.base_address_id` and `client_profile.default_address_id` both
-point at `address`, and `address.user_id` points back at `user`. All four tables therefore land in
-`0003` together; splitting them further would mean a migration that leaves a dangling FK.
+point at `address`, and `address.user_id` points back at `app_user`. All four tables therefore land
+in `0003` together; splitting them further would mean a migration that leaves a dangling FK.
 
-**No new extension.** Q5 chose `text` + `CREATE UNIQUE INDEX ON "user" (lower(email))` over
+**`updated_at` carries a database default as well as Prisma's `@updatedAt`,** and this was a test
+finding rather than a design choice. `@updatedAt` is applied by the Prisma **client**; the column
+Prisma generates is `NOT NULL` with no default, so **every raw-SQL `INSERT` into these tables
+fails**. That is not a test-only concern: `W3-T05` must use raw SQL for `ST_DWithin` (§4.1), the
+seed pipeline is raw, and `W1-T09`'s factories may be. Writing `@default(now()) @updatedAt` gives
+the column a `DEFAULT CURRENT_TIMESTAMP` that Prisma itself emits, so there is no drift and raw
+inserts work.
+
+The residual limitation, recorded rather than solved: `@updatedAt` still only fires on Prisma
+writes, so a raw `UPDATE` leaves `updated_at` stale. Fixing that needs a trigger on five tables,
+which is the machinery §5.5 declined for category depth on the same grounds. Whoever writes a raw
+`UPDATE` sets the column themselves.
+
+**No new extension.** Q5 chose `text` + `CREATE UNIQUE INDEX ON app_user (lower(email))` over
 `citext`, precisely so this task adds no precondition of the kind P2 makes a human step. The cost
 is application discipline: a lookup written as `WHERE email = $1` compiles, passes a naive test
 against lowercase fixtures, and silently fails to use the index — so `W2-T01`'s tests must include
@@ -504,8 +543,8 @@ code later.
 
 | Constraint | Fires when | Postgres | Which task maps it |
 | --- | --- | --- | --- |
-| `user_email_lower_key` | signup with a taken email, **in any case** | `23505` | `W2-T01` → `CONFLICT` |
-| `user_phone_key` | phone already verified elsewhere | `23505` | `W2-T06` → `CONFLICT` |
+| `app_user_email_lower_key` | signup with a taken email, **in any case** | `23505` | `W2-T01` → `CONFLICT` |
+| `app_user_phone_key` | phone already verified elsewhere | `23505` | `W2-T06` → `CONFLICT` |
 | `client_profile_user_id_key` | second client profile for one user | `23505` | `W2-T04` → `CONFLICT` |
 | `provider_profile_user_id_key` | second provider profile | `23505` | `W2-T05` → `CONFLICT` |
 | `category_slug_key` | duplicate slug in the seed | `23505` | `W3-T01` → seed fails loudly |
@@ -515,7 +554,7 @@ code later.
 | FK `provider_category_category_id_fkey` | delete a category in use | `23503` | `W3-T01` → refuse, deactivate instead |
 
 **Not a constraint violation, and the more likely bug:** a query written `WHERE email = $1` is
-valid SQL that returns no row for `Ana@example.com` and does not use `user_email_lower_key`. The
+valid SQL that returns no row for `Ana@example.com` and does not use `app_user_email_lower_key`. The
 database cannot catch it. `W2-T01` owns a login test with a mixed-case email, and AC-17 proves the
 index behaves at this layer so that the failure, when it comes, is unambiguously in the query and
 not in the schema.
@@ -530,9 +569,23 @@ red phase.
 2. **Given** the migrated database, **when** every `down.sql` from `0005` to `0002` is applied in
    reverse order, **then** each exits 0 and the schema returns to its `0001` state.
 3. **Given** an existing user with email `ana@example.com`, **when** a second user is inserted with
-   the same email, **then** the insert fails with `23505` on `user_email_lower_key`.
-4. **Given** a user with a `ProviderProfile`, **then** `PROVIDER` ∈ `user.roles`; and **given** a
-   user with `PROVIDER` ∈ `roles`, **then** a `ProviderProfile` row exists. Both directions.
+   the same email, **then** the insert fails with `23505` on `app_user_email_lower_key`.
+4. **Given** the invariant *`PROVIDER` ∈ `roles` ⟺ a `ProviderProfile` row exists*, **when** the
+   detector query below runs against a consistent pair, **then** it returns no rows; **and** against
+   a user carrying `PROVIDER` with no profile, **then** it returns exactly that user.
+
+   ```sql
+   SELECT u.id FROM app_user u
+     LEFT JOIN provider_profile p ON p.user_id = u.id
+    WHERE ('PROVIDER' = ANY (u.roles)) <> (p.id IS NOT NULL);
+   ```
+
+   **Postgres does not enforce this and this task does not make it.** It needs a trigger, and §5.5
+   already refused one for category depth on the grounds that machinery guarding a rule the
+   application controls is machinery nobody remembers. What is testable *here* is the detector, so
+   that is what the criterion asserts — and the detector is the deliverable: `W2-T05` owns keeping
+   the invariant, `W1-T09`'s factories must be unable to build a violating fixture, and `W9-T05`
+   can run this query to find out whether either of them failed.
 5. **Given** a user row, **when** a second `ClientProfile` is inserted for it, **then** the insert
    fails with `23505`.
 6. **Given** a user with a client profile, two addresses and a provider profile, **when** the user
@@ -602,8 +655,8 @@ most of them.
 
 | Risk | Impact | Mitigation |
 | --- | --- | --- |
-| Prisma reports permanent drift on the generated column | every agent learns to ignore drift | AC-13, before merge. Fallback in §13 Q4, now one column and one index wide |
-| A query written `WHERE email = $1` misses `user_email_lower_key` | duplicate accounts differing only in case | Q5's accepted cost. AC-17 proves the schema side; `W2-T01` owns a mixed-case login test |
+| ~~Prisma reports permanent drift on the generated column~~ | — | **Closed.** AC-13 caught it, the datamodel now declares the same `dbgenerated` default, and both AC-13 and `W0-T05`'s whole-schema drift criterion pass |
+| A query written `WHERE email = $1` misses `app_user_email_lower_key` | duplicate accounts differing only in case | Q5's accepted cost. AC-17 proves the schema side; `W2-T01` owns a mixed-case login test |
 | Longitude/latitude transposed | every location in Spain is wrong by ~5000 km | AC-12 with a known point |
 | Rating columns rot, unwritten for weeks | a sort field that is always null | accepted; rule (c) requires the column to pre-exist its endpoint. `W8-T05` fills them |
 | A provider's home street address is exposed by a later endpoint | a privacy incident, from a column this task created | the deny in §8, inherited by `W3-T02` and `W3-T07` as a test each |
@@ -634,11 +687,13 @@ Q3 — UUIDv4 (`gen_random_uuid()`) primary keys, accepting random index insert 
 Answer:    A — approved. Revisit only with a measurement.
 
 Q4 — Fallback if AC-13 shows `GENERATED ALWAYS AS … STORED` produces permanent Prisma drift?
-Answer:    B — drop the column, keep lat/lng, use a functional GIST index over
-           `ST_MakePoint(...)`. Nothing for Prisma to misunderstand. Contingent; AC-13 decides.
+Answer:    B was approved and was NOT needed. AC-13 failed on the first run, but the report named
+           a missing column *default* rather than an unreadable column; declaring the same
+           `dbgenerated` expression in the datamodel closed it. The fallback stands unused, for
+           the next person who changes that expression. See §4.1.
 
 Q5 — `citext` for `user.email`, needing a `CREATE EXTENSION` human step (P2)?
-Answer:    B — `text` + `CREATE UNIQUE INDEX ON "user" (lower(email))`. Same guarantee, no
+Answer:    B — `text` + `CREATE UNIQUE INDEX ON app_user (lower(email))`. Same guarantee, no
            precondition, at the cost of application discipline (§9, AC-17).
 
 Blocked:   nothing. Contract freeze proceeds.
