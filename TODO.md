@@ -409,7 +409,7 @@ for data), so no feature is blocked waiting for an account that is not needed ye
 - `W1-T02` `[A]` ✅ Pagination, sorting, filtering conventions — cursor (keyset) paging only, a per-endpoint sortable allow-list with `id` appended as the tiebreaker, flat typed filters, and `{ items, page: { nextCursor, hasMore } }` with no `total`; the lexicographic keyset predicate lives in the seam as provider-neutral data *(issue #56)*
 - `W1-T03` `[A]` zod → OpenAPI generation + typed client codegen
 - `W1-T04` `[A]` Contract-test harness (spin API, assert every route matches OpenAPI)
-- `W1-T05` `[A]` Core Prisma schema: User, profiles, Category, geo columns + PostGIS indexes
+- `W1-T05` `[A]` ✅ Core Prisma schema — `app_user` (the table is not `user`: Postgres resolves the bare keyword to `current_user` and returns a row instead of failing), both profiles, `address` as the **only** table with geography, `category` + `provider_category`; one generated `geography(Point,4326)` column and one GIST index serve every proximity query *(issue #59)*
 - `W1-T06` `[A]` ✅ Money value object — integer cents in `packages/contracts`, `prorate` and `allocate` the only two rounding sites, bounded at `Int32` because that is what Prisma `Int` is *(issue #60)*
 - `W1-T07` `[A]` State-machine helper (transition table + guard + audit log emit)
 - `W1-T08` `[M]` ADR template + first 5 ADRs (stack, contracts seam, money, geo, auth) *(human: sign off on the money + auth ADRs)*

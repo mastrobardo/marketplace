@@ -27,3 +27,199 @@ model SeedRun {
 
   @@map("_seed_run")
 }
+
+// ---------------------------------------------------------------------------------------------
+// W1-T05 — the core schema. Spec: docs/specs/S1/W1-T05-core-schema.md §5.
+//
+// Six tables and four enums: an account, the two profiles it can wear, an address book, and the
+// service tree. Every location in the platform lives in `address` and nowhere else (§4.1, Q2), so
+// there is one generated geography column and one GIST index in the whole product.
+// ---------------------------------------------------------------------------------------------
+
+/// What a person may do. Held as an array: a plumber who hires a painter is both.
+/// MANITAS/PRO is deliberately *not* here — that lives only on ProviderProfile.kind (§4.2).
+enum UserRole {
+  CLIENT
+  PROVIDER
+  ADMIN
+
+  @@map("user_role")
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  DELETED
+
+  @@map("user_status")
+}
+
+/// The licensing distinction, in its single home. `manitas` = non-licensed (glossary).
+enum ProviderKind {
+  MANITAS
+  PRO
+
+  @@map("provider_kind")
+}
+
+enum Locale {
+  ES
+  EN
+
+  @@map("locale")
+}
+
+/// The account. One row per person who can log in, whatever they use the platform for.
+///
+/// Mapped to `app_user`, not `user`: `user` is a Postgres keyword, and an unquoted
+/// `SELECT ... FROM user` does not fail — it silently resolves to `current_user` and returns a
+/// row. A table name that turns a typo into wrong data rather than an error is not worth the
+/// tidier spelling.
+model User {
+  id              String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  /// Unique on `lower(email)` via a functional index, not on the column (§13 Q5).
+  /// Every lookup must be written `WHERE lower(email) = lower($1)` or it will not use it.
+  email           String
+  emailVerifiedAt DateTime?  @map("email_verified_at") @db.Timestamptz(3)
+  /// E.164. UNIQUE, and Postgres treats NULLs as distinct, so many users may have none.
+  phone           String?    @unique(map: "app_user_phone_key")
+  phoneVerifiedAt DateTime?  @map("phone_verified_at") @db.Timestamptz(3)
+  /// Nullable so that adding a social login later is not a migration.
+  passwordHash    String?    @map("password_hash")
+  roles           UserRole[] @default([CLIENT])
+  status          UserStatus @default(ACTIVE)
+  locale          Locale     @default(ES)
+  /// Soft delete (§4.5). Nothing in the database excludes these rows — W2-T08 owns that.
+  deletedAt       DateTime?  @map("deleted_at") @db.Timestamptz(3)
+  createdAt       DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime   @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  clientProfile   ClientProfile?
+  providerProfile ProviderProfile?
+  addresses       Address[]
+
+  @@index([createdAt(sort: Desc), id(sort: Desc)], map: "app_user_created_at_id_idx")
+  @@index([status], map: "app_user_status_idx")
+  @@map("app_user")
+}
+
+/// Who a person is when they are hiring.
+model ClientProfile {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId           String   @unique(map: "client_profile_user_id_key") @map("user_id") @db.Uuid
+  /// What a provider sees. Not the legal name.
+  displayName      String   @map("display_name")
+  defaultAddressId String?  @map("default_address_id") @db.Uuid
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt        DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  defaultAddress Address? @relation("ClientDefaultAddress", fields: [defaultAddressId], references: [id], onDelete: SetNull)
+
+  @@map("client_profile")
+}
+
+/// Who a person is when they are working. The row W3 builds on and W3-T05 searches.
+model ProviderProfile {
+  id                  String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId              String       @unique(map: "provider_profile_user_id_key") @map("user_id") @db.Uuid
+  kind                ProviderKind
+  displayName         String       @map("display_name")
+  bio                 String?
+  /// Where they work from. Null until set, and a provider with no base is not searchable.
+  /// Usually a home address — no response may ever return its line1/line2 (spec §8).
+  baseAddressId       String?      @map("base_address_id") @db.Uuid
+  /// Metres, because ST_DWithin on geography takes metres. CHECK (> 0 AND <= 200000).
+  serviceRadiusMetres Int?         @map("service_radius_metres")
+  /// Integer cents (W1-T06). CHECK (>= 0). Null = quote-only.
+  hourlyRateCents     Int?         @map("hourly_rate_cents")
+  /// Denormalised; S4 owns writing it. Null = no reviews yet, which is not 0.00.
+  ratingAvg           Decimal?     @map("rating_avg") @db.Decimal(3, 2)
+  ratingCount         Int          @default(0) @map("rating_count")
+  createdAt           DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt           DateTime     @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  user        User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  baseAddress Address?           @relation("ProviderBaseAddress", fields: [baseAddressId], references: [id], onDelete: SetNull)
+  categories  ProviderCategory[]
+
+  @@index([baseAddressId], map: "provider_profile_base_address_idx")
+  @@index([ratingAvg(sort: Desc), id(sort: Desc)], map: "provider_profile_rating_id_idx")
+  @@index([kind], map: "provider_profile_kind_idx")
+  @@map("provider_profile")
+}
+
+/// A place — and the only table in the schema with a geography column.
+model Address {
+  id          String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId      String  @map("user_id") @db.Uuid
+  /// "Casa", "Oficina". User copy, so no enum.
+  label       String?
+  line1       String
+  line2       String?
+  city        String
+  province    String
+  /// CHECK (postal_code ~ '^[0-9]{5}$') — ES only, per the locked market decision.
+  postalCode  String  @map("postal_code")
+  countryCode String  @default("ES") @map("country_code") @db.Char(2)
+  /// Geocoded client-side. NOT NULL: an address without coordinates is a bug, not a state.
+  latitude    Decimal @db.Decimal(9, 6)
+  longitude   Decimal @db.Decimal(9, 6)
+  /// GENERATED ALWAYS AS (...) STORED — maintained by Postgres from latitude/longitude.
+  /// Present only so Prisma does not report drift (W0-T05 §8); it cannot be read or written
+  /// through the client. Proximity queries use $queryRaw with ST_DWithin.
+  location    Unsupported("geography(Point, 4326)")? @default(dbgenerated("(st_setsrid(st_makepoint((longitude)::double precision, (latitude)::double precision), 4326))::geography"))
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  user            User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  clientDefaultOf ClientProfile[]   @relation("ClientDefaultAddress")
+  providerBaseOf  ProviderProfile[] @relation("ProviderBaseAddress")
+
+  @@index([userId], map: "address_user_id_idx")
+  @@index([location], map: "address_location_gist", type: Gist)
+  @@map("address")
+}
+
+/// The service tree. W3-T01 seeds it; a human decides which nodes legally require a licence.
+model Category {
+  id       String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  /// URL-safe, stable, ES: `fontaneria`, `electricidad`.
+  slug     String  @unique(map: "category_slug_key")
+  nameEs   String  @map("name_es")
+  nameEn   String  @map("name_en")
+  parentId String? @map("parent_id") @db.Uuid
+  /// The legal flag. NOT inherited from the parent — an explicit true on every node that needs
+  /// one, so `SELECT slug FROM category WHERE requires_licence` answers the compliance question
+  /// completely rather than depending on a recursive walk a query can get wrong (§5.5).
+  requiresLicence Boolean @default(false) @map("requires_licence")
+  position        Int     @default(0)
+  /// Retire a category without deleting rows that reference it.
+  isActive        Boolean @default(true) @map("is_active")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  parent    Category?          @relation("CategoryTree", fields: [parentId], references: [id], onDelete: Restrict)
+  children  Category[]         @relation("CategoryTree")
+  providers ProviderCategory[]
+
+  @@index([parentId, position], map: "category_parent_id_position_idx")
+  @@map("category")
+}
+
+/// What a provider will do. Explicit rather than an implicit Prisma m-n, because W3-T05 must
+/// join it from raw SQL and a generated `_CategoryToProviderProfile` is not a name to rely on.
+model ProviderCategory {
+  providerProfileId String   @map("provider_profile_id") @db.Uuid
+  categoryId        String   @map("category_id") @db.Uuid
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  providerProfile ProviderProfile @relation(fields: [providerProfileId], references: [id], onDelete: Cascade)
+  category        Category        @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+
+  @@id([providerProfileId, categoryId])
+  @@index([categoryId], map: "provider_category_category_idx")
+  @@map("provider_category")
+}
