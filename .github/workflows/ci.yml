@@ -126,6 +126,7 @@ jobs:
         run: |
           pnpm vitest run tests/local-stack.test.ts
           pnpm --filter @marketplace/api exec vitest run tests/db.test.ts
+          pnpm --filter @marketplace/api exec vitest run tests/core-schema.test.ts
         env:
           STACK_LIVE: '1'
           DATABASE_URL: postgres://marketplace:marketplace_local@127.0.0.1:5432/marketplace

@@ -118,6 +118,33 @@ to prevent.
 AC-18 (category depth ≤ 2) is declared in this spec and tested in `W3-T01`, because §5.5 deliberately
 puts that rule in the application rather than in a trigger.
 
+## The green CI run that proved nothing
+
+The first PR run was 12/12 green — and **17 of this task's 18 criteria had not executed.** CI's
+`database` job runs the live suites by naming files:
+
+```yaml
+- name: Run the live suites
+  run: |
+    pnpm vitest run tests/local-stack.test.ts
+    pnpm --filter @marketplace/api exec vitest run tests/db.test.ts
+  env:
+    STACK_LIVE: '1'
+```
+
+`core-schema.test.ts` was not on that list, so its `describe.runIf(live)` block was skipped in both
+jobs that could have run it — `unit` has no database, and `database` never invoked the file. The
+five static assertions passed and the job went green.
+
+The comment directly above that step says it exists so the suite does not "quietly measure less than
+it claims". It had acquired the failure mode it was written to prevent, one file at a time, because
+the list is manual. Adding a line fixes this task; the next slice with live tests will hit it again,
+and a `database` job that discovered its own suites would not. That is `agent-devops`' call, not a
+change to make inside a contracts task — filed rather than done.
+
+**This is the one change here to a file `agent-contracts` does not own.** One line, to the list the
+step exists to maintain.
+
 ## Deliberate non-changes
 
 **The live-database helpers in `core-schema.test.ts` duplicate `db.test.ts` rather than extracting a
