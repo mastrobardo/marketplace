@@ -149,9 +149,12 @@ describe('AppError carries the status its code maps to', () => {
  * AC4/AC5. "`details` is typed against `code`" is only true if it is compiled and observed — the
  * same argument `W0-T04` made for the i18n catalogues, and the same mechanism.
  */
+/** The local binary rather than `npx tsc` — see the note in `money.test.ts`. */
+const tsc = fileURLToPath(new URL('../node_modules/.bin/tsc', import.meta.url));
+
 function typecheckFixture(name: string): { ok: boolean; output: string } {
   try {
-    execFileSync('npx', ['tsc', '-p', `tests/fixtures/${name}/tsconfig.json`], {
+    execFileSync(tsc, ['-p', `tests/fixtures/${name}/tsconfig.json`], {
       cwd: root,
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'pipe'],
@@ -164,17 +167,21 @@ function typecheckFixture(name: string): { ok: boolean; output: string } {
 }
 
 describe('AC4/AC5 — a wrong details payload is a compile error', () => {
-  it('compiles a fixture that pairs every code with the right details', () => {
-    const result = typecheckFixture('valid');
-    expect(result.ok, `the valid fixture did not compile:\n${result.output}`).toBe(true);
-  });
+  it(
+    'compiles a fixture that pairs every code with the right details',
+    { timeout: 120_000 },
+    () => {
+      const result = typecheckFixture('valid');
+      expect(result.ok, `the valid fixture did not compile:\n${result.output}`).toBe(true);
+    },
+  );
 
-  it('refuses details that do not match the code', () => {
+  it('refuses details that do not match the code', { timeout: 120_000 }, () => {
     const result = typecheckFixture('wrong-details');
     expect(result.ok, 'a mismatched details payload compiled').toBe(false);
   });
 
-  it('refuses details on a code that declares none', () => {
+  it('refuses details on a code that declares none', { timeout: 120_000 }, () => {
     const result = typecheckFixture('details-on-a-code-that-has-none');
     expect(result.ok, 'INTERNAL_ERROR accepted a details payload').toBe(false);
   });

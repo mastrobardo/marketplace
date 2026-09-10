@@ -5,3 +5,4 @@
  * (`agents/policies/contract-change.md`).
  */
 export * from './errors.js';
+export * from './money.js';
