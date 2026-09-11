@@ -15,6 +15,7 @@ import { type CategorySummary } from '@marketplace/contracts';
 import { LanguageSwitcher } from '../shared/LanguageSwitcher.js';
 import { changeLanguage, isLocale, LOCALES } from '../i18n/index.js';
 import { loadCategories } from '../shared/categories.js';
+import { throwIfFaultRequested } from '../shared/fault.js';
 import { queryKeys } from '../shared/query.js';
 import { searchSchema } from '../features/search/schema.js';
 import { useSearchSubmission } from '../features/search/navigation.js';
@@ -42,7 +43,12 @@ interface ShellData {
  * The client arrives through the router's context (`getContext` in `App.tsx`), never from a module
  * singleton: R5/R6, and the reason is that on a Worker a module-scope cache is shared by every user.
  */
-export async function loader({ params, context }: LoaderFunctionArgs): Promise<ShellData> {
+export async function loader({ params, context, request }: LoaderFunctionArgs): Promise<ShellData> {
+  // A no-op in every build that does not set `VITE_ENABLE_FAULT_ROUTES` — the module is replaced at
+  // resolve time, so there is nothing here to guard. `W12-T16` needs the 500 page to have a URL;
+  // see `shared/fault.ts` for why it may not be a runtime check.
+  throwIfFaultRequested(request);
+
   const lang = params['lang'] ?? '';
   // `/:lang` matches any single segment, so an unknown one would otherwise render the Spanish home
   // page at `/nope` — a soft 404 that returns 200 and is invisible to everything except a user.

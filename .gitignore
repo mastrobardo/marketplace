@@ -5,6 +5,11 @@ node_modules/
 # build output
 dist/
 storybook-static/
+
+# W12-T16 — Playwright's run output. The *baselines* under packages/ui/visual/baselines are
+# committed on purpose (ADR-012 §6); these are the per-run artefacts around them.
+visual-results/
+visual-report/
 build/
 .turbo/
 *.tsbuildinfo

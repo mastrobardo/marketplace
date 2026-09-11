@@ -30,6 +30,34 @@ function stripMocks(): Plugin {
   };
 }
 
+/**
+ * Replace the deliberate-fault trigger with a no-op.
+ *
+ * `W12-T16` needs a URL that reaches the 500 page, because `W12-T09` correctly made it unreachable
+ * and left the one surface with no a11y coverage also with no way to visit it. The trigger must not
+ * exist anywhere else: a query parameter that 500s the storefront is a denial-of-service primitive
+ * if it survives into a real build.
+ *
+ * Same mechanism as `stripMocks`, and for the same reason — a resolve-time stub rather than a
+ * runtime guard, so the module graph has no edge to follow. `mocks.test.ts` asserts both directions
+ * of this one too: a flag with two meaningful outcomes gets a test per outcome, because the
+ * untested one is the one that ships broken.
+ */
+function stripFaults(): Plugin {
+  const STUB = '\0mp:fault-stub';
+  return {
+    name: 'mp-strip-faults',
+    apply: 'build',
+    enforce: 'pre',
+    resolveId(source) {
+      return source.includes('shared/fault') ? STUB : null;
+    },
+    load(id) {
+      return id === STUB ? 'export function throwIfFaultRequested() {}\n' : null;
+    },
+  };
+}
+
 export default defineConfig(({ mode }) => {
   // Read through `loadEnv` rather than `process.env` so the flag resolves the same way here as it
   // does inside `main.tsx`: one source, so the plugin cannot strip a module the app still imports.
@@ -42,8 +70,19 @@ export default defineConfig(({ mode }) => {
    */
   const withMocks = env['VITE_ENABLE_MOCKS'] === 'true';
 
+  /**
+   * Never on by default, and never inferred from the mode: the nightly sets it explicitly and
+   * nothing else does. Unlike the mocks flag there is no deploy that legitimately wants this — it
+   * exists so one Playwright navigation can render the 500 page.
+   */
+  const withFaults = env['VITE_ENABLE_FAULT_ROUTES'] === 'true';
+
   return {
-    plugins: [react(), ...(mode === 'production' && !withMocks ? [stripMocks()] : [])],
+    plugins: [
+      react(),
+      ...(mode === 'production' && !withMocks ? [stripMocks()] : []),
+      ...(withFaults ? [] : [stripFaults()]),
+    ],
     server: { host: '127.0.0.1', port: 5173 },
     build: { outDir: 'dist', sourcemap: true },
   };

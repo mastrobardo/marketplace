@@ -844,3 +844,144 @@ describe('AC35 — the workbench is deployed beside the app, not instead of it',
     ]);
   });
 });
+
+/**
+ * `W12-T16` AC13–AC16 — the nightly visual run and its accept path.
+ *
+ * These assertions live here, beside the deploy ones, for the reason `W12-T06` §5 gave when it put
+ * the workbench deploy in this file: `.github/**` is `agent-devops`' folder, and the next agent
+ * editing the pipeline should find every assertion about it in one place rather than discovering
+ * that `packages/ui` also has opinions about a workflow.
+ *
+ * AC16 is the load-bearing one. `ci.yml` is `permissions: contents: read` on purpose — a workflow
+ * with a write token cannot safely run on a pull request from a fork — and the easy way to build
+ * baseline regeneration would have been a job inside it. That is why regeneration is a separate
+ * file, and why this asserts the pull-request workflow's token did not quietly widen.
+ */
+describe('W12-T16 — nightly visual regression', () => {
+  const NIGHTLY = 'nightly-visual.yml';
+  const BASELINES = 'visual-baselines.yml';
+  const IMAGE = 'mcr.microsoft.com/playwright:v1.63.0-noble';
+  const DIGEST = 'sha256:eff16c30e6f3f4af0a03fa4b706120d5e9b0891c344a27d64559aff5900a4a27';
+
+  it('AC14 — runs on a schedule, and can also be run on demand', () => {
+    const on = workflow(NIGHTLY).on as { schedule?: unknown[]; workflow_dispatch?: unknown };
+
+    expect(on.schedule, 'a nightly with no schedule is a workflow nobody runs').toBeDefined();
+    expect(
+      on.workflow_dispatch,
+      'no way to test a change to it without waiting a day',
+    ).toBeDefined();
+  });
+
+  it('AC14 — renders inside the digest-pinned container, not on the bare runner', () => {
+    const job = jobs(NIGHTLY)['visual'] as Job & { container?: { image?: string } };
+
+    // A tag alone can be rebuilt with different fonts, which silently invalidates every committed
+    // baseline and reads as a screenful of regressions on an unchanged tree.
+    expect(job?.container?.image).toContain(IMAGE);
+    expect(job?.container?.image, 'the image is not pinned by digest').toContain(DIGEST);
+  });
+
+  it('AC14 — the image the container runs is the image the fingerprint claims', () => {
+    // Two places name the digest — this workflow and `visual/fingerprint.json` — and a drift
+    // between them is the failure mode the fingerprint exists to catch, so it must not be possible
+    // to update one and not the other without a red test.
+    const fingerprint = JSON.parse(
+      readFileSync(join(root, 'packages', 'ui', 'visual', 'fingerprint.json'), 'utf8'),
+    ) as { image: string; imageDigest: string };
+
+    expect(fingerprint.image).toBe(IMAGE);
+    expect(fingerprint.imageDigest).toBe(DIGEST);
+    expect(code(NIGHTLY)).toContain(`VISUAL_IMAGE_DIGEST: ${DIGEST}`);
+    expect(code(BASELINES)).toContain(`VISUAL_IMAGE_DIGEST: ${DIGEST}`);
+  });
+
+  it('AC14 — the rendering job gets no write token; only the reporting job does', () => {
+    const all = jobs(NIGHTLY);
+
+    expect(all['visual']?.permissions ?? {}).not.toHaveProperty('issues');
+    expect(all['report']?.permissions).toMatchObject({ contents: 'read', issues: 'write' });
+  });
+
+  it('AC13 — the storefront is a real build behind a preview server, with mocks on', () => {
+    const code_ = code(NIGHTLY);
+
+    // A dev server is a different application: no minification, no stripping, and `stripMocks`
+    // never runs. The a11y pass has to see what a visitor sees.
+    expect(code_).toContain('vite preview');
+    expect(code_, 'without mocks every page renders its degraded shape').toContain(
+      "VITE_ENABLE_MOCKS: 'true'",
+    );
+    expect(code_, 'the 500 page has no URL without this').toContain(
+      "VITE_ENABLE_FAULT_ROUTES: 'true'",
+    );
+    expect(code_).toContain('WEB_BASE_URL');
+  });
+
+  it('AC13 — workspace packages are built through turbo, not pnpm --filter', () => {
+    // MEM-2026-09-11-19: `pnpm --filter <app> build` does not build the packages the app imports,
+    // and the failure is invisible until a clean checkout — so it lands in CI, never in review.
+    const build = code(NIGHTLY).match(/pnpm [^\n]*build[^\n]*/g) ?? [];
+    // `build:storybook` is deliberately exempt and the exemption is narrow: turbo defines no such
+    // task, the package it belongs to has already been built by the `turbo run build` above, and
+    // `deploy-preview.yml` has invoked it this way since `W12-T06`. The rule is about the `build`
+    // task, which is the one with `dependsOn: ["^build"]` behind it.
+    const viaFilter = build.filter((line) => /pnpm --filter \S+ build(?![:\w])/.test(line));
+
+    expect(viaFilter, `built without turbo: ${viaFilter.join(', ')}`).toEqual([]);
+  });
+
+  it('AC9 — the three images are uploaded when, and only when, something failed', () => {
+    const upload = steps(jobs(NIGHTLY)['visual'] as Job).find((step) =>
+      step.uses?.startsWith('actions/upload-artifact'),
+    );
+
+    expect(upload?.if, 'the diffs are uploaded unconditionally, or not at all').toBe('failure()');
+    expect(String(upload?.with?.['path'])).toContain('visual-results');
+  });
+
+  it('AC15 — regeneration is on demand only, and opens a pull request', () => {
+    const on = workflow(BASELINES).on as { workflow_dispatch?: unknown; schedule?: unknown };
+
+    expect(on.workflow_dispatch).toBeDefined();
+    expect(on.schedule, 'baselines must never regenerate on a timer').toBeUndefined();
+
+    const code_ = code(BASELINES);
+    expect(code_).toContain('create-pull-request');
+    expect(code_, 'a baseline change must be looked at, not pushed').toContain('base: main');
+    expect(code_).toContain('--update-snapshots');
+  });
+
+  it('AC15 — regeneration touches the baselines and nothing else', () => {
+    const paths = String(
+      (steps(jobs(BASELINES)['regenerate'] as Job).find((step) =>
+        step.uses?.startsWith('peter-evans/create-pull-request'),
+      )?.with?.['add-paths'] ?? '') as string,
+    );
+
+    // A regeneration run that can commit source is a run that can launder a code change through a
+    // "just the baselines" pull request.
+    expect(paths).toContain('packages/ui/visual/baselines');
+    expect(paths).not.toMatch(/packages\/ui\/src|apps\/web/);
+  });
+
+  it('AC16 — ci.yml stays read-only, which is why regeneration is a separate file', () => {
+    const ci = workflow('ci.yml') as { permissions?: Record<string, string> };
+
+    expect(ci.permissions).toEqual({ contents: 'read' });
+    expect(code('ci.yml'), 'the visual run leaked into the per-PR gate').not.toContain(
+      'playwright test',
+    );
+  });
+
+  it('adds no new secret, because it is not a new service', () => {
+    // Same rule as the workbench deploy above: `GITHUB_TOKEN` is issued by Actions, not configured.
+    const names = [
+      ...code(NIGHTLY).matchAll(/secrets\.([A-Z0-9_]+)/g),
+      ...code(BASELINES).matchAll(/secrets\.([A-Z0-9_]+)/g),
+    ].map((m) => m[1]);
+
+    expect([...new Set(names)].sort()).toEqual(['GITHUB_TOKEN']);
+  });
+});

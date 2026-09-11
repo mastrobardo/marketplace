@@ -253,6 +253,31 @@ describe('AC17..AC18 — none of this ships, and all of it is typechecked', () =
       'the handlers are bundled but the seeded catalogue is not',
     ).toBe(true);
   });
+
+  /**
+   * `W12-T16` §10 Q1 — the deliberate-fault trigger, asserted in both directions.
+   *
+   * The 500 page had no URL: `W12-T09` correctly made the shell's loader degrade rather than throw
+   * (`MEM-2026-09-11-21`), which left the one surface with no a11y coverage also with no way to
+   * reach it. `shared/fault.ts` gives it one, stripped at resolve time.
+   *
+   * The absence assertion is the important one and it is not sufficient on its own — the same trap
+   * as AC17 vs AC19. A query parameter that 500s the storefront on demand must not survive into a
+   * real build; a trigger that never works means the nightly silently stops covering the 500 page.
+   */
+  it('W12-T16 — a normal build has no fault trigger', { timeout: 180_000 }, () => {
+    for (const source of bundledSources()) {
+      expect(source, 'a chunk carries the deliberate-fault trigger').not.toContain('__boom');
+    }
+  });
+
+  it('W12-T16 — VITE_ENABLE_FAULT_ROUTES=true keeps it', { timeout: 180_000 }, () => {
+    const sources = bundledSources({ VITE_ENABLE_FAULT_ROUTES: 'true' });
+    expect(
+      sources.some((source) => source.includes('__boom')),
+      'the nightly build has no fault trigger, so the 500 page is uncovered again',
+    ).toBe(true);
+  });
 });
 
 /**
