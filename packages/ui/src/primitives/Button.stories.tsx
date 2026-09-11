@@ -38,3 +38,8 @@ export const Pending: Story = {
 export const LongText: Story = {
   args: { children: 'Solicitar presupuesto sin compromiso para reforma integral de cocina' },
 };
+
+/** A disclosure: the button says whether the thing it controls is open (`W12-T07`'s compact header). */
+export const Disclosure: Story = {
+  args: { isExpanded: false, children: 'Más opciones de búsqueda' },
+};

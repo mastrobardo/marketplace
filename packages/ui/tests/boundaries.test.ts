@@ -36,19 +36,36 @@ describe('AC15 — the design system knows nothing about the domain', () => {
   });
 });
 
-describe('AC16 — every primitive is reviewable', () => {
-  it('gives each exported primitive a story file beside it', () => {
+describe('AC16 — every component is reviewable', () => {
+  /**
+   * Widened by `W12-T07` (its AC12). The rule was written when `primitives/` was the only folder
+   * this package exported from, and `patterns/` — ADR-012's second layer — would have arrived
+   * outside it: a pattern with no story is a pattern with no axe assertion, which is precisely the
+   * gate `W12-T04` set up.
+   *
+   * A capitalised filename is the component convention here, and it is what separates `SearchBar.tsx`
+   * from the `schema.ts` and `query.ts` beside it — those are types and pure functions, and a story
+   * for a function would be theatre.
+   */
+  it('gives each exported component a story file beside it', () => {
     const index = readFileSync(join(src, 'index.ts'), 'utf8');
-    const exported = [...index.matchAll(/from\s+'\.\/primitives\/([A-Za-z]+)\.js'/g)].map(
-      (match) => match[1] ?? '',
-    );
-    expect(exported.length, 'index.ts exports no primitive').toBeGreaterThan(0);
+    const exported = [...index.matchAll(/from\s+'\.\/((?:[a-z-]+\/)+[A-Za-z]+)\.js'/g)]
+      .map((match) => match[1] ?? '')
+      .filter((path) => /^[A-Z]/.test(path.slice(path.lastIndexOf('/') + 1)));
+    expect(exported.length, 'index.ts exports no component').toBeGreaterThan(0);
 
-    const stories = new Set(
-      readdirSync(join(src, 'primitives')).filter((name) => name.endsWith('.stories.tsx')),
-    );
-    for (const name of exported) {
-      expect(stories, `${name} has no stories file`).toContain(`${name}.stories.tsx`);
+    for (const path of exported) {
+      const dir = join(src, path.slice(0, path.lastIndexOf('/')));
+      const name = path.slice(path.lastIndexOf('/') + 1);
+      const stories = new Set(readdirSync(dir).filter((entry) => entry.endsWith('.stories.tsx')));
+      expect(stories, `${path} has no stories file`).toContain(`${name}.stories.tsx`);
+    }
+  });
+
+  it('covers both layers, so neither gate is vacuous', () => {
+    const index = readFileSync(join(src, 'index.ts'), 'utf8');
+    for (const layer of ['primitives', 'patterns']) {
+      expect(index, `index.ts exports nothing from ${layer}/`).toContain(`'./${layer}/`);
     }
   });
 });

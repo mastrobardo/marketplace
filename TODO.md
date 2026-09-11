@@ -575,7 +575,7 @@ finished pages is how the accessibility and SSR bills both come due at once.
 
 **The seam — search is a schema, and the schema defines the API's input.**
 
-- `W12-T07` `[A]` The search bar as a declarative schema: typed field descriptors (`what · where · when · mode`), three renderings from one source (hero, compact header, filter rail), query-string serialisation, `SearchSchema → SearchQuery` as a pure function
+- `W12-T07` `[A]` ✅ The search bar as a declarative schema: typed field descriptors, three renderings of one declaration (hero, compact header, filter rail) from a single `SearchBar`, and `toSearchQuery`/`serializeSearchQuery`/`parseSearchQuery` as pure, DOM-free functions a Worker can call (`R4`). The descriptors are domain-free — a field's `name` is a string and its options arrive as data — because `packages/ui` may not import `packages/contracts`, which is also why the zod freeze stays `W12-T08`. Nine stories, so every rendering is an axe assertion *(issue #207)*
 - `W12-T08` `[A]` Contract request to `agent-contracts`: `SearchQuery` / `SearchResult` zod schemas, and MSW handlers built **from** the `packages/testing` factories — never a second fixture set alongside them (`W1-T09`)
 
 **The storefront — the M11 surface, all of it public.**
