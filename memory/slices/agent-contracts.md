@@ -98,3 +98,117 @@ Keep it to facts that changed how you would work. Task-specific detail stays in 
 - **evidence**: `packages/contracts/src/pagination.ts` (`asciiJson`, `toBase64Url`);
   `packages/contracts/tests/fixtures/valid/tsconfig.json`
 - **status**: active
+
+### Test data comes from `packages/testing`, and AC10 is what keeps it that way
+- **id**: MEM-2026-09-11-01
+- **scope**: slice:S1
+- **fact**: `W1-T09` built the package `MEM-2026-09-07-06` had promised since before it existed.
+  Pure builders (`buildUser`) and persisting factories (`createUser(client, overrides)`), one entry
+  point, **zero runtime dependencies**. Determinism is a counter, not a seeded PRNG: ids are
+  v4-shaped but derived from an 8-hex per-entity prefix plus an ordinal, and `nextAt()` returns a
+  fixed epoch plus one minute per call. `resetFactories()` in `beforeEach` is mandatory.
+- **why**: The counter beats `faker` because the values are legible —
+  `00000001-0000-4000-8000-000000000003` reads as "the third user" in a failure message. The
+  strictly-increasing clock is load-bearing rather than cosmetic: keyset paging ([[W1-T02]],
+  MEM-2026-09-10-07) drops rows at page boundaries without a total order, and rows sharing a
+  `createdAt` cannot demonstrate it.
+- **apply**: Adding a table? Add a builder and a factory — `tests/factories.test.ts` parses
+  `schema.prisma` and fails until you do, which is what makes the no-inline-fixtures convention
+  hold without anyone policing it in review. Need a *scenario* rather than a row, build it in your
+  own slice; composite builders in `packages/testing` would become a dumping ground. When #195
+  merges, `AuditRecord` will need one.
+- **evidence**: `packages/testing/src/`; `docs/specs/S1/W1-T09-test-factories.md` §4
+- **status**: active
+
+### A structural client interface moves database tests into the job that actually runs
+- **id**: MEM-2026-09-11-02
+- **scope**: slice:S1
+- **fact**: `packages/testing`'s `FactoryClient` declares only the `create` calls the factories
+  make, so `PrismaClient` satisfies it structurally and the package imports `@prisma/client`
+  nowhere. Same trick as `W1-T07`'s `AuditRecorder`. A recording fake then satisfies it in ten
+  lines.
+- **why**: The payoff is not purity, it is coverage. `ci.yml` names its live suites by hand, so a
+  new `STACK_LIVE` test does not run (#174) — `W1-T07` lost five criteria to this. Typing against a
+  structural interface moved all the factory *logic* into the `unit` job, leaving exactly one
+  criterion ("does the interface still match Prisma?") needing a database.
+- **apply**: Writing something that talks to Prisma from a shared package? Declare the two or three
+  methods you call as an interface and take it as a parameter. Then add **one** live test that
+  assigns a real `PrismaClient` to it — that assignment is the drift detector, and without it the
+  structural type is a lie nobody checks.
+- **evidence**: `packages/testing/src/persist.ts`; `apps/api/tests/factories-live.test.ts`
+- **status**: active
+
+### A red phase can lie through its setup hook
+- **id**: MEM-2026-09-11-03
+- **scope**: slice:S1
+- **fact**: `W1-T09`'s first red run reported 27/27 failed. It was wrong: a file-level
+  `beforeEach(resetFactories)` threw on the stub, so every test failed **in the hook**, including
+  the structural ones that never touch the sequence. Scoped to the two describes that need it, the
+  honest figure was 19 failed, 8 passed.
+- **why**: 27/27 is the number an agent wants to see and would have written into the run record,
+  hiding eight vacuous passes — four of which are weak assertions about *absences* that a stub
+  satisfies trivially. The vacuous-pass table (MEM-2026-09-10-03) only works if the red run is
+  measuring what it claims to.
+- **apply**: If a setup hook calls the thing under test, scope it to the blocks that need it, never
+  the file. And read the red output's *failure reason*, not just its count — the same rule caught a
+  stale `dist/` in `W1-T07`. If a test file was written in the red phase but only executed after
+  the implementation existed, it never went red: restore the stub, rebuild, run it, and say in the
+  run record that the red was reconstructed.
+- **evidence**: `docs/specs/S1/W1-T09-test-factories.run.md` §Red phase
+### A state change goes through `transition()`, and its recorder is not optional
+- **id**: MEM-2026-09-10-09
+- **scope**: slice:S1
+- **fact**: `W1-T07` put one mechanism in `packages/contracts/src/state-machine.ts` for all six
+  machines `TODO.md` §3 names. `defineMachine` validates the table at module load — unknown states,
+  two rules for one `(from, event)`, unreachable states, and dead ends not declared `terminal` are
+  all definition errors. `transition(machine, request, record)` takes the recorder as a **required
+  third parameter**, so a caller cannot obtain the new state without having supplied something that
+  persists the audit record.
+- **why**: The alternative — returning the record and trusting the caller to write it — makes
+  "every transition is recorded" a thing review has to notice on thirteen agents' pull requests.
+  As a required parameter it is a thing the type checker enforces once.
+- **apply**: Reviewing a slice with a status column: grep its updates for `status:` and
+  `state:`. Any assignment not downstream of a `transition()` call is a review finding. Declare the
+  machine at module scope, never per request, or `defineMachine`'s checks run on every call instead
+  of at boot. Guards are synchronous and pure by design: load what the guard needs first and pass
+  it as `context`.
+- **evidence**: `packages/contracts/src/state-machine.ts`;
+  `docs/specs/S1/W1-T07-state-machine.md` §4
+- **status**: active
+
+### `audit_record` is append-only and its `actor_id` deliberately dangles
+- **id**: MEM-2026-09-10-10
+- **scope**: slice:S1
+- **fact**: A trigger raises `AUDIT_RECORD_IMMUTABLE` on any `UPDATE` or `DELETE` of
+  `audit_record`, and `actor_id` carries **no foreign key** to `app_user`. A `CHECK` named
+  `audit_record_actor_pairing_check` enforces `(actor_type = 'SYSTEM') = (actor_id IS NULL)`, which
+  is the same rule `AuditRecordSchema`'s discriminated union states in zod.
+- **why**: `W2-T08` (GDPR erasure) may hard-delete a user row. `ON DELETE CASCADE` would erase the
+  ledger of what that user did, and `RESTRICT` would block the erasure the law requires — so the
+  column stores a uuid nothing guarantees still resolves. This is the one place in the schema where
+  that is correct. The trigger exists because "nobody updates the audit table" holds right up to
+  the first backfill migration.
+- **apply**: A wrong audit record is corrected by writing a new one, never by editing it — do not
+  write a migration that backfills this table. Joining `actor_id` to `app_user` must be a LEFT
+  join; an inner join silently drops the actions of erased users, which is the opposite of what an
+  audit query is for. `pnpm db:reset` is unaffected: `prisma migrate reset` drops the schema, and
+  row triggers do not fire on `TRUNCATE`.
+- **evidence**: `apps/api/prisma/migrations/0006_audit_record/migration.sql`;
+  `docs/specs/S1/W1-T07-state-machine.md` §8.2
+- **status**: active
+
+### When the deliverable is a database object, hold it out of the contract freeze
+- **id**: MEM-2026-09-10-11
+- **scope**: slice:S1
+- **fact**: Refines [[MEM-2026-09-10-03]] for DDL. The pipeline puts the Prisma freeze *before* the
+  red phase, so a trigger or a `CHECK` written in that step makes its tests pass on their first ever
+  run. In `W1-T07` the freeze landed only what `prisma migrate diff` produced — table, enum,
+  indexes — and the trigger and `CHECK` were added in the green phase, so all 26 criteria went red.
+- **why**: A constraint test that has never failed is not evidence the constraint works; it is
+  evidence the test ran. This is the only technique found so far that gives DDL an honest red
+  phase, and it cost one `psql` call to drop two objects from the dev database.
+- **apply**: Split the migration mentally into "what Prisma generates" (freeze) and "what I wrote by
+  hand" (green). Never edit a migration that has already merged — this works only because the
+  migration was still on the branch.
+- **evidence**: `docs/specs/S1/W1-T07-state-machine.run.md` §Red phase
+- **status**: active

@@ -317,4 +317,21 @@ come from real experience.
 - **evidence**: audit 2026-09-11 across 13 tasks; `docs/adr/ADR-010-agent-telemetry.md` §Context;
   `docs/specs/S0/W0-T01-monorepo-skeleton.run.md` §Prompts vs
   `docs/specs/S1/W1-T06-money-value-object.run.md` (no such section)
+### `prisma migrate diff` with a shadow database cannot get past migration `0000`
+- **id**: MEM-2026-09-10-12
+- **scope**: repo
+- **fact**: `prisma migrate diff --from-migrations … --shadow-database-url …` **resets** the shadow
+  database before replaying, which drops the PostGIS extension installed in `public`. Migration
+  `0000_require_postgis` then does its job and refuses with `POSTGIS_MISSING`, and the whole diff
+  fails with `P3006`. Creating the extension on the shadow database first does not help — the reset
+  happens after. Use `--from-url <a migrated database>` instead; that is also how `0006` was
+  generated.
+- **why**: The failure reads exactly like schema drift or a broken migration, and the obvious fix
+  (create the extension) appears to do nothing, so the trap costs the same twenty minutes every
+  time somebody meets it.
+- **apply**: Drift-checking locally: `prisma migrate diff --from-url $DATABASE_URL
+  --to-schema-datamodel ./prisma/schema.prisma --exit-code` against a database that is up to date
+  on migrations. Also note the local `POSTGRES_PORT` override in `.env` — the compose stack is not
+  necessarily on 5432, and `docker compose port db 5432` is the reliable way to find it.
+- **evidence**: `docs/specs/S1/W1-T07-state-machine.run.md` §Green phase; `apps/api/prisma/migrations/0000_require_postgis`
 - **status**: active
