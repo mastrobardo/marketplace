@@ -19,6 +19,7 @@ import { PrismaClient } from '@prisma/client';
 import {
   buildUser,
   createAddress,
+  createAuditRecord,
   createCategory,
   createClientProfile,
   createProviderCategory,
@@ -89,6 +90,7 @@ describe.runIf(live)('live — the factories against a real database', () => {
     const address = await createAddress(client, { userId: user.id });
     const category = await createCategory(client);
     const link = await createProviderCategory(client);
+    const audit = await createAuditRecord(client);
 
     expect(await prisma.user.findUnique({ where: { id: user.id } })).not.toBeNull();
     expect(
@@ -97,6 +99,7 @@ describe.runIf(live)('live — the factories against a real database', () => {
     expect(await prisma.providerProfile.findUnique({ where: { id: provider.id } })).not.toBeNull();
     expect(await prisma.address.findUnique({ where: { id: address.id } })).not.toBeNull();
     expect(await prisma.category.findUnique({ where: { id: category.id } })).not.toBeNull();
+    expect(await prisma.auditRecord.findUnique({ where: { id: audit.id } })).not.toBeNull();
     expect(
       await prisma.providerCategory.findUnique({
         where: {
