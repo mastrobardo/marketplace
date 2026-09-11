@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Design system \u2014 tokens, primitives and patterns. The only place a component is defined (ADR-012).",
+  "description": "Design system — tokens, primitives and patterns. The only place a component is defined (ADR-012).",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {
@@ -41,7 +41,9 @@
     "react-aria-components": "^1.21.1"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.13.0",
     "@marketplace/config": "workspace:*",
+    "@playwright/test": "1.63.0",
     "@storybook/addon-a11y": "^10.6.0",
     "@storybook/addon-vitest": "^10.6.0",
     "@storybook/react": "^10.6.0",
