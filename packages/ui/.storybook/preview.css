@@ -1,0 +1,17 @@
+/*
+ * The workbench's own chrome — not part of the design system, and never imported by the app. It
+ * exists so a story sits on the product's background at a width that shows how a control behaves
+ * when it has room and when it does not.
+ */
+.sb-story {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mp-space-4);
+  width: min(32rem, 100%);
+  padding: var(--mp-space-4);
+  background: var(--mp-color-bg);
+  color: var(--mp-color-text);
+  font-family: var(--mp-font-family);
+  font-size: var(--mp-font-size-base);
+  line-height: var(--mp-font-line-height);
+}
