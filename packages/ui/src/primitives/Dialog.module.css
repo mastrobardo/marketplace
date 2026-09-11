@@ -1,0 +1,48 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--mp-space-4);
+  background: var(--mp-overlay-scrim);
+}
+
+.modal {
+  width: 100%;
+  max-width: var(--mp-dialog-max-width);
+}
+
+.dialog {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mp-space-4);
+  max-height: 80vh;
+  padding: var(--mp-dialog-padding);
+  border: 1px solid var(--mp-dialog-border);
+  border-radius: var(--mp-dialog-radius);
+  background: var(--mp-dialog-bg);
+  overflow-y: auto;
+}
+
+.dialog:focus-visible {
+  outline: 2px solid var(--mp-color-focus);
+  outline-offset: 2px;
+}
+
+.title {
+  margin: 0;
+  font-size: var(--mp-font-size-lg);
+}
+
+.body {
+  margin: 0;
+}
+
+.footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--mp-space-2);
+  justify-content: flex-end;
+}

@@ -1,9 +1,17 @@
 /**
  * The design system's single entry point.
  *
- * Empty on purpose: `W12-T01` builds the package, its build and its exports map so that the seven
- * primitives in `W12-T02` land in something that already works. Tokens are not exported from here —
- * they are a stylesheet, reachable as `@marketplace/ui/tokens.css`, because a consumer that must
- * run a build before it can read a colour is a consumer that will hardcode the colour.
+ * Two layers, per ADR-012: primitives here, patterns (`SearchBar`, `Card`, `ResultRow`,
+ * `Pagination`, the map frame) when the pages that need them arrive. Nothing here knows a domain
+ * type — a component takes strings, numbers and callbacks, which is what keeps `agent-ui` from
+ * becoming downstream of nine slices. `tests/boundaries.test.ts` is the gate.
+ *
+ * Tokens are a stylesheet, not an export: `@marketplace/ui/tokens.css`.
  */
-export {};
+export { Button, type ButtonProps, type ButtonVariant } from './primitives/Button.js';
+export { Field, type FieldProps } from './primitives/Field.js';
+export { TextInput, type TextInputProps } from './primitives/TextInput.js';
+export { Select, type Option, type SelectProps } from './primitives/Select.js';
+export { Combobox, type ComboboxProps } from './primitives/Combobox.js';
+export { Dialog, type DialogProps } from './primitives/Dialog.js';
+export { Popover, type PopoverProps } from './primitives/Popover.js';

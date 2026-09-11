@@ -1,0 +1,75 @@
+.wrapper {
+  display: block;
+  min-width: 0;
+}
+
+.trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--mp-space-2);
+  width: 100%;
+  min-height: var(--mp-field-min-height);
+  padding: var(--mp-field-padding-block) var(--mp-field-padding-inline);
+  border: 1px solid var(--mp-field-border);
+  border-radius: var(--mp-field-radius);
+  background: var(--mp-field-bg);
+  color: var(--mp-field-fg);
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+.trigger[data-focus-visible] {
+  outline: 2px solid var(--mp-color-focus);
+  outline-offset: 2px;
+}
+
+.trigger[data-invalid] {
+  border-color: var(--mp-field-border-invalid);
+}
+
+.trigger[data-disabled] {
+  background: var(--mp-color-surface-muted);
+  cursor: not-allowed;
+}
+
+.value[data-placeholder] {
+  color: var(--mp-field-description-color);
+}
+
+.popover {
+  width: var(--trigger-width);
+  border: 1px solid var(--mp-listbox-border);
+  border-radius: var(--mp-listbox-radius);
+  background: var(--mp-listbox-bg);
+  overflow: hidden;
+}
+
+.listbox {
+  display: flex;
+  flex-direction: column;
+  max-height: 18rem;
+  padding: var(--mp-space-1);
+  overflow-y: auto;
+}
+
+.option {
+  padding: var(--mp-space-2) var(--mp-space-3);
+  border-radius: var(--mp-radius-sm);
+  cursor: pointer;
+}
+
+.option[data-selected] {
+  background: var(--mp-listbox-option-selected-bg);
+}
+
+.option[data-focused] {
+  background: var(--mp-listbox-option-focus-bg);
+  color: var(--mp-listbox-option-focus-fg);
+}
+
+.option[data-disabled] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

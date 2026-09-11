@@ -1,0 +1,15 @@
+.popover {
+  max-width: 22rem;
+  border: 1px solid var(--mp-popover-border);
+  border-radius: var(--mp-popover-radius);
+  background: var(--mp-popover-bg);
+}
+
+.dialog {
+  padding: var(--mp-popover-padding);
+}
+
+.dialog:focus-visible {
+  outline: 2px solid var(--mp-color-focus);
+  outline-offset: 2px;
+}

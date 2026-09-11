@@ -67,3 +67,49 @@ Keep it to facts that changed how you would work. Task-specific detail stays in 
   (`./styles.css`) added by `W12-T02`; do not move the tokens behind the build to unify them.
 - **evidence**: `packages/ui/package.json`; spec §4.1; `apps/web/tests/ui-package.test.ts`
 - **status**: active
+
+### React Aria conveys invalidity by linking the message, not with `aria-invalid`
+- **id**: MEM-2026-09-11-04
+- **scope**: slice:S10
+- **fact**: On `Select` the trigger is a `button`, so React Aria does not put `aria-invalid` on it.
+  It links the error message with `aria-describedby`, marks the wrapper `data-invalid` for styling,
+  and puts the constraint on the hidden native select. `TextInput` *does* get `aria-invalid`,
+  because there the control is an input.
+- **why**: I asserted the attribute I expected, React Aria dropped the prop, and the test failed —
+  correctly. Forcing the attribute through would have produced markup that looks right in a diff and
+  is not what the ARIA practices say.
+- **apply**: Assert the linked message and `data-invalid`, not the attribute. More generally: when a
+  React Aria prop seems not to work, read the rendered DOM before working around it.
+- **evidence**: `packages/ui/tests/primitives.test.tsx` AC11; `docs/specs/S10/W12-T02-ui-primitives.md` §7
+- **status**: active
+
+### React Aria filters uncontrolled collections only, and its own strings are English
+- **id**: MEM-2026-09-11-05
+- **scope**: slice:S10
+- **fact**: A `ComboBox` given controlled `items` does **not** filter — that is the caller's job
+  (`useFilter`, `sensitivity: 'base'`, which matches *València* for `valencia`). It also closes a
+  menu with an empty collection unless `allowsEmptyCollection` is set, which otherwise makes both
+  the loading and the no-match states unreachable. Separately, React Aria's built-in strings default
+  to English: a `Select` with no placeholder renders *"Select an item"*.
+- **why**: Each of the three is invisible until a specific state happens, and two of them are states
+  an ES-first product hits on day one.
+- **apply**: Controlled combobox → filter it yourself, locale-aware. Empty states →
+  `allowsEmptyCollection`. And wrap `apps/web` in `<I18nProvider locale="es-ES">` when the shell is
+  built (`W12-T09`).
+- **evidence**: `packages/ui/src/primitives/Combobox.tsx`; spec §10 Q2 and Q3
+- **status**: active
+
+### The design system holds no copy and bundles no React Aria
+- **id**: MEM-2026-09-11-06
+- **scope**: slice:S10
+- **fact**: Every user-visible string in `packages/ui` is a prop with a Spanish default —
+  `pendingLabel`, `loadingLabel`, `emptyLabel`, `suggestionsLabel`, `placeholder`. And the library
+  build lists `react-aria*` as `external`, with `sideEffects: ["*.css"]`.
+- **why**: Copy in the design system means an i18n dependency in a package that must stay
+  domain-free. And inlining React Aria made the entry point 339 KB — `apps/web` would have pulled
+  all of it in to use one `Button`, failing ADR-011's ≤170 KB budget one task later and looking like
+  the page's fault. External: 8.81 KB.
+- **apply**: Adding a component? Its strings are props. Adding a dependency to this package? Ask
+  whether the consumer should bundle it instead, and check `dist/index.js` in the build output.
+- **evidence**: `packages/ui/vite.config.ts`; `docs/specs/S10/W12-T02-ui-primitives.run.md`
+- **status**: active

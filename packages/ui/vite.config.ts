@@ -21,7 +21,11 @@ export default defineConfig({
       fileName: () => 'index.js',
     },
     rollupOptions: {
-      external: ['react', 'react-dom', 'react/jsx-runtime'],
+      // React Aria is external, not bundled. Inlining it produced a 339 KB entry that `apps/web`
+      // would pull in whole to use one Button — and ADR-011's ≤170 KB initial-route budget is the
+      // thing that would then fail, one task after this one. Left external, the consumer's bundler
+      // sees the same ESM everyone else does and takes only the components actually imported.
+      external: [/^react($|\/)/, /^react-dom($|\/)/, /^react-aria/],
     },
   },
 });
