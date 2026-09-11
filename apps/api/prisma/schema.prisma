@@ -223,3 +223,51 @@ model ProviderCategory {
   @@index([categoryId], map: "provider_category_category_idx")
   @@map("provider_category")
 }
+
+// ---------------------------------------------------------------------------------------------
+// W1-T07 — the transition ledger. Spec: docs/specs/S1/W1-T07-state-machine.md §8.
+//
+// One row per state change, for all six machines TODO.md §3 names. The table is append-only and
+// a trigger in migration 0006 enforces it: a ledger whose rows can be edited is a report.
+// ---------------------------------------------------------------------------------------------
+
+/// Who caused a transition. SYSTEM is a scheduled close or a webhook — real transitions with no
+/// person behind them, which is why `actorId` is nullable and why the pairing is a CHECK (§8.2).
+enum ActorType {
+  USER
+  SYSTEM
+
+  @@map("actor_type")
+}
+
+/// A state change that happened. Written only through `transition()` in `@marketplace/contracts`,
+/// which cannot return a new state without having called a recorder (spec §4.4, Decision A).
+model AuditRecord {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+
+  /// The machine's name — `booking`, `job`. Text, not an enum: an enum here would list every
+  /// state of every slice in the shared schema, making a new booking event a migration (§8.2).
+  entity    String
+  entityId  String @map("entity_id") @db.Uuid
+  /// The event that fired, e.g. `PAYMENT_CAPTURED`.
+  action    String
+  fromState String @map("from_state")
+  toState   String @map("to_state")
+
+  actorType ActorType @map("actor_type")
+  /// Deliberately **no** foreign key. W2-T08 (GDPR erasure) may hard-delete the user row: CASCADE
+  /// would erase the ledger of what they did and RESTRICT would block the erasure the law
+  /// requires. The one place in this schema where a dangling reference is the right design.
+  actorId   String?   @map("actor_id") @db.Uuid
+
+  /// Whatever makes the row legible for its machine — a refund amount, a winning bid. Not indexed.
+  metadata Json?
+
+  /// No column default, on purpose. The value always comes from the application (spec §8.2), so
+  /// there is one source of truth for when a transition happened.
+  at DateTime @db.Timestamptz(3)
+
+  @@index([entity, entityId, at(sort: Desc), id(sort: Desc)], map: "audit_record_entity_at_idx")
+  @@index([actorId, at(sort: Desc), id(sort: Desc)], map: "audit_record_actor_at_idx")
+  @@map("audit_record")
+}
