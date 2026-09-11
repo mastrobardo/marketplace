@@ -1,0 +1,17 @@
+.pagination {
+  display: flex;
+  justify-content: center;
+  padding-block: var(--mp-space-6);
+}
+
+.next {
+  display: inline-block;
+  min-height: var(--mp-button-min-height);
+  padding: var(--mp-button-padding-block) var(--mp-button-padding-inline);
+  border: var(--mp-border-width) solid var(--mp-button-border);
+  border-radius: var(--mp-button-radius);
+  background: var(--mp-button-bg);
+  color: var(--mp-button-fg);
+  font-weight: var(--mp-button-font-weight);
+  text-decoration: none;
+}

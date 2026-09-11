@@ -64,6 +64,22 @@
   --mp-card-description-fg: var(--mp-color-text-muted);
   --mp-card-eyebrow-fg: var(--mp-color-accent);
 
+  --mp-row-gap: var(--mp-space-2);
+  --mp-row-padding: var(--mp-space-4);
+  --mp-row-radius: var(--mp-radius-md);
+  --mp-row-bg: var(--mp-color-surface);
+  --mp-row-bg-hover: var(--mp-color-surface-muted);
+  --mp-row-fg: var(--mp-color-text);
+  --mp-row-border: var(--mp-color-border);
+  --mp-row-border-hover: var(--mp-color-accent);
+  --mp-row-meta-fg: var(--mp-color-text-muted);
+  --mp-row-badge-bg: var(--mp-color-surface-muted);
+  --mp-row-badge-fg: var(--mp-color-text);
+
+  --mp-empty-bg: var(--mp-color-surface);
+  --mp-empty-border: var(--mp-color-border);
+  --mp-empty-description-fg: var(--mp-color-text-muted);
+
   --mp-popover-bg: var(--mp-color-surface);
   --mp-popover-border: var(--mp-color-border);
   --mp-popover-radius: var(--mp-radius-md);

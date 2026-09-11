@@ -153,8 +153,10 @@ describe('AC8 — a missing endpoint degrades, it does not take the site down', 
     await user.keyboard('{Escape}');
     await user.click(within(search).getByRole('button', { name: es['search.submit'] }));
 
+    // The categories request failed, so the service field has no options — and the search still
+    // runs, because `what` is optional and `where` is all the contract requires.
     await waitFor(() => {
-      expect(screen.getByTestId('not-found')).toBeDefined();
+      expect(screen.getByTestId('results')).toBeDefined();
     });
   });
 
@@ -202,10 +204,10 @@ describe('AC9 — the header search submits to the search URL', () => {
     await user.keyboard('{Escape}');
     await user.click(within(search).getByRole('button', { name: es['search.submit'] }));
 
-    // `/es/search`, not `/es/buscar` — URL segments are not translated. The page itself is
-    // `W12-T11`, so this lands on the 404 for now, and that is the correct intermediate state.
+    // `/es/search`, not `/es/buscar` — URL segments are not translated. `W12-T11` built the page,
+    // so this now lands on the results rather than on the deliberate intermediate 404.
     await waitFor(() => {
-      expect(screen.getByTestId('not-found')).toBeDefined();
+      expect(screen.getByTestId('results')).toBeDefined();
     });
   });
 });

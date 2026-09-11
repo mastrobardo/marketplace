@@ -1,0 +1,25 @@
+.empty {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mp-space-3);
+  align-items: flex-start;
+  padding: var(--mp-space-8) var(--mp-space-4);
+  border: var(--mp-border-width) solid var(--mp-empty-border);
+  border-radius: var(--mp-radius-md);
+  background: var(--mp-empty-bg);
+}
+
+.title {
+  margin: 0;
+  font-size: var(--mp-font-size-lg);
+}
+
+.description {
+  margin: 0;
+  color: var(--mp-empty-description-fg);
+  max-width: 52ch;
+}
+
+.action {
+  margin: 0;
+}
