@@ -395,3 +395,91 @@ Keep it to facts that changed how you would work. Task-specific detail stays in 
   actually emitted rather than at what the source says.
 - **evidence**: `apps/web/tests/mocks.test.ts` AC17 + AC19
 - **status**: active
+
+### Two renderings of one control must not disagree about what "incomplete" means
+- **id**: MEM-2026-09-11-23
+- **scope**: slice:S10
+- **fact**: `SearchBar` sets `validationBehavior="aria"` deliberately — it reports `isRequired` to
+  assistive technology and **lets the form submit**, because the sentence a user reads is the
+  application's to own (`W12-T07`). `W12-T09`'s header never owned it, so an empty submit navigated
+  to `/es/search?` — a query `SearchQuerySchema` rejects outright, since `where` is required. Found
+  in `W12-T10` while writing the *hero's* version of that test. The guard is now one hook,
+  `features/search/navigation.ts`, and both bars call it; `search.where.required` had been sitting in
+  both catalogues since `W12-T07` with nothing rendering it.
+- **why**: A component that deliberately delegates a decision has not made it — it has created an
+  obligation, and an unmet obligation in a *shared* component is met differently by each consumer.
+  Two controls built from one declaration that disagree about validity is the drift the whole
+  `W12-T07`→`T09`→`T10` line exists to prevent.
+- **apply**: When a `packages/ui` component documents that the application owns something, grep for
+  every consumer before adding the second one. And a translation key with no renderer is a to-do
+  someone wrote in the catalogue — treat it as a missing implementation, not as spare copy.
+- **evidence**: `apps/web/src/features/search/navigation.ts`; `routing.test.tsx` AC3b;
+  `home.test.tsx` AC3; `docs/specs/S10/W12-T10-home-page.md` §4.4
+- **status**: active
+
+### A second landmark of the same role needs its own name, and pages are where that first bites
+- **id**: MEM-2026-09-11-24
+- **scope**: slice:S10
+- **fact**: `SearchBar` renders `role="search"` named by its `label`, and the shell puts one in the
+  header of **every** page. `W12-T10`'s hero is therefore the second on one page — the case
+  `SearchBar.tsx`'s own comment predicted for `W12-T11`, arriving a ticket early. The hero is
+  `search.hero.label`; the header keeps `search.label`. `home.test.tsx` AC10 checks `region`, `search`
+  and `navigation` together, resolving `aria-labelledby` the way assistive technology does rather than
+  comparing `textContent` — comparing text passes for a landmark with no name at all, because every
+  section's text differs.
+- **why**: Duplicated landmarks with one name are an axe failure, and before that they are a
+  screen-reader user hearing "search" twice with no way to tell which is which. A component cannot
+  catch it; only the page that composes two of them can.
+- **apply**: Any component that renders a landmark takes its accessible name as a prop, and the page
+  that mounts two of anything is where the uniqueness assertion lives. Write the name check against
+  the computed accessible name, never against `textContent`.
+- **evidence**: `apps/web/src/routes/home.tsx`; `apps/web/tests/home.test.tsx` AC10;
+  `packages/ui/src/patterns/search/SearchBar.tsx`
+- **status**: active
+
+### A pattern hands out a class; it does not render the application's link
+- **id**: MEM-2026-09-11-25
+- **scope**: slice:S10
+- **fact**: `Card` takes `renderLink({ className, children })` rather than an `href` or an `onPress`.
+  An `href` makes the card render an `<a>`, which is a full page reload inside an SPA; an `onPress`
+  makes it a button pretending to be a link — no middle-click, no open-in-new-tab, no URL to copy —
+  and a category card **is** a URL. The stretch is a `::after` overlay on the class the card hands
+  out, so the whole surface is clickable with exactly one tab stop in it.
+- **why**: ADR-012 §1 — `packages/ui` may not know what a router is, and `boundaries.test.ts` AC15 is
+  that as a gate. The render prop is the only shape that keeps the package domain-free *and* gives
+  the product real links.
+- **apply**: Every future pattern that is "a surface someone navigates from" — `ResultRow`, the
+  landing cards — takes the same render prop. Do not add an `href` prop to any of them.
+- **evidence**: `packages/ui/src/patterns/card/Card.tsx`; `packages/ui/tests/card.test.tsx` AC14;
+  `docs/specs/S10/W12-T10-home-page.md` §4.5
+- **status**: active
+
+### A missing endpoint removes a section, never the page — and a heading over nothing is worse than neither
+- **id**: MEM-2026-09-11-26
+- **scope**: slice:S10
+- **fact**: `W12-T10`'s category region is **absent** when the list is empty, not an empty grid under
+  a heading — and an empty list and a failed request produce the identical page (`home.test.tsx`
+  AC7/AC8). The degrade itself moved into `shared/categories.ts` when the home page became the second
+  loader needing it; `root.tsx` was refactored onto it.
+- **why**: This is `MEM-2026-09-11-21` one level down. `GET /categories` is still `W3-T01`, so the
+  degraded path is the *normal* path, and a naive `.map()` renders "Todos los servicios" above
+  nothing every day until that ticket lands. Two copies of a degrade rule is one copy too many: the
+  second is the one that gets forgotten.
+- **apply**: A degrade rule lives in one function the moment there is a second caller. And the check
+  is not `catch` — it is "what does this region look like with zero rows", asserted.
+- **evidence**: `apps/web/src/shared/categories.ts`; `apps/web/tests/home.test.tsx` AC7/AC8
+- **status**: active
+
+### A child route owns its loader, on the parent's query key
+- **id**: MEM-2026-09-11-27
+- **scope**: slice:S10
+- **fact**: `W12-T10`'s home page needs the shell's category list and does **not** read it with
+  `useRouteLoaderData`. It calls `ensureQueryData` on the same key, so React Query answers from a warm
+  cache and no second request is made.
+- **why**: R3 then holds by construction rather than by the parent's good behaviour, the page stays
+  self-contained, and `W12-T11`/`T12`/`T13` copy a pattern that still works when their data is *not*
+  something the shell happens to have. Reading the parent's data couples every child page to the
+  shell's loader shape for as long as the shape survives.
+- **apply**: Storefront pages get their own loader. Share the *key*, never the loader data.
+- **evidence**: `apps/web/src/routes/home.tsx` loader; `docs/specs/S10/W12-T10-home-page.md` §4.2
+- **status**: active

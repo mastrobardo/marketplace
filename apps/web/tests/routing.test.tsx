@@ -209,3 +209,22 @@ describe('AC9 — the header search submits to the search URL', () => {
     });
   });
 });
+
+describe('AC3b (W12-T10) — one guard for both renderings of the search', () => {
+  it('refuses an empty location from the header too, and names the field', async () => {
+    const user = userEvent.setup();
+    renderApp('/es');
+    await screen.findByRole('banner');
+
+    const search = screen.getByRole('search', { name: es['search.label'] });
+    await user.click(within(search).getByRole('button', { name: es['search.expand'] }));
+    await user.click(within(search).getByRole('button', { name: es['search.submit'] }));
+
+    // `W12-T09` navigated to `/es/search?` with an empty query string — a request the API rejects.
+    // The hero would have had to answer the same question, and two renderings of one declaration
+    // that disagree about validity are the drift `W12-T07` exists to prevent.
+    expect(await screen.findByRole('alert')).toBeDefined();
+    expect(screen.getByRole('alert').textContent).toContain(es['search.where.required']);
+    expect(screen.queryByTestId('not-found')).toBeNull();
+  });
+});

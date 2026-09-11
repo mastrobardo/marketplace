@@ -5,7 +5,8 @@ import {
   HydrateFallback,
   loader as rootLoader,
 } from '../routes/root.js';
-import { Component as Home } from '../routes/home.js';
+import { Component as Home, loader as homeLoader } from '../routes/home.js';
+import { Component as BecomeAPro } from '../routes/become-a-pro.js';
 import {
   Component as Legal,
   ErrorBoundary as LegalErrorBoundary,
@@ -40,7 +41,9 @@ export const routes: RouteObject[] = [
     ErrorBoundary,
     HydrateFallback,
     children: [
-      { index: true, Component: Home },
+      { index: true, Component: Home, loader: homeLoader },
+      // Not `/es/hazte-profesional`: the language is the only translated segment (Amendment 1).
+      { path: 'become-a-pro', Component: BecomeAPro },
       {
         path: 'legal/:doc',
         Component: Legal,

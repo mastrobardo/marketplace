@@ -1,22 +1,24 @@
-import { type ReactElement, useEffect } from 'react';
+import { type ReactElement, useEffect, useMemo } from 'react';
 import {
   Link,
   Outlet,
   isRouteErrorResponse,
   useLoaderData,
-  useNavigate,
   useRevalidator,
   useRouteError,
 } from 'react-router';
 import type { LoaderFunctionArgs } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
-import { SearchBar, serializeSearchQuery, type SearchQuery } from '@marketplace/ui';
+import { SearchBar } from '@marketplace/ui';
 import { type CategorySummary } from '@marketplace/contracts';
 import { LanguageSwitcher } from '../shared/LanguageSwitcher.js';
 import { changeLanguage, isLocale, LOCALES } from '../i18n/index.js';
-import { queryKeys, routeContext } from '../shared/query.js';
+import { loadCategories } from '../shared/categories.js';
+import { queryKeys } from '../shared/query.js';
 import { searchSchema } from '../features/search/schema.js';
+import { useSearchSubmission } from '../features/search/navigation.js';
+import { MissingFields } from '../features/search/MissingFields.js';
 
 /**
  * The shell every route renders into: skip link, banner, the compact search, navigation, main,
@@ -48,31 +50,17 @@ export async function loader({ params, context }: LoaderFunctionArgs): Promise<S
   if (!isLocale(lang)) throw new Response('Not found', { status: 404 });
 
   const locale: string = lang;
-  const { queryClient, api } = context.get(routeContext);
 
   // Categories enrich **one field** of the search box. They are not a precondition for the site, and
-  // treating them as one is how `W12-T09` first reached a deploy: `GET /categories` does not exist
-  // yet (`W3-T01`), the request 404'd, this loader rejected, and the root boundary replaced the
-  // entire storefront with the 500 page. The search bar was unreachable because a dropdown was empty.
-  //
-  // So a failure degrades to an empty list. `what` is optional in `SearchQuerySchema`, and `where`,
-  // `when` and `mode` need no endpoint at all — a search is still a search without the category
-  // list. The rule this encodes: **a deployed page may not hard-depend on an endpoint that does not
-  // exist.** It mocks it or it degrades.
-  const categories = await queryClient
-    .ensureQueryData({
-      queryKey: queryKeys.categories(locale),
-      queryFn: () => api.getCategories(locale),
-    })
-    .catch((): CategorySummary[] => []);
-
-  return { locale, categories };
+  // the degrade that says so now lives in `shared/categories.ts`, because `W12-T10`'s home page is
+  // the second loader that needs the same list and the second copy of a rule is the one that gets
+  // forgotten. What that rule is, and what it cost to learn, is written there.
+  return { locale, categories: await loadCategories(context, locale) };
 }
 
 export function Component(): ReactElement {
   const { locale, categories } = useLoaderData<ShellData>();
   const { t } = useTranslation();
-  const navigate = useNavigate();
 
   // The loader put it in the cache; this reads it. Same key, so there is no second request — and
   // when `W3-T01` makes categories real, a background revalidation updates the box in place.
@@ -82,6 +70,9 @@ export function Component(): ReactElement {
     initialData: categories,
   });
 
+  // `t` changes identity when the language does, which is exactly when the labels must be rebuilt.
+  const schema = useMemo(() => searchSchema(data, t), [data, t]);
+
   // The URL is what decides the language, so i18next follows it rather than the other way round.
   // In an effect because it is a side effect on a module singleton — the known R6 debt `W12-T14`
   // owns — and doing it during render would mutate shared state while React is still deciding.
@@ -89,12 +80,11 @@ export function Component(): ReactElement {
     void changeLanguage(locale);
   }, [locale]);
 
-  function onSearch(query: SearchQuery): void {
-    // The search page does not exist until `W12-T11`. Wiring it now is deliberate: the alternative
-    // is a disabled control that hides whether the schema, the query string and the router agree
-    // until three tasks from here.
-    void navigate(`/${locale}/search?${serializeSearchQuery(query)}`);
-  }
+  // The search page does not exist until `W12-T11`. Wiring it now is deliberate: the alternative is
+  // a disabled control that hides whether the schema, the query string and the router agree until
+  // three tasks from here. `W12-T10` moved the destination — and the "you have not said where"
+  // guard — into one hook, so the hero and this cannot disagree about either.
+  const { submit, missing } = useSearchSubmission(locale, schema);
 
   return (
     <div className="mp-shell">
@@ -112,12 +102,13 @@ export function Component(): ReactElement {
           <div className="mp-header__search">
             <SearchBar
               rendering="header"
-              schema={searchSchema(data, t)}
+              schema={schema}
               label={t('search.label')}
               submitLabel={t('search.submit')}
               expandLabel={t('search.expand')}
-              onSubmit={onSearch}
+              onSubmit={submit}
             />
+            <MissingFields missing={missing} />
           </div>
 
           <nav className="mp-nav" aria-label={t('nav.primary')}>

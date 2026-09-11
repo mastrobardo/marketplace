@@ -53,6 +53,17 @@
   --mp-dialog-padding: var(--mp-space-6);
   --mp-dialog-max-width: 32rem;
 
+  --mp-card-gap: var(--mp-space-2);
+  --mp-card-padding: var(--mp-space-4);
+  --mp-card-radius: var(--mp-radius-md);
+  --mp-card-bg: var(--mp-color-surface);
+  --mp-card-bg-hover: var(--mp-color-surface-muted);
+  --mp-card-fg: var(--mp-color-text);
+  --mp-card-border: var(--mp-color-border);
+  --mp-card-border-hover: var(--mp-color-accent);
+  --mp-card-description-fg: var(--mp-color-text-muted);
+  --mp-card-eyebrow-fg: var(--mp-color-accent);
+
   --mp-popover-bg: var(--mp-color-surface);
   --mp-popover-border: var(--mp-color-border);
   --mp-popover-radius: var(--mp-radius-md);

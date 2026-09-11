@@ -1,7 +1,7 @@
 # ADR-011: The web front end — how a page is rendered, and what the storefront is made of
 
 ## Status
-Proposed — 2026-09-11 · **amended 2026-09-11 (see "Amendment 1" below): URL segments are not
+Proposed — 2026-09-11 · **amended 2026-09-11 (see "Amendment 1" and "Amendment 2" below): URL segments are not
 translated, and SEO is deferred.** Implemented by `W12` (milestone `M11 Public storefront`). Companion:
 [ADR-012](ADR-012-design-system-and-component-workbench.md), which covers the components this
 architecture assembles. Depends on [ADR-006](ADR-006-hosting-and-environments.md) (Cloudflare
@@ -106,7 +106,7 @@ stateDiagram-v2
     SSR: Framework mode on Workers
     SSR: loaders run server-first
 
-    SPA --> Prerendered: W12-T10 — home page ships
+    SPA --> Prerendered: W12-T14 — see Amendment 2
     Prerendered --> SSR: W12-T13/T14 — first data-generated indexable page
     SSR --> [*]
 
@@ -388,3 +388,25 @@ keep and is a decision about what *not* to do.
 
 **When SEO returns**, it is a new ticket with a fresh justification against whatever the product
 looks like then — not a resumption of this ADR's plan.
+
+---
+
+## Amendment 2 — 2026-09-11: prerendering moves from `W12-T10` to `W12-T14`
+
+**Decided:** shipping the home page does *not* flip the rendering mode. Fixed routes stay
+client-rendered until `W12-T14`, which flips the whole switch at once.
+
+**What it replaces:** §1's state diagram, whose first arrow reads `SPA --> Prerendered: W12-T10 —
+home page ships`.
+
+**Why:** prerendering's stated rationale in §1 is indexing and link previews. Amendment 1.2 deferred
+both. What is left is first paint on four routes nobody is being sent to yet — and the number that
+would say whether the current paint is too slow is `W12-T15`'s Lighthouse gate, which has not run.
+Standing up a prerender pipeline now means standing up a rendering path that `W12-T14` then deletes,
+which is the same trade Amendment 1.1 declined.
+
+**What this does not change:** the six route rules. `W12-T10` is written to them — its loaders are
+loaders, its `QueryClient` comes through `getContext`, and its query-string functions are pure and
+DOM-free. The arrow is later, not cancelled, and it is cheap precisely because those held.
+
+**Escalated by** `W12-T10` §10 Q1 and answered by the operator on 2026-09-11.
