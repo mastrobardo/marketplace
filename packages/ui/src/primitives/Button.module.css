@@ -1,0 +1,81 @@
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--mp-space-2);
+  min-height: var(--mp-button-min-height);
+  padding: var(--mp-button-padding-block) var(--mp-button-padding-inline);
+  border: 1px solid var(--mp-button-border);
+  border-radius: var(--mp-button-radius);
+  background: var(--mp-button-bg);
+  color: var(--mp-button-fg);
+  font: inherit;
+  font-weight: var(--mp-button-font-weight);
+  cursor: pointer;
+  /* Spanish runs 15–20% longer than English: the label wraps rather than overflowing, and the
+     button grows. A fixed width here is the single most common way this system would break in its
+     primary language. */
+  max-width: 100%;
+  text-align: center;
+}
+
+.button[data-focus-visible] {
+  outline: 2px solid var(--mp-color-focus);
+  outline-offset: 2px;
+}
+
+.button[data-disabled],
+.button[data-pending] {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.primary {
+  background: var(--mp-button-bg-primary);
+  border-color: var(--mp-button-bg-primary);
+  color: var(--mp-button-fg-primary);
+}
+
+.secondary {
+  background: var(--mp-button-bg);
+}
+
+.danger {
+  background: var(--mp-button-bg-danger);
+  border-color: var(--mp-button-bg-danger);
+  color: var(--mp-button-fg-danger);
+}
+
+.label {
+  overflow-wrap: break-word;
+}
+
+.pending {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--mp-space-2);
+  font-size: var(--mp-font-size-sm);
+  font-weight: var(--mp-font-weight-regular);
+}
+
+.spinner {
+  width: var(--mp-space-4);
+  height: var(--mp-space-4);
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  border-radius: var(--mp-radius-full);
+  animation: spin 700ms linear infinite;
+}
+
+/* A spinner that never stops is a vestibular trigger and an axe finding waiting to happen. */
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation: none;
+  }
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

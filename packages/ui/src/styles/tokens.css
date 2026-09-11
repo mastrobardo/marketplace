@@ -77,3 +77,57 @@
     --mp-color-success: #7fd3a3;
   }
 }
+
+/*
+ * Component tokens — the third layer. A component's stylesheet reads only these and the semantic
+ * tokens above; it never reaches for a palette value, and it never writes a literal. Added by
+ * `W12-T02` with the primitives that consume them; `W12-T05` formalises the three layers and makes
+ * the layering itself a test.
+ */
+:root {
+  --mp-button-radius: var(--mp-radius-md);
+  --mp-button-padding-block: var(--mp-space-2);
+  --mp-button-padding-inline: var(--mp-space-4);
+  --mp-button-font-weight: var(--mp-font-weight-bold);
+  --mp-button-min-height: 2.75rem; /* 44px — the touch target this product is used with. */
+  --mp-button-bg: var(--mp-color-surface);
+  --mp-button-fg: var(--mp-color-text);
+  --mp-button-border: var(--mp-color-border);
+  --mp-button-bg-primary: var(--mp-color-accent);
+  --mp-button-fg-primary: var(--mp-color-accent-contrast);
+  --mp-button-bg-danger: var(--mp-color-danger);
+  --mp-button-fg-danger: var(--mp-color-accent-contrast);
+
+  --mp-field-gap: var(--mp-space-1);
+  --mp-field-label-color: var(--mp-color-text);
+  --mp-field-description-color: var(--mp-color-text-muted);
+  --mp-field-error-color: var(--mp-color-danger);
+  --mp-field-border: var(--mp-color-border);
+  --mp-field-border-invalid: var(--mp-color-danger);
+  --mp-field-bg: var(--mp-color-surface);
+  --mp-field-fg: var(--mp-color-text);
+  --mp-field-radius: var(--mp-radius-sm);
+  --mp-field-padding-block: var(--mp-space-2);
+  --mp-field-padding-inline: var(--mp-space-3);
+  --mp-field-min-height: 2.75rem;
+
+  --mp-listbox-bg: var(--mp-color-surface);
+  --mp-listbox-border: var(--mp-color-border);
+  --mp-listbox-radius: var(--mp-radius-md);
+  --mp-listbox-option-selected-bg: var(--mp-color-surface-muted);
+  --mp-listbox-option-focus-bg: var(--mp-color-accent);
+  --mp-listbox-option-focus-fg: var(--mp-color-accent-contrast);
+  --mp-listbox-empty-color: var(--mp-color-text-muted);
+
+  --mp-overlay-scrim: rgb(0 0 0 / 45%);
+  --mp-dialog-bg: var(--mp-color-surface);
+  --mp-dialog-border: var(--mp-color-border);
+  --mp-dialog-radius: var(--mp-radius-lg);
+  --mp-dialog-padding: var(--mp-space-6);
+  --mp-dialog-max-width: 32rem;
+
+  --mp-popover-bg: var(--mp-color-surface);
+  --mp-popover-border: var(--mp-color-border);
+  --mp-popover-radius: var(--mp-radius-md);
+  --mp-popover-padding: var(--mp-space-4);
+}
