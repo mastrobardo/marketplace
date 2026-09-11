@@ -12,7 +12,7 @@
 | Area | Decision |
 |---|---|
 | API | **Fastify + TypeScript + Prisma + PostgreSQL** |
-| Frontend | **Vite + React + TypeScript** (SPA), separate from the API |
+| Frontend | **Vite + React + TypeScript**, separate from the API. Client-rendered today; **React Router framework mode (SSR on Workers) is a recorded switch**, not a rewrite — see `docs/adr/ADR-011` |
 | Sharetribe | **Design/UX reference only.** We read the Sharetribe Web Template for flow design, search UX, Stripe + Google Maps integration patterns. We do **not** run their backend and do **not** fork their app. |
 | Repo | pnpm monorepo, single repo, single CI |
 | Market | **Spain first.** ES + EN i18n, EUR only |
@@ -23,6 +23,7 @@
 | Code host | **GitHub** + **GitHub Actions** for CI (Codeberg was considered; its CI needs a self-hosted runner or a different Woodpecker syntax — not worth the friction at MVP) |
 | Hosting | **Neon** (Postgres, branch-per-PR) · **Fly.io** (API) · **Cloudflare Pages** (web) · **R2** (objects) — see `docs/adr/ADR-006` |
 | Feature flags | **Flagsmith** free tier behind the **OpenFeature** SDK — see `docs/adr/ADR-007` |
+| Design system | **`packages/ui`** on **React Aria Components** + CSS Modules over three token layers; **Storybook** as a deployed workbench whose stories *are* the accessibility test suite — see `docs/adr/ADR-012` |
 | Board | **GitHub Projects** (issues + kanban), one issue per task ID from §6, automated from PR state |
 
 ### Working assumptions (correct me if wrong)
@@ -57,11 +58,12 @@ marketplace/
 │  │  └─ prisma/
 │  └─ web/                 # Vite + React + TS
 │     ├─ src/features/<same slice names>
-│     ├─ src/shared/       # design system, hooks, api client (generated)
-│     └─ src/routes/
+│     ├─ src/shared/       # hooks, api client (generated) — components live in packages/ui
+│     └─ src/routes/       # route modules: loader + component, DOM-free at import (ADR-011)
 ├─ packages/
 │  ├─ contracts/           # ⚠️ THE FROZEN SEAM: zod schemas + OpenAPI + generated client
-│  ├─ ui/                  # design-system primitives
+│  ├─ ui/                  # design-system primitives, patterns, tokens + the
+│  │                       # Storybook workbench — deployed, stories are tests (ADR-012)
 │  ├─ config/              # eslint, tsconfig, prettier, vitest presets
 │  └─ testing/             # fixtures, factories, Stripe/Maps mocks, seed data
 ├─ memory/                 # what agents know across sessions — see §5.8
@@ -555,6 +557,42 @@ This runs against the human-driven pipeline and is what gives `W11-T09` and `W11
 
 - `W11-T19` `[A]` **Close the learning loop** (`docs/adr/ADR-010`). Four signals — correction rate by root cause, run-record completeness, cost/attempts per finished task, memory hit rate. Lower the `intervention-logged` trigger from "a human closed a PR" to "a human corrected the agent"; extend `spec-present` to assert a run record's **sections**, not just its existence; backfill the ledger from the 15 session transcripts **before the harness prunes them** — they are 20 MB, outside git, and hold ~125 operator turns against a ledger of one
 
+### W12 — Web experience & design system (`agent-ui`) — *the storefront, and the parts every slice reuses*
+
+The one slice in §4 that had an owner, a folder and no backlog. Design: `docs/adr/ADR-011` (how a
+page is rendered) and `docs/adr/ADR-012` (what it is made of). Milestone `M11`. **Order matters
+here**: the rules and the component layer land before the pages, because retrofitting either onto
+finished pages is how the accessibility and SSR bills both come due at once.
+
+**The foundation — rules and components before pages.**
+
+- `W12-T01` `[A]` `packages/ui`: package, build, exports; `tokens.css` moves in from `apps/web`; the ADR-011 route rules as lint (**no browser global at module scope, no module-scope mutable cache, no fetch in a component**) plus a DOM-free route-module test — *the gates land before there is anything to retrofit*
+- `W12-T02` `[A]` First primitives on React Aria Components — Button, Field, TextInput, Select, Combobox, Dialog, Popover — each with stories for default, focus, disabled, loading, error and long-text (ES runs ~20% longer than EN)
+- `W12-T03` `[A]` Storybook 10 workbench in `packages/ui`: theme and locale toolbars, stories run as Vitest browser tests via `@storybook/addon-vitest` — the runner the repo already has, not a second harness
+- `W12-T04` `[A]` `parameters.a11y.test = 'error'` on every story: an axe violation fails the PR like any other test. This is `W10-T05` paid down per pull request instead of as an audit at the end
+- `W12-T05` `[A]` Three token layers (primitive → semantic → component), `[data-theme]` switching alongside `prefers-color-scheme`, **a second theme that proves the swap is real**, and `tokens.test.ts` extended with layering + per-theme completeness
+- `W12-T06` `[A]` Deploy the workbench to its own Cloudflare Pages project — per PR and on merge, URL commented beside the app preview, teardown mirroring `deploy-preview-teardown.yml`. A new Pages *project*, not a fifth service
+
+**The seam — search is a schema, and the schema defines the API's input.**
+
+- `W12-T07` `[A]` The search bar as a declarative schema: typed field descriptors (`what · where · when · mode`), three renderings from one source (hero, compact header, filter rail), query-string serialisation, `SearchSchema → SearchQuery` as a pure function
+- `W12-T08` `[A]` Contract request to `agent-contracts`: `SearchQuery` / `SearchResult` zod schemas, and MSW handlers built **from** the `packages/testing` factories — never a second fixture set alongside them (`W1-T09`)
+
+**The storefront — the M11 surface, all of it public.**
+
+- `W12-T09` `[A]` Public shell: header with the compact search, language switcher, footer, 404/500, legal page slots, skip link and landmark structure
+- `W12-T10` `[A]` Home page: hero search over the schema, category cards as pre-filled searches, how-it-works, trust strip, supply-side CTA — responsive, on seeded content
+- `W12-T11` `[A]` Results page: list + facet rail from the same schema, **map as a deferred chunk the page works without** (`R9`), empty/loading/error states, pagination per `W1-T02`
+- `W12-T12` `[A]` Public provider profile and listing detail: gallery, categories, badges, review summary, and a CTA that stops cleanly at the auth wall — the visible edge of M11
+- `W12-T13` `[A]` Category and category × city landing pages over the **curated** matrix — the SEO surface and half the cold-start answer *(needs `BD-15`)*
+
+**Making it count — indexable, fast, and provably unchanged.**
+
+- `W12-T14` `[A]` Flip the rendering switch: React Router framework mode on Workers, per-request i18n instance (the one known R6 violation today), `meta`/canonical/`hreflang`/JSON-LD, sitemap from the curated matrix, `robots.txt` disallowing `/buscar`
+- `W12-T15` `[A]` Performance budget as a gate: Lighthouse CI on the preview URL (LCP ≤2.5s, INP ≤200ms, CLS ≤0.1, ≤170 KB initial JS), R2 image pipeline with `srcset`/AVIF, font loading strategy
+- `W12-T16` `[A]` Nightly visual regression: Playwright screenshots over a pinned story list, baselines generated **only** inside the CI image
+- `W12-T17` `[M]` `[B]` Landing-page content: the curated city × category matrix and where the prose comes from *(human: `BD-15` — headless CMS vs MDX in the repo)*
+
 ---
 
 ## 7. Testing strategy
@@ -567,12 +605,12 @@ agent loads the `test-driven-development` skill at task start.
 | Unit (services, state machines, money, badge rules) | Vitest | slice owner | **required** | every PR |
 | Contract (route ⇄ OpenAPI ⇄ generated client) | Vitest + supertest | `agent-contracts` | **required** | every PR |
 | Integration (API + real Postgres in docker) | Vitest + testcontainers | slice owner | **required** | every PR |
-| Component (React) | Vitest + Testing Library | slice owner | required for logic-bearing components | every PR |
+| Component (React) | Vitest + Testing Library; in `packages/ui` the **stories are the tests** (`@storybook/addon-vitest`) | slice owner / `agent-ui` | required for logic-bearing components | every PR |
 | E2E | Playwright against preview env | `agent-qa` | written from the spec's acceptance criteria, before the feature | smoke on PR, full nightly |
 | Payments | Stripe test mode + webhook replay fixtures | `agent-money` | **required** | every PR touching S9 |
 | Concurrency | targeted race tests (emergency accept, auction close, quote accept) | slice owner | **required** | every PR touching S7/S8 |
 | Load | k6 on search + broadcast | `agent-devops` | n/a | pre-launch + nightly |
-| A11y | axe in Playwright | `agent-ui` | n/a | nightly |
+| A11y | **axe on every story** (Storybook + Vitest, failing the build) · axe in Playwright on the core flows | `agent-ui` | n/a | **every PR** (stories) + nightly (flows) |
 
 **E2E flows that must exist before beta:**
 1. Client signs up → searches manitas near a postcode → books → pays → completes → reviews
@@ -604,12 +642,19 @@ fixture set — no ad-hoc data creation in tests except via shared factories in 
 | **M8** | Monetisation | W5-T05…T11, W8-T04 | Subscriptions, fees, refunds, badges, reconciliation clean |
 | **M9** | Beta-ready | W9, W10 | Security + a11y + load pass, runbooks written, rollback rehearsed |
 | **M10** | Agent autonomy | `W0-T26`, `OPS-19`–`22`, W11 | **Phase A**: an `[A]` ticket goes from `agent:go` to merged PR with no human keystroke but the spec approval and the review. **Phase B**: the cheap tier closes a majority of tickets unaided, measured per completed task. **Phase C**: zero leaks on the agentic-traffic corpus, `verify` fail-closed in the loop |
+| **M11** | Public storefront | `W12` | A stranger with no account, on staging: home → search *fontanero · Madrid · esta semana* → seeded results on a list + map → a provider profile → a CTA that **stops cleanly at the auth wall**. Workbench deployed, every story passing axe, Lighthouse mobile budget green, ES **and** EN complete |
+
+**M11 is numbered, not ordered.** It starts the moment M0 lands and runs alongside M1–M2: `agent-ui`
+builds the component layer and the public pages against seeded fixtures while `agent-identity` and
+`agent-discovery` build what those pages will eventually call. Its exit criterion is deliberately the
+auth wall — everything past it (accounts, posting a job, paying) is M1, M3 and M4 arriving *into* a
+front end that already exists, rather than each of them growing its own.
 
 **Critical path**: human blockers (§6) → M0 → M1 → M3 (money). Everything else parallelises after M1.
 Staff `agent-money` from M0 so Stripe Connect onboarding is already in review when M2 finishes.
 
 **Parallelisation after M1**: `agent-discovery` (W3) ‖ `agent-money` (W5) ‖ `agent-trust`
-(W8-T01/T02) ‖ `agent-ui` (design system) ‖ `agent-qa` (W10-T01 seeds).
+(W8-T01/T02) ‖ `agent-ui` (**W12**, from M0 — it needs seeded fixtures, not endpoints) ‖ `agent-qa` (W10-T01 seeds).
 
 ---
 
@@ -649,6 +694,9 @@ Staff `agent-money` from M0 so Stripe Connect onboarding is already in review wh
 | R13 | Fly has no Spain region (nearest Paris ~25ms) | Latency | Acceptable at MVP; revisit if users complain |
 | R14 | Preview envs branched from real data would leak PII/licences | GDPR breach | Previews branch only from **sanitised** staging (`W0-T20`); prod is a separate Neon project |
 | R15 | Flags accumulate and rot into dead code paths | Maintainability | Removal task ID on every flag; 4 weeks at 100% rollout ⇒ cleanup task (ADR-007) |
+| R16 | The SPA → SSR "switch" rots into a rewrite because the route rules stayed conventions | Landing pages ship late, slow, or never — and they are half of R3's answer | The six rules are lint + a DOM-free route-module test in `W12-T01`, landed **before** there are components to retrofit (ADR-011) |
+| R17 | Every slice invents its own button; accessibility arrives as a `W10-T05` audit at the end | Thirty components to retrofit at the most expensive possible moment | `packages/ui` is the only place a component is defined, and axe runs per story per PR (ADR-012) |
+| R18 | A client-rendered storefront is indexed badly or late by Google | No organic acquisition, which is the only cheap channel before there is supply to advertise | Curated landing matrix, server-rendered by `W12-T14`; search results deliberately `noindex, follow` to protect them from thin-content dilution |
 
 ## 10.1 Business decisions register — `[B]`
 
@@ -672,6 +720,7 @@ rule: build the mechanism, read the value from config, ship nothing with an inve
 | `BD-12` | Target beta city/region | `W10-T01`, supply recruitment | Also shapes seed data |
 | `BD-13` | VAT/IVA invoicing rules for autónomos + DAC7 reporting | `W5-T09` | Needs an accountant, not a decision alone |
 | `BD-14` | GDPR data retention periods per entity | `W2-T08` | |
+| `BD-15` | **Landing-page content**: which categories × which cities we publish, and where the prose comes from — headless CMS vs MDX in the repo | `W12-T13`, `W12-T14`, `W12-T17` | The SEO surface, and half the cold-start answer (R3). A *curated* list, never a loop over every pair. Distinct from the W9 back office: a CMS is for marketing content, never for the ops console |
 
 ---
 
