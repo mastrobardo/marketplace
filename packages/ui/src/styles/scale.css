@@ -21,13 +21,37 @@
   --mp-radius-lg: 1rem;
   --mp-radius-full: 9999px;
 
-  --mp-font-size-sm: 0.875rem;
-  --mp-font-size-base: 1rem;
-  --mp-font-size-lg: 1.25rem;
-  --mp-font-size-xl: 1.75rem;
+  /*
+   * The type scale (`W12-T18`). Sizes are vendored from Open Props (MIT) — the step each one came
+   * from is named beside it — and the two display steps are its fluid pair, so a hero headline is
+   * not phone-sized on a desktop and desktop-sized on a phone.
+   *
+   * **Every size has its own leading.** Before this there was one `--mp-font-line-height: 1.55` for
+   * all four sizes, which is correct for body copy and far too loose for a headline: it is the
+   * single reason the storefront `h1` read as large body text rather than as a heading. Leading
+   * tightens as type grows, down the Open Props `--font-lineheight-*` ladder. `tokens.test.ts`
+   * AC19 fails the build if a size is ever added without one.
+   */
+  --mp-font-size-xs: 0.75rem; /* Open Props --font-size-0 */
+  --mp-font-size-sm: 0.875rem; /* kept from W12-T01 — between Open Props steps 0 and 1 */
+  --mp-font-size-base: 1rem; /* Open Props --font-size-1 */
+  --mp-font-size-lg: 1.25rem; /* Open Props --font-size-3 */
+  --mp-font-size-xl: 1.75rem; /* kept from W12-T01 — between Open Props steps 4 and 5 */
+  --mp-font-size-2xl: 2rem; /* Open Props --font-size-5 */
+  --mp-font-size-display: clamp(1.5rem, 6vw, 2.5rem); /* Open Props --font-size-fluid-2 */
+  --mp-font-size-display-lg: clamp(2rem, 9vw, 3.5rem); /* Open Props --font-size-fluid-3 */
+
+  --mp-font-line-height-xs: 1.5; /* Open Props --font-lineheight-3 */
+  --mp-font-line-height-sm: 1.5; /* Open Props --font-lineheight-3 */
+  --mp-font-line-height-base: 1.5; /* Open Props --font-lineheight-3 */
+  --mp-font-line-height-lg: 1.375; /* Open Props --font-lineheight-2 */
+  --mp-font-line-height-xl: 1.25; /* Open Props --font-lineheight-1 */
+  --mp-font-line-height-2xl: 1.25; /* Open Props --font-lineheight-1 */
+  --mp-font-line-height-display: 1.1; /* Open Props --font-lineheight-0 */
+  --mp-font-line-height-display-lg: 1.1; /* Open Props --font-lineheight-0 */
+
   --mp-font-weight-regular: 400;
   --mp-font-weight-bold: 650;
-  --mp-font-line-height: 1.55;
 
   --mp-layout-max-width: 68rem;
 

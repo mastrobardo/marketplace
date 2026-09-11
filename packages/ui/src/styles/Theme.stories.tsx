@@ -37,12 +37,32 @@ const COMBINATIONS: [Theme, Scheme][] = [
   ['contrast', 'dark'],
 ];
 
-/** A role rendered in its own colour, on the surface it is meant for. */
-const ROLES: { token: string; label: string }[] = [
-  { token: '--mp-color-accent', label: 'Acento' },
-  { token: '--mp-color-focus', label: 'Foco' },
+/**
+ * A role rendered **the way it is used**, which is the only way axe can judge it.
+ *
+ * `W12-T18` split this list in two. It used to render every role as coloured text, including
+ * `--mp-color-accent` — and once the accent became orange, axe failed the story at 3.16:1 and was
+ * right to: no orange is AA-legible as small text on a light grey, which is exactly why the accent
+ * is a fill and an edge in this palette. A story that paints a fill colour as text is asserting
+ * something the product never does.
+ */
+const TEXT_ROLES: { token: string; label: string }[] = [
+  { token: '--mp-color-primary', label: 'Base — enlaces y etiquetas' },
   { token: '--mp-color-danger', label: 'Error' },
   { token: '--mp-color-success', label: 'Correcto' },
+];
+
+/** Roles that are a solid fill: rendered filled, with the contrast token that belongs to them. */
+const FILL_ROLES: { token: string; contrast: string; label: string }[] = [
+  { token: '--mp-color-primary', contrast: '--mp-color-primary-contrast', label: 'Acción' },
+  { token: '--mp-color-accent', contrast: '--mp-color-accent-contrast', label: 'Acento' },
+  { token: '--mp-color-danger', contrast: '--mp-color-danger-contrast', label: 'Peligro' },
+];
+
+/** Roles that are an edge or a ring: rendered as a border, never as text. */
+const EDGE_ROLES: { token: string; label: string }[] = [
+  { token: '--mp-color-accent-strong', label: 'Borde de acento' },
+  { token: '--mp-color-focus', label: 'Foco' },
 ];
 
 function Panel({ theme, scheme }: { theme: Theme; scheme: Scheme }) {
@@ -62,7 +82,7 @@ function Panel({ theme, scheme }: { theme: Theme; scheme: Scheme }) {
         color: 'var(--mp-color-text)',
         fontFamily: 'var(--mp-font-family)',
         fontSize: 'var(--mp-font-size-base)',
-        lineHeight: 'var(--mp-font-line-height)',
+        lineHeight: 'var(--mp-font-line-height-base)',
         border: 'var(--mp-border-width) solid var(--mp-color-border)',
         borderRadius: 'var(--mp-radius-lg)',
       }}
@@ -108,20 +128,36 @@ function Panel({ theme, scheme }: { theme: Theme; scheme: Scheme }) {
         Superficie atenuada
       </div>
 
-      <div
-        style={{
-          padding: 'var(--mp-space-2)',
-          background: 'var(--mp-color-accent)',
-          color: 'var(--mp-color-accent-contrast)',
-          borderRadius: 'var(--mp-radius-md)',
-          fontWeight: 'var(--mp-font-weight-bold)',
-        }}
-      >
-        Acento con su contraste
-      </div>
+      {FILL_ROLES.map(({ token, contrast, label }) => (
+        <div
+          key={token}
+          style={{
+            padding: 'var(--mp-space-2)',
+            background: `var(${token})`,
+            color: `var(${contrast})`,
+            borderRadius: 'var(--mp-radius-md)',
+            fontWeight: 'var(--mp-font-weight-bold)',
+          }}
+        >
+          {label}
+        </div>
+      ))}
+
+      {EDGE_ROLES.map(({ token, label }) => (
+        <div
+          key={token}
+          style={{
+            padding: 'var(--mp-space-2)',
+            border: `var(--mp-focus-ring-width) solid var(${token})`,
+            borderRadius: 'var(--mp-radius-md)',
+          }}
+        >
+          {label}
+        </div>
+      ))}
 
       <ul style={{ margin: 0, paddingInlineStart: 'var(--mp-space-4)' }}>
-        {ROLES.map(({ token, label }) => (
+        {TEXT_ROLES.map(({ token, label }) => (
           <li key={token} style={{ color: `var(${token})` }}>
             {label}
           </li>

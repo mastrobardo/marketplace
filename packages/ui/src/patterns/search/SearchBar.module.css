@@ -40,6 +40,7 @@
   border: var(--mp-border-width) solid var(--mp-search-border);
   border-radius: var(--mp-search-radius);
   background: var(--mp-search-bg);
+  box-shadow: var(--mp-search-shadow);
 }
 
 /* The header: tighter, narrower fields, and it stays on one line for as long as it can. */

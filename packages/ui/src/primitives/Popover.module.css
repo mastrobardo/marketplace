@@ -3,6 +3,7 @@
   border: var(--mp-border-width) solid var(--mp-popover-border);
   border-radius: var(--mp-popover-radius);
   background: var(--mp-popover-bg);
+  box-shadow: var(--mp-popover-shadow);
 }
 
 .dialog {

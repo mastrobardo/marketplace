@@ -9,12 +9,14 @@
   border: var(--mp-border-width) solid var(--mp-row-border);
   border-radius: var(--mp-row-radius);
   background: var(--mp-row-bg);
+  box-shadow: var(--mp-row-shadow);
   color: var(--mp-row-fg);
 }
 
 .linked:hover {
   border-color: var(--mp-row-border-hover);
   background: var(--mp-row-bg-hover);
+  box-shadow: var(--mp-row-shadow-hover);
 }
 
 .main {
@@ -29,6 +31,7 @@
 .title {
   margin: 0;
   font-size: var(--mp-font-size-lg);
+  line-height: var(--mp-font-line-height-lg);
   overflow-wrap: break-word;
 }
 

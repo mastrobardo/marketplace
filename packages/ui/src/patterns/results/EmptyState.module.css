@@ -12,6 +12,7 @@
 .title {
   margin: 0;
   font-size: var(--mp-font-size-lg);
+  line-height: var(--mp-font-line-height-lg);
 }
 
 .description {

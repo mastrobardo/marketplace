@@ -23,6 +23,7 @@
   border: var(--mp-border-width) solid var(--mp-dialog-border);
   border-radius: var(--mp-dialog-radius);
   background: var(--mp-dialog-bg);
+  box-shadow: var(--mp-dialog-shadow);
   overflow-y: auto;
 }
 
@@ -34,6 +35,7 @@
 .title {
   margin: 0;
   font-size: var(--mp-font-size-lg);
+  line-height: var(--mp-font-line-height-lg);
 }
 
 .body {

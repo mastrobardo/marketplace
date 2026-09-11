@@ -221,6 +221,16 @@ Blocked:   Nothing. A is safe to start under either answer.
 Not blocked: Everything.
 ```
 
+**Answered by the operator, 2026-09-12: A — no brand is arriving.** *"No, i will hire a designer
+after the first phase."* With a direction: **grey, blue, and accents orange / dark orange, keeping
+the light style.**
+
+The first implementation had guessed a warm neutral (Radix `sand` + `brown`) under option A's own
+logic and was wrong about the direction, which is precisely the cost ADR-012 §4 caps at one file —
+the palette was re-cut on Radix `slate` + `blue` + `orange` in that one file plus the component
+mapping, with no component markup touched. The re-cut is recorded in the run record; the
+operator's own words are the spec now.
+
 ### Q2 — the contrast gate names its pairs by hand
 
 Six literal pairs today. `--mp-color-text-muted` on `--mp-color-surface` is missing and is what every
@@ -233,6 +243,14 @@ The honest caveat: "the surface its component puts it on" is not fully knowable 
 together, and only the stylesheet says so. So the derivation is *per component family*: every `*-fg`
 in a family is measured against every `*-bg` in the same family, plus the page-level pairs. That
 over-measures slightly, which is the correct direction for a gate to be wrong in.
+
+**Resolved on implementation: the derivation pairs by *variant* within a family.** A foreground
+with an exact variant match is measured against that background **and nothing else** — without that
+rule `--mp-listbox-option-focus-fg` is also measured against `--mp-listbox-bg`, which is white on
+white and a failure for a composition that never happens. Over-measuring is the safe direction only
+while the extra pairs are real. The result is **21 pairs per combination, 84 measurements**, against
+24 before — and it failed on the palette already in `main`: `--mp-card-eyebrow-fg` on
+`--mp-card-bg-hover` at 4.4:1.
 
 ### Q3 — AC24 is reviewed, not tested
 
@@ -257,3 +275,9 @@ high-contrast modes. The licence covering them was **not** established while wri
 pages that describe them do not state one. Nothing may be copied from them until it is, and if it
 turns out to be restrictive the task loses a reference and nothing else: Radix Colors and Open Props
 carry the parts this ticket depends on.
+
+**Still unresolved after implementation (2026-09-11), and therefore honoured:** the pages describing
+the starter kits state no licence, and React Aria's Apache-2.0 covers the library rather than the
+downloadable kit. **Nothing was copied from it** — not a line and not a measurement. Radix Colors
+(MIT) and Open Props (MIT) carried the whole ticket, exactly as this section predicted. The
+reference stays unavailable until someone establishes the terms.

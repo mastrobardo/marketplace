@@ -20,31 +20,83 @@
 [data-theme='default'] {
   /* ---------------------------------------------------------------- primitive */
 
-  /* Warm neutrals at the light end, cool at the dark end — the ramp as it was drawn. */
-  --mp-palette-stone-0: #ffffff;
-  --mp-palette-stone-50: #fbfaf9;
-  --mp-palette-stone-100: #f2f0ee;
-  --mp-palette-stone-200: #e0dcd7;
-  --mp-palette-stone-400: #a6a1ac;
-  --mp-palette-stone-500: #6b6560;
-  --mp-palette-stone-700: #3a3841;
-  --mp-palette-stone-800: #292830;
-  --mp-palette-stone-850: #1f1e24;
-  --mp-palette-stone-900: #1c1a18;
-  --mp-palette-stone-950: #16151a;
+  /*
+   * The ramp (`W12-T18`). Every value is **vendored from Radix Colors** (MIT) — the scale and step
+   * are named on each line — and copied in as a literal rather than installed. ADR-012 §4 says a
+   * theme is a palette plus the mapping over it and nothing else; a theme that declared
+   * `--mp-palette-slate-2: var(--slate-2)` would be a theme that no longer resolves on its own,
+   * because `tokens.test.ts` walks a graph of `--mp-*` declarations and `--slate-2` is not in it.
+   * It also keeps the dependency count, and the bundle `W12-T15` is over budget on, where it was.
+   *
+   * Radix earns its place because its twelve steps are defined by **role**, not by lightness —
+   * 1–2 page background, 3–5 component background, 6–8 borders, 9–10 solid fills, 11 muted text,
+   * 12 high-contrast text. That is nearly the set of semantic names `W12-T05` already chose, so
+   * the mapping below is a table rather than a judgement call.
+   *
+   * **The direction is the operator's, 2026-09-12**: grey neutrals, blue as the base, orange and
+   * dark orange as the accents, light-first. No brand is arriving from outside — a designer comes
+   * after phase one, and ADR-012 §4 makes that a ramp swap in this one file.
+   *
+   * `slate` is grey with a slight blue cast, which is the neutral Radix pairs with `blue` so the
+   * two read as one family. For a dead-neutral grey instead, `gray` is the same six steps:
+   * `#fcfcfc #f9f9f9 #f0f0f0 #cecece #646464 #202020` light, `#111111 #191919 #222222 #484848
+   * #b4b4b4 #eeeeee` dark. One line per step, nothing else changes.
+   */
 
-  --mp-palette-clay-400: #e8935c;
-  --mp-palette-clay-600: #b4531f;
+  /* Radix `slate` — steps 1, 2, 3, 7, 11, 12 (light) and the same steps of `slate-dark`. */
+  --mp-palette-slate-1: #fcfcfd;
+  --mp-palette-slate-2: #f9f9fb;
+  --mp-palette-slate-3: #f0f0f3;
+  --mp-palette-slate-7: #cdced6;
+  --mp-palette-slate-11: #60646c;
+  --mp-palette-slate-12: #1c2024;
 
-  --mp-palette-blue-300: #8ab4f8;
-  --mp-palette-blue-700: #1d4ed8;
+  --mp-palette-slate-dark-1: #111113;
+  --mp-palette-slate-dark-2: #18191b;
+  --mp-palette-slate-dark-3: #212225;
+  --mp-palette-slate-dark-7: #43484e;
+  --mp-palette-slate-dark-11: #b0b4ba;
+  --mp-palette-slate-dark-12: #edeef0;
 
-  --mp-palette-red-200: #f2b8b5;
-  --mp-palette-red-700: #b3261e;
+  /*
+   * Radix `blue` step 11 — the base. Step 11 is the text-contrast step, and it is the only blue
+   * that does **both** of this palette's blue jobs: a solid fill under white (4.65:1) and link or
+   * label text on the page (4.53:1). Steps 9 and 10 are brighter and fail the first at 3.18:1 and
+   * 3.54:1 — a primary button nobody can read the label on.
+   */
+  --mp-palette-blue-11: #0d74ce;
+  --mp-palette-blue-dark-11: #70b8ff;
 
-  --mp-palette-green-300: #7fd3a3;
-  --mp-palette-green-700: #1f6f43;
+  /*
+   * Radix `orange` steps 10 and 11 — the accents, and they are **fills and edges, never text**.
+   * No orange is AA-legible as small text on a light grey: `orange-11` measures 4.40 / 4.29 / 3.96
+   * against the three surfaces below, and only `orange-12` clears 4.5 — at which darkness it reads
+   * as brown rather than orange. So step 10 is a solid fill carrying near-black text at 4.92:1, and
+   * step 11 is the dark-orange edge at 4.29:1 against the page, comfortably past the 3:1 that
+   * WCAG 1.4.11 asks of a UI boundary. Decided with the operator on 2026-09-12.
+   */
+  --mp-palette-orange-10: #ef5f00;
+  --mp-palette-orange-11: #cc4e00;
 
+  --mp-palette-orange-dark-10: #ff801f;
+  --mp-palette-orange-dark-11: #ffa057;
+
+  /* Radix `red` and `grass` — step 11, the text-contrast step, in each scheme. */
+  --mp-palette-red-11: #ce2c31;
+  --mp-palette-red-dark-11: #ff9592;
+
+  --mp-palette-grass-11: #2a7e3b;
+  --mp-palette-grass-dark-11: #71d083;
+
+  /*
+   * Shadow alphas. Not a Radix scale — a shadow is the absence of light, not a hue, and Radix does
+   * not ship one. The geometry of the elevation set below follows Open Props `--shadow-1` and
+   * `--shadow-2`; the colour is ours, because Open Props' version resolves through
+   * `--shadow-color` and `--shadow-strength`, two more names outside this namespace.
+   */
+  --mp-palette-shadow-09: rgb(0 0 0 / 9%);
+  --mp-palette-shadow-12: rgb(0 0 0 / 12%);
+  --mp-palette-shadow-20: rgb(0 0 0 / 20%);
   --mp-palette-shadow-45: rgb(0 0 0 / 45%);
   --mp-palette-shadow-65: rgb(0 0 0 / 65%);
 
@@ -52,21 +104,59 @@
 
   /* Roles, not shades. `--mp-color-danger`, never `--mp-color-red-700`: the design system should
      be able to change the red without renaming anything. */
-  --mp-color-bg: light-dark(var(--mp-palette-stone-50), var(--mp-palette-stone-950));
-  --mp-color-surface: light-dark(var(--mp-palette-stone-0), var(--mp-palette-stone-850));
-  --mp-color-surface-muted: light-dark(var(--mp-palette-stone-100), var(--mp-palette-stone-800));
-  --mp-color-border: light-dark(var(--mp-palette-stone-200), var(--mp-palette-stone-700));
-  --mp-color-text: light-dark(var(--mp-palette-stone-900), var(--mp-palette-stone-100));
-  --mp-color-text-muted: light-dark(var(--mp-palette-stone-500), var(--mp-palette-stone-400));
-  --mp-color-accent: light-dark(var(--mp-palette-clay-600), var(--mp-palette-clay-400));
-  --mp-color-accent-contrast: light-dark(var(--mp-palette-stone-0), var(--mp-palette-stone-900));
-  --mp-color-focus: light-dark(var(--mp-palette-blue-700), var(--mp-palette-blue-300));
-  --mp-color-danger: light-dark(var(--mp-palette-red-700), var(--mp-palette-red-200));
-  --mp-color-success: light-dark(var(--mp-palette-green-700), var(--mp-palette-green-300));
+  --mp-color-bg: light-dark(var(--mp-palette-slate-2), var(--mp-palette-slate-dark-1));
+  --mp-color-surface: light-dark(var(--mp-palette-slate-1), var(--mp-palette-slate-dark-2));
+  --mp-color-surface-muted: light-dark(var(--mp-palette-slate-3), var(--mp-palette-slate-dark-3));
+  --mp-color-border: light-dark(var(--mp-palette-slate-7), var(--mp-palette-slate-dark-7));
+  --mp-color-text: light-dark(var(--mp-palette-slate-12), var(--mp-palette-slate-dark-12));
+  --mp-color-text-muted: light-dark(var(--mp-palette-slate-11), var(--mp-palette-slate-dark-11));
+
+  /* The base. Primary actions, links, and any label that has to carry meaning in colour. */
+  --mp-color-primary: light-dark(var(--mp-palette-blue-11), var(--mp-palette-blue-dark-11));
+  --mp-color-primary-contrast: light-dark(
+    var(--mp-palette-slate-1),
+    var(--mp-palette-slate-dark-1)
+  );
+
+  /* The accent. A fill and an edge — see the note on the orange steps above. */
+  --mp-color-accent: light-dark(var(--mp-palette-orange-10), var(--mp-palette-orange-dark-10));
+  --mp-color-accent-strong: light-dark(
+    var(--mp-palette-orange-11),
+    var(--mp-palette-orange-dark-11)
+  );
+  /* Near-black in **both** schemes, because `orange-10` is a light fill in both. That is why this
+     is its own token and not shared with `--mp-color-primary-contrast`, which flips. */
+  --mp-color-accent-contrast: light-dark(
+    var(--mp-palette-slate-12),
+    var(--mp-palette-slate-dark-1)
+  );
+
+  --mp-color-focus: light-dark(var(--mp-palette-blue-11), var(--mp-palette-blue-dark-11));
+  --mp-color-danger: light-dark(var(--mp-palette-red-11), var(--mp-palette-red-dark-11));
+  --mp-color-danger-contrast: light-dark(var(--mp-palette-slate-1), var(--mp-palette-slate-dark-1));
+  --mp-color-success: light-dark(var(--mp-palette-grass-11), var(--mp-palette-grass-dark-11));
 
   /* The scrim over a modal. It was the one literal left in the component layer, where the colour
      gate could not see it, because the gate exempted the token file wholesale. */
   --mp-color-overlay: light-dark(var(--mp-palette-shadow-45), var(--mp-palette-shadow-65));
+
+  /*
+   * Elevation (`W12-T18`). Before this, the two shadow entries were read by `Dialog` and `Popover`
+   * and by nothing else, so every surface in the product was flat and nothing had hierarchy. The
+   * geometry is Open Props `--shadow-1` (resting) and `--shadow-2` (raised); `overlay` is the
+   * heavier pair the two overlay components were already reaching for.
+   *
+   * Dark schemes get more opacity, not less: a shadow on a near-black background is nearly
+   * invisible at the alpha that reads correctly on white.
+   */
+  --mp-elevation-resting: 0 1px 2px -1px
+    light-dark(var(--mp-palette-shadow-12), var(--mp-palette-shadow-45));
+  --mp-elevation-raised:
+    0 3px 5px -2px light-dark(var(--mp-palette-shadow-09), var(--mp-palette-shadow-45)),
+    0 7px 14px -5px light-dark(var(--mp-palette-shadow-12), var(--mp-palette-shadow-65));
+  --mp-elevation-overlay:
+    0 10px 20px -5px light-dark(var(--mp-palette-shadow-20), var(--mp-palette-shadow-65)),
+    0 20px 40px -10px light-dark(var(--mp-palette-shadow-12), var(--mp-palette-shadow-65));
 
   --mp-font-family: system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
 }

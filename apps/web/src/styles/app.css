@@ -15,7 +15,7 @@ body {
   color: var(--mp-color-text);
   font-family: var(--mp-font-family);
   font-size: var(--mp-font-size-base);
-  line-height: var(--mp-font-line-height);
+  line-height: var(--mp-font-line-height-base);
 }
 
 /* A visible focus ring on every interactive element. Removing it is the single most common
@@ -107,7 +107,8 @@ body {
 }
 
 .mp-main h1 {
-  font-size: var(--mp-font-size-xl);
+  font-size: var(--mp-font-size-display);
+  line-height: var(--mp-font-line-height-display);
   margin-top: 0;
 }
 
@@ -198,7 +199,10 @@ body {
 
 .mp-hero h1 {
   margin: 0;
-  font-size: var(--mp-font-size-xl);
+  /* The largest step, and fluid: the hero is the one headline whose job is to be a size.
+     `W12-T18` — before it, this was 1.75rem at every viewport. */
+  font-size: var(--mp-font-size-display-lg);
+  line-height: var(--mp-font-line-height-display-lg);
 }
 
 .mp-section {
@@ -208,7 +212,8 @@ body {
 
 .mp-section h2 {
   margin-block: 0 var(--mp-space-4);
-  font-size: var(--mp-font-size-lg);
+  font-size: var(--mp-font-size-xl);
+  line-height: var(--mp-font-line-height-xl);
 }
 
 .mp-card-grid {

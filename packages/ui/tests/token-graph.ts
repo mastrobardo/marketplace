@@ -46,9 +46,17 @@ export interface Declaration {
 /** `--mp-palette-*`: a value with no meaning. Only a theme file may read one. */
 export const isPrimitive = (token: string): boolean => token.startsWith('--mp-palette-');
 
-/** A role: what the value is *for*. The tier ADR-012 §3 lets any file in the package read. */
+/**
+ * A role: what the value is *for*. The tier ADR-012 §3 lets any file in the package read.
+ *
+ * `elevation` joined the list in `W12-T18`. A shadow is a colour with extra steps — it resolves
+ * through `--mp-palette-shadow-*`, so it has to be declared in a theme file, and a theme file may
+ * only declare a primitive or a role. Left out of this list it would have classified as a
+ * *component* token declared outside `components.css`, and AC5 would have failed it for reading a
+ * palette entry — which is the one thing an elevation token has to do.
+ */
 export const isSemantic = (token: string): boolean =>
-  /^--mp-(?:color|space|radius|font|layout|border-width|focus-ring-width)\b/.test(token);
+  /^--mp-(?:color|space|radius|font|layout|elevation|border-width|focus-ring-width)\b/.test(token);
 
 /** A use: `--mp-button-bg`. Everything that is neither of the above. */
 export const isComponent = (token: string): boolean => !isPrimitive(token) && !isSemantic(token);
@@ -198,7 +206,10 @@ export class UnresolvedToken extends Error {}
 export interface Resolution {
   /** The literal the chain ends at — `#fbfaf9`, `1rem`, `rgb(0 0 0 / 45%)`. */
   value: string;
-  /** Every token visited, in order, starting with the one asked for. */
+  /**
+   * Every token visited, in order, starting with the one asked for. A token read twice by one
+   * value appears twice — that is a fact about the value, not a cycle.
+   */
   path: string[];
 }
 
@@ -206,24 +217,32 @@ export interface Resolution {
  * Resolve a token to a literal for one combination, or throw naming the hop that broke. Throwing
  * rather than returning `undefined` is deliberate: a half-resolved token is how the old
  * string-matching gate passed on a palette that was missing a colour.
+ *
+ * `ancestors` is the chain currently being resolved — *only* the tokens this one is nested inside —
+ * and it is what the cycle check reads. It used to be the same array as the visited record, which
+ * made a token used **twice in one value** indistinguishable from a cycle: the second occurrence
+ * found the first already listed and threw "refers to itself". Nothing referenced the same token
+ * twice until `W12-T18`'s elevation set put `--mp-palette-shadow-65` in both layers of one shadow,
+ * so the bug had never been reachable. A sibling is not an ancestor.
  */
 export function resolve(
   declarations: Declaration[],
   token: string,
   combination: Combination,
-  path: string[] = [],
+  ancestors: string[] = [],
 ): Resolution {
-  if (path.includes(token)) {
-    throw new UnresolvedToken(`${token} refers to itself (${path.join(' → ')})`);
+  if (ancestors.includes(token)) {
+    throw new UnresolvedToken(`${token} refers to itself (${[...ancestors, token].join(' → ')})`);
   }
   const declaration = winner(declarations, token, combination);
   if (!declaration) {
     throw new UnresolvedToken(
       `${token} is not declared in ${label(combination)}` +
-        (path.length > 0 ? ` (reached through ${path.join(' → ')})` : ''),
+        (ancestors.length > 0 ? ` (reached through ${ancestors.join(' → ')})` : ''),
     );
   }
-  const here = [...path, token];
+  const chain = [...ancestors, token];
+  const visited: string[] = [token];
   let value = declaration.value;
   let guard = 0;
   for (;;) {
@@ -240,13 +259,13 @@ export function resolve(
     }
 
     const reference = call(value, 'var');
-    if (!reference) return { value: value.trim(), path: here };
+    if (!reference) return { value: value.trim(), path: visited };
     const [name = '', fallback] = splitTop(reference.args);
     let replacement: string;
     try {
-      const resolved = resolve(declarations, name, combination, here);
+      const resolved = resolve(declarations, name, combination, chain);
       replacement = resolved.value;
-      here.push(...resolved.path.slice(here.length));
+      visited.push(...resolved.path);
     } catch (error) {
       if (fallback === undefined) throw error;
       replacement = fallback;
@@ -301,4 +320,78 @@ export function contrastRatio(foreground: string, background: string): number {
     number,
   ];
   return Math.round(((lighter + 0.05) / (darker + 0.05)) * 100) / 100;
+}
+
+/* --------------------------------------------------- composed colour pairs */
+
+/**
+ * The pairs of tokens a component actually renders one on top of the other, derived from the
+ * component-token graph rather than written down.
+ *
+ * `W12-T18` AC6 replaced a six-entry literal list, which had the failure mode every hand-written
+ * gate has: `--mp-color-text-muted` on `--mp-color-surface` was not among the six, and it is what
+ * every `Card` description renders in. A gate that names its subjects by hand only ever checks the
+ * ones somebody remembered.
+ *
+ * The honest limit (spec §10 Q2): only a stylesheet knows which surface a foreground lands on.
+ * `--mp-card-description-fg` and `--mp-card-bg` are a pair because `Card.module.css` uses them
+ * together. So the derivation works **per component family** and pairs by *variant*:
+ *
+ *   --mp-button-fg-primary        variant "primary"       → --mp-button-bg-primary
+ *   --mp-listbox-option-focus-fg  variant "option-focus"  → --mp-listbox-option-focus-bg
+ *   --mp-card-description-fg      variant "description"   → no match, so the family's own
+ *                                                           background and its hover state
+ *
+ * A foreground with an exact variant match is paired with *that* background and nothing else.
+ * Without that rule `--mp-listbox-option-focus-fg` would also be measured against
+ * `--mp-listbox-bg` — white on white, a failure for a composition that never happens. Over-measuring
+ * is the safe direction only while the extra pairs are real.
+ */
+const STATE_VARIANTS = new Set(['hover', 'active', 'selected', 'focus']);
+
+/** `--mp-button-fg-primary` → `primary`; `--mp-card-bg` → ``. The variant, with the role removed. */
+function variant(token: string, roles: readonly string[]): string | null {
+  const parts = token
+    .replace(/^--mp-/, '')
+    .split('-')
+    .slice(1);
+  const at = parts.findIndex((part) => roles.includes(part));
+  if (at === -1) return null;
+  return [...parts.slice(0, at), ...parts.slice(at + 1)].join('-');
+}
+
+export interface Pair {
+  foreground: string;
+  background: string;
+}
+
+export function composedPairs(declarations: Declaration[]): Pair[] {
+  const components = [...new Set(declarations.map((entry) => entry.token))].filter(isComponent);
+
+  const foregrounds = new Map<string, string>();
+  const backgrounds = new Map<string, string>();
+  for (const token of components) {
+    const asForeground = variant(token, ['fg', 'color']);
+    if (asForeground !== null) foregrounds.set(token, asForeground);
+    const asBackground = variant(token, ['bg']);
+    if (asBackground !== null) backgrounds.set(token, asBackground);
+  }
+
+  const pairs: Pair[] = [];
+  for (const [foreground, key] of foregrounds) {
+    const sameFamily = [...backgrounds].filter(
+      ([background]) => family(background) === family(foreground),
+    );
+    const exact = sameFamily.filter(([, backgroundKey]) => backgroundKey === key);
+    const chosen =
+      exact.length > 0
+        ? exact
+        : sameFamily.filter(
+            ([, backgroundKey]) => backgroundKey === '' || STATE_VARIANTS.has(backgroundKey),
+          );
+    for (const [background] of chosen) pairs.push({ foreground, background });
+  }
+  return pairs.sort(
+    (a, b) => a.foreground.localeCompare(b.foreground) || a.background.localeCompare(b.background),
+  );
 }
