@@ -18,6 +18,7 @@
 | Market | **Spain first.** ES + EN i18n, EUR only |
 | Payments | **Stripe Connect Express** — pro onboarding/KYC, platform-held funds, split payouts, Stripe Billing for pro subscriptions |
 | Geo | PostgreSQL + **PostGIS**, Google Maps Places/Geocoding on the client |
+| Auth | **`better-auth`, self-hosted** against our own Postgres — `app_user` stays the user record, sessions are database rows behind an httpOnly cookie (not access tokens), email+password first with Google as a second method. See `docs/adr/ADR-005` |
 | Process | **Strict**: spec → frozen contract → **TDD** → implementation → review, one owning agent per vertical slice |
 | Traceability | Every branch carries its spec **and** its agent run record; every human intervention is logged |
 | Code host | **GitHub** + **GitHub Actions** for CI (Codeberg was considered; its CI needs a self-hosted runner or a different Woodpecker syntax — not worth the friction at MVP) |
@@ -368,7 +369,7 @@ visible rather than assumed. All are `[H]` — an agent must never attempt them.
 | `OPS-11` | **Sentry** project + DSN | first test event received | `W0-T08` |
 | `OPS-12` | **Google Cloud** project + Maps API key + billing + quota alerts | key restricted by referrer/IP | `W3-T06` |
 | `OPS-13` | **Stripe** account (test mode) + Connect Express settings + webhook endpoint | test PaymentIntent succeeds | `W5-T01`, `W5-T03` |
-| `OPS-14` | Email provider (Resend/Brevo) + verified sender domain | test email delivered | `W2-T01` |
+| `OPS-14` | Email provider (Resend/Brevo) + verified sender domain | test email delivered | `W2-T01` (to **ship** it — MailHog builds and tests it, `ADR-005`) |
 | `OPS-15` | SMS provider (Twilio) + Spanish sender | test SMS delivered | `W2-T06`, `W7-T04` |
 | `OPS-16` | Domain + DNS pointed at Cloudflare | staging hostname resolves | `W0-T07` |
 | `OPS-17` | Per-environment encryption data keys generated and stored in Fly secrets | keys present, never in repo | `W0-T18` |
@@ -417,6 +418,8 @@ for data), so no feature is blocked waiting for an account that is not needed ye
 - `W0-T26` `[A]` **Make the `database` job discover its own live suites.** It names them file by file, so a new test file is skipped and the run still reports green — a gate that fails open. Tolerable while a human reads every diff; **load-bearing the moment an agent treats "CI green" as its success signal**, so this blocks `M10` *(prerequisite for `W11-T06`)*
 - `W0-T27` `[A]` **Mirror the stack's third-party images into GHCR.** `minio/minio` and `minio/mc` were deleted from Docker Hub — the repositories, not the tags — and `stack:up` failed on every PR and on `main` until they were repointed at `quay.io` (#237). GHCR needs no external account, so this is `[A]`: the built-in `GITHUB_TOKEN` pushes to a package this repo owns. Both `linux/amd64` (CI) and `linux/arm64` (every laptop) must survive the copy. Not urgent — #237 pins by **digest**, so a re-pointed tag now fails loudly — and load-bearing at the same moment `W0-T26` is: an agent treating "CI green" as its success signal cannot diagnose a build that will not start because someone else deleted a tag *(issue #238)*
 
+- `W0-T28` `[A]` **Route `/api/*` from Cloudflare to the Fly app so the browser sees one origin.** `ADR-005` put the session in a `SameSite=Lax` cookie, and previews are where that breaks: the web is `<task>.<project>.pages.dev` and the API is `marketplace-api-<task>.fly.dev` — different *registrable* domains, so the cookie is never sent and every preview login fails silently. Production is fine on its own (`api.<domain>` under `.<domain>`, `OPS-16`), which is exactly why this would be found late. `apps/web/src/shared/api.ts` already defaults `baseUrl()` to `/`, so nothing in the web app changes — this is the platform half of a default it has been relying on since `W12-T08`. Blocks `W2-T02`, not `W2-T01`
+
 ### W1 — Contracts & domain foundation (`agent-contracts`)
 - `W1-T01` `[A]` ✅ Error envelope + error-code registry — frozen in `packages/contracts` as a zod schema, `details` typed per code, explicit HTTP status→code table *(issue #55)*
 - `W1-T02` `[A]` ✅ Pagination, sorting, filtering conventions — cursor (keyset) paging only, a per-endpoint sortable allow-list with `id` appended as the tiebreaker, flat typed filters, and `{ items, page: { nextCursor, hasMore } }` with no `total`; the lexicographic keyset predicate lives in the seam as provider-neutral data *(issue #56)*
@@ -425,17 +428,17 @@ for data), so no feature is blocked waiting for an account that is not needed ye
 - `W1-T05` `[A]` ✅ Core Prisma schema — `app_user` (the table is not `user`: Postgres resolves the bare keyword to `current_user` and returns a row instead of failing), both profiles, `address` as the **only** table with geography, `category` + `provider_category`; one generated `geography(Point,4326)` column and one GIST index serve every proximity query *(issue #59)*
 - `W1-T06` `[A]` ✅ Money value object — integer cents in `packages/contracts`, `prorate` and `allocate` the only two rounding sites, bounded at `Int32` because that is what Prisma `Int` is *(issue #60)*
 - `W1-T07` `[A]` State-machine helper (transition table + guard + audit log emit)
-- `W1-T08` `[M]` ADR template + first 5 ADRs (stack, contracts seam, money, geo, auth) *(human: sign off on the money + auth ADRs)*
+- `W1-T08` `[M]` ADR template + first 5 ADRs (stack, contracts seam, money, geo, auth) — **the auth one is written and signed off** (`ADR-005`, 2026-09-11), because it was what `W2` was blocked on; the other four are still outstanding and their decisions currently live only in §1 and in the code *(human: sign off on the money ADR when it is written)*
 - `W1-T09` `[A]` Shared test factories + fixtures in `packages/testing` (TDD prerequisite for every slice)
 
 ### W2 — Identity & access (`agent-identity`)
-- `W2-T01` `[A]` Signup/login (email+password), email verification, password reset
-- `W2-T02` `[A]` Sessions: httpOnly refresh cookie + short-lived access token, rotation, revoke
+- `W2-T01` `[A]` Signup/login (email+password), email verification, password reset — **mount `better-auth` on Fastify and map it onto `app_user`** (`ADR-005`): `modelName`, `generateId: false`, `roles`/`status`/`locale`/`deletedAt` as `additionalFields`. **Drops `app_user.passwordHash`** — credentials are `account` rows, which is also how Google arrives later without a migration — and **adds `name` and `email_verified`**, the latter because `emailVerified` is a boolean and `emailVerifiedAt` is a timestamp and field mapping renames columns without converting types. Soft-deleted users must not be able to authenticate: better-auth has no `deletedAt`, so that guard is ours and needs a test *(needs `OPS-14` to ship, not to build — MailHog covers verification and reset locally)*
+- `W2-T02` `[A]` Sessions: **database rows, not access tokens** — one opaque session token in an httpOnly/`Secure`/`SameSite=Lax` cookie, looked up per request; the `session`/`account`/`verification` migration; sliding expiry as rotation; revoke as a delete. **`ADR-005` rule 3 rewrote this line**: the old one said *"httpOnly refresh cookie + short-lived access token, rotation, revoke"*, and a short-lived access token makes revoke eventually-consistent — a suspended provider (`UserStatus.SUSPENDED`) and support impersonation (`BD-11`) both need it to mean *now*. Cookie caching stays **off** for the same reason. Session lifetime is an open choice, not better-auth's 7-day default (`ADR-005` Q3) *(needs `W0-T28` — a preview login fails cross-origin without it)*
 - `W2-T03` `[A]` Roles & permissions matrix + route guards + tests for every 403
 - `W2-T04` `[A]` Client profile CRUD, addresses, saved locations
 - `W2-T05` `[A]` Provider signup flow (MANITAS vs PRO, different required fields)
 - `W2-T06` `[M]` Phone verification (SMS), required for providers *(human: SMS provider account + credentials)*
-- `W2-T07` `[A]` Rate limiting, brute-force lockout, audit log on auth events
+- `W2-T07` `[A]` Rate limiting, brute-force lockout, audit log on auth events — the first two come from `better-auth`; the audit half stays ours, emitting into `AuditRecord` through `W1-T07`'s helper (`ADR-005`)
 - `W2-T08` `[M]` `[B]` GDPR: export my data, delete my account (soft-delete + anonymise) *(human: retention policy decision)*
 
 ### W3 — Providers & discovery (`agent-providers`, `agent-discovery`)
