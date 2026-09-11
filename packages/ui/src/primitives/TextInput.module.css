@@ -7,7 +7,7 @@
   width: 100%;
   min-height: var(--mp-field-min-height);
   padding: var(--mp-field-padding-block) var(--mp-field-padding-inline);
-  border: 1px solid var(--mp-field-border);
+  border: var(--mp-border-width) solid var(--mp-field-border);
   border-radius: var(--mp-field-radius);
   background: var(--mp-field-bg);
   color: var(--mp-field-fg);
@@ -15,7 +15,7 @@
 }
 
 .input[data-focus-visible] {
-  outline: 2px solid var(--mp-color-focus);
+  outline: var(--mp-focus-ring-width) solid var(--mp-color-focus);
   outline-offset: 2px;
 }
 

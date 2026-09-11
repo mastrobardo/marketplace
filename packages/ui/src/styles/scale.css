@@ -1,0 +1,56 @@
+/*
+ * Layer 1 — the scale. Primitive values with no meaning attached, and no colour among them: a
+ * spacing step is the same 4px in every theme, and a theme that wants sharper corners re-declares
+ * the radii rather than inventing a second set of names.
+ *
+ * Nothing here reads another token. If a declaration in this file needs a `var()`, it belongs in a
+ * theme file or in `components.css`.
+ */
+:root {
+  /* Spacing — a 4px scale. Every margin and padding is one of these. */
+  --mp-space-1: 0.25rem;
+  --mp-space-2: 0.5rem;
+  --mp-space-3: 0.75rem;
+  --mp-space-4: 1rem;
+  --mp-space-6: 1.5rem;
+  --mp-space-8: 2rem;
+  --mp-space-12: 3rem;
+
+  --mp-radius-sm: 0.25rem;
+  --mp-radius-md: 0.5rem;
+  --mp-radius-lg: 1rem;
+  --mp-radius-full: 9999px;
+
+  --mp-font-size-sm: 0.875rem;
+  --mp-font-size-base: 1rem;
+  --mp-font-size-lg: 1.25rem;
+  --mp-font-size-xl: 1.75rem;
+  --mp-font-weight-regular: 400;
+  --mp-font-weight-bold: 650;
+  --mp-font-line-height: 1.55;
+
+  --mp-layout-max-width: 68rem;
+
+  /*
+   * Density. Both were literals — `1px` in nine component stylesheets, `2px` in six — which is to
+   * say they were values the design system owned and had not named. A theme overrides them, and so
+   * does the preference below.
+   */
+  --mp-border-width: 1px;
+  --mp-focus-ring-width: 2px;
+}
+
+/*
+ * A user who has asked their system for more contrast gets thicker edges, in whichever theme they
+ * are in. Two declarations, no palette: applying a whole theme from here would mean writing the
+ * entire semantic mapping a second time, because plain CSS cannot combine a media query with an
+ * attribute selector in one rule — and a palette kept in two places is the failure this layering
+ * exists to prevent. Choosing a *theme* from a preference belongs to the shell (`W12-T09`), which
+ * is where persistence and SSR are already the question.
+ */
+@media (prefers-contrast: more) {
+  :root {
+    --mp-border-width: 2px;
+    --mp-focus-ring-width: 3px;
+  }
+}

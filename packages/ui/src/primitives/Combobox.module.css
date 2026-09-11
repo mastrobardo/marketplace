@@ -6,14 +6,14 @@
 .control {
   display: flex;
   align-items: stretch;
-  border: 1px solid var(--mp-field-border);
+  border: var(--mp-border-width) solid var(--mp-field-border);
   border-radius: var(--mp-field-radius);
   background: var(--mp-field-bg);
   overflow: hidden;
 }
 
 .control:has(.input[data-focus-visible]) {
-  outline: 2px solid var(--mp-color-focus);
+  outline: var(--mp-focus-ring-width) solid var(--mp-color-focus);
   outline-offset: 2px;
 }
 
@@ -39,7 +39,7 @@
 .trigger {
   padding-inline: var(--mp-space-3);
   border: none;
-  border-inline-start: 1px solid var(--mp-field-border);
+  border-inline-start: var(--mp-border-width) solid var(--mp-field-border);
   background: transparent;
   color: var(--mp-field-fg);
   font: inherit;
@@ -48,7 +48,7 @@
 
 .popover {
   width: var(--trigger-width);
-  border: 1px solid var(--mp-listbox-border);
+  border: var(--mp-border-width) solid var(--mp-listbox-border);
   border-radius: var(--mp-listbox-radius);
   background: var(--mp-listbox-bg);
   overflow: hidden;

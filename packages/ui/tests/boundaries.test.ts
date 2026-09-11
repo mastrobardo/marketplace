@@ -53,20 +53,23 @@ describe('AC16 — every primitive is reviewable', () => {
   });
 });
 
-describe('AC18 — colour lives in the token file and nowhere else', () => {
-  const TOKENS = join(src, 'styles/tokens.css');
-  const sheets = files().filter((file) => extname(file) === '.css');
+describe('AC18 — colour lives in the token layer and nowhere else', () => {
+  // Everything under `src/styles` *is* the token layer — four files since `W12-T05`, of which the
+  // two themes are the only ones allowed to write a colour. Which of them may is `tokens.test.ts`'s
+  // question; this file's question is about the components, so it excludes the layer wholesale
+  // rather than naming one file and silently exempting the rest.
+  const TOKEN_LAYER = join(src, 'styles');
+  const sheets = files()
+    .filter((file) => extname(file) === '.css')
+    .filter((file) => !file.startsWith(TOKEN_LAYER));
 
   it('has component stylesheets, and none of them names a colour', () => {
     // `W12-T01` could only assert that the walker found `tokens.css`, because that was the only
     // stylesheet in the package. Now that component stylesheets exist, the guard is the assertion:
     // an empty list here would make the loop below pass forever.
-    expect(
-      sheets.filter((file) => file !== TOKENS).length,
-      'no component stylesheets',
-    ).toBeGreaterThan(0);
+    expect(sheets.length, 'no component stylesheets').toBeGreaterThan(0);
 
-    for (const sheet of sheets.filter((file) => file !== TOKENS)) {
+    for (const sheet of sheets) {
       const offending = readFileSync(sheet, 'utf8')
         .split('\n')
         .filter((line) => /#[0-9a-fA-F]{3,8}\b|\b(?:rgba?|hsla?)\s*\(/.test(line));
@@ -82,7 +85,7 @@ describe('AC18 — colour lives in the token file and nowhere else', () => {
   const REACT_ARIA_PROVIDED = new Set(['--trigger-width']);
 
   it('reads only the tokens the design system publishes', () => {
-    for (const sheet of sheets.filter((file) => file !== TOKENS)) {
+    for (const sheet of sheets) {
       const used = [...readFileSync(sheet, 'utf8').matchAll(/var\((--[a-z0-9-]+)/g)].map(
         (match) => match[1] ?? '',
       );

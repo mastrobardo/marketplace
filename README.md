@@ -199,9 +199,27 @@ for each.
 
 ### Colour and spacing
 
-Every design value is a `--mp-`-namespaced custom property in `src/styles/tokens.css`. A colour
-literal anywhere else fails the build, and so does a light-theme colour with no dark counterpart.
-`agent-ui` owns that file and builds `packages/ui` on top of it.
+Every design value is a `--mp-`-namespaced custom property, and they live in `packages/ui` in three
+layers (ADR-012 §3). `@marketplace/ui/tokens.css` is the one import a consumer needs; it pulls in:
+
+| Layer | File | What it holds | What may read it |
+|---|---|---|---|
+| primitive | `styles/scale.css` | the 4px scale, radii, type sizes, border and ring widths | anything |
+| primitive | `styles/themes/*.css` | the `--mp-palette-*` ramp | **that theme file only** |
+| semantic | `styles/themes/*.css` | the roles over it — `--mp-color-accent`, `--mp-font-family` | anything |
+| component | `styles/components.css` | the uses — `--mp-button-bg` | that component |
+
+Two themes ship: `default` and `contrast`. A theme is one file — a ramp, the mapping over it, a font
+pairing, and any radius or density override — selected with `[data-theme]` on the root or on any
+container. Light and dark are the other axis: `color-scheme` plus `light-dark()`, so each colour is
+written once with both values in it, `prefers-color-scheme` is the default, and `[data-scheme]`
+overrides it either way.
+
+`packages/ui/tests/tokens.test.ts` resolves the whole graph for all four `theme × scheme`
+combinations and fails the build on a colour literal outside a theme file, a component reaching for
+a palette value, a `var()` that names nothing, a role one theme has and the other does not, or a
+text pair that misses WCAG AA. `Foundations/Themes` in the workbench renders all four at once, and
+its `play` function asks a real browser whether anything actually changed.
 
 ### Adding a page
 
