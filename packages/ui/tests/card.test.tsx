@@ -42,7 +42,12 @@ describe('AC14 — a linked card is one tab stop over the whole surface', () => 
 describe('AC15 — an unlinked card is a heading and some text', () => {
   it('renders at the requested level and contains no link', () => {
     render(
-      <Card headingLevel={2} eyebrow="1" title="Dinos qué necesitas" description="Elige el servicio" />,
+      <Card
+        headingLevel={2}
+        eyebrow="1"
+        title="Dinos qué necesitas"
+        description="Elige el servicio"
+      />,
     );
 
     expect(screen.getByRole('heading', { level: 2 }).textContent).toContain('Dinos qué necesitas');

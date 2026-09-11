@@ -192,7 +192,9 @@ describe('AC9..AC11 — the rest of the page, and the way out of it', () => {
       expect(screen.getByRole('heading', { level: 1 }).textContent).toBe(en['home.title']);
     });
 
-    const cta = within(region(en['home.pro.title'])).getByRole('link', { name: en['home.pro.cta'] });
+    const cta = within(region(en['home.pro.title'])).getByRole('link', {
+      name: en['home.pro.cta'],
+    });
     expect(cta.getAttribute('href')).toBe('/en/become-a-pro');
   });
 });

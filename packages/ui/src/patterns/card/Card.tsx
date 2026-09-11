@@ -53,9 +53,7 @@ export function Card({
 
   return (
     <div className={cx(styles['card'], renderLink ? styles['linked'] : undefined)}>
-      {eyebrow === undefined ? null : (
-        <p className={cx(styles['eyebrow'])}>{eyebrow}</p>
-      )}
+      {eyebrow === undefined ? null : <p className={cx(styles['eyebrow'])}>{eyebrow}</p>}
       <Heading className={cx(styles['title'])}>
         {renderLink ? renderLink({ className: styles['link'] ?? '', children: title }) : title}
       </Heading>

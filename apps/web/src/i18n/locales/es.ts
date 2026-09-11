@@ -55,7 +55,8 @@ export const es = {
   'pro.benefits.control.title': 'Tú decides',
   'pro.benefits.control.body': 'Aceptas lo que te encaja y rechazas lo demás, sin penalización.',
   'pro.benefits.payment.title': 'Cobro garantizado',
-  'pro.benefits.payment.body': 'El cliente paga por la plataforma antes de que empieces el trabajo.',
+  'pro.benefits.payment.body':
+    'El cliente paga por la plataforma antes de que empieces el trabajo.',
   'pro.pending': 'El registro de profesionales todavía no está abierto.',
 
   'notFound.title': 'Página no encontrada',

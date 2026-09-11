@@ -17,7 +17,8 @@ export const en = {
     'Renovations, home maintenance and emergency call-outs, with verified professionals near you.',
 
   'home.categories.title': 'All services',
-  'home.categories.intro': 'Every service is a search already started — pick one and tell us where.',
+  'home.categories.intro':
+    'Every service is a search already started — pick one and tell us where.',
 
   'home.how.title': 'How it works',
   'home.how.search.title': 'Tell us what you need',
