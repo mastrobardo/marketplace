@@ -185,7 +185,10 @@ describe('AC20..AC21 — gone, and broken, are different pages', () => {
     expect(await screen.findByTestId('provider-not-found')).toBeDefined();
     // The uuid check is `ProviderIdSchema`, shared with the endpoint. A round trip to be told what
     // the client already knew is a request that should never leave.
-    expect(getProvider, 'the endpoint was called for an id that cannot be valid').not.toHaveBeenCalled();
+    expect(
+      getProvider,
+      'the endpoint was called for an id that cannot be valid',
+    ).not.toHaveBeenCalled();
   });
 
   it('AC21 — a failing endpoint is the route boundary, with a retry that works', async () => {

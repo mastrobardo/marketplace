@@ -142,7 +142,8 @@ export const en = {
   'provider.cta.body':
     'Client accounts are not open yet, so there is no way to get in touch from here for now.',
   'provider.notFound.title': 'This professional is no longer listed',
-  'provider.notFound.body': 'They may have taken their profile down, or the link may be an old one.',
+  'provider.notFound.body':
+    'They may have taken their profile down, or the link may be an old one.',
   'provider.notFound.search': 'Search for professionals',
   'provider.error.body': 'We could not load this profile. Please try again in a moment.',
 

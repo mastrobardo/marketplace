@@ -40,7 +40,9 @@ function profile(overrides: Partial<ProviderProfile> = {}): ProviderProfile {
 }
 
 /** Parse a row with an extra key without asking TypeScript to believe the key belongs. */
-function parseWith(extra: Record<string, unknown>): ReturnType<typeof ProviderProfileSchema.safeParse> {
+function parseWith(
+  extra: Record<string, unknown>,
+): ReturnType<typeof ProviderProfileSchema.safeParse> {
   return ProviderProfileSchema.safeParse({ ...profile(), ...extra });
 }
 
@@ -122,9 +124,9 @@ describe('AC7 — the service radius restates the column CHECK', () => {
   });
 
   it.each([0, -1, SERVICE_RADIUS_MAX_METRES + 1])('refuses %d', (metres) => {
-    expect(
-      ProviderProfileSchema.safeParse(profile({ serviceRadiusMetres: metres })).success,
-    ).toBe(false);
+    expect(ProviderProfileSchema.safeParse(profile({ serviceRadiusMetres: metres })).success).toBe(
+      false,
+    );
   });
 
   it('accepts the maximum itself', () => {

@@ -1,5 +1,11 @@
 import { type ReactElement, useId } from 'react';
-import { Link, isRouteErrorResponse, useLoaderData, useRevalidator, useRouteError } from 'react-router';
+import {
+  Link,
+  isRouteErrorResponse,
+  useLoaderData,
+  useRevalidator,
+  useRouteError,
+} from 'react-router';
 import type { LoaderFunctionArgs } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { AuthWall, EmptyState } from '@marketplace/ui';
@@ -183,10 +189,7 @@ export function ErrorBoundary(): ReactElement {
   if (isRouteErrorResponse(error) && error.status === 404) {
     return (
       <div data-testid="provider-not-found">
-        <EmptyState
-          title={t('provider.notFound.title')}
-          description={t('provider.notFound.body')}
-        >
+        <EmptyState title={t('provider.notFound.title')} description={t('provider.notFound.body')}>
           <p>
             <Link to={`/${locale}/search`}>{t('provider.notFound.search')}</Link>
           </p>

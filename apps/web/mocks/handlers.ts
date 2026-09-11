@@ -83,17 +83,12 @@ export const handlers = [
 
     if (!id.success) {
       return HttpResponse.json(
-        errorEnvelope(
-          'VALIDATION_FAILED',
-          'The provider id is not a uuid.',
-          crypto.randomUUID(),
-          {
-            issues: id.error.issues.map((issue) => ({
-              path: 'id',
-              message: issue.message,
-            })),
-          },
-        ),
+        errorEnvelope('VALIDATION_FAILED', 'The provider id is not a uuid.', crypto.randomUUID(), {
+          issues: id.error.issues.map((issue) => ({
+            path: 'id',
+            message: issue.message,
+          })),
+        }),
         { status: 400 },
       );
     }
