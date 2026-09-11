@@ -80,9 +80,20 @@ services:
   #
   # Image note: pinned to the last release that still ships the full web console. Later community
   # releases removed it, and being able to look at a bucket is most of the value locally.
+  #
+  # Registry note: **not Docker Hub.** `minio/minio` and `minio/mc` were removed from Docker Hub —
+  # the repositories, not just these tags — and every `pnpm stack:up` since answers
+  # `pull access denied for minio/minio, repository does not exist or may require 'docker login'`.
+  # That message is Docker's single wording for "gone" and "unauthorised" both, which is why it
+  # reads like a credentials problem and is not one. quay.io is MinIO's own registry and carries
+  # the identical tags.
+  #
+  # Both images are pinned by tag **and** digest. The tag is what a human reads; the digest is what
+  # actually resolves, so a tag that is deleted or re-pointed fails the pull loudly instead of
+  # quietly starting a different MinIO. A public image disappearing is no longer hypothetical here.
   # ---------------------------------------------------------------------------------------------
   objects:
-    image: minio/minio:RELEASE.2025-04-22T22-12-26Z
+    image: quay.io/minio/minio:RELEASE.2025-04-22T22-12-26Z@sha256:a1ea29fa28355559ef137d71fc570e508a214ec84ff8083e39bc5428980b015e
     restart: unless-stopped
     command: server /data --console-address ":9001"
     environment:
@@ -105,7 +116,7 @@ services:
   # because the container is expected to stop with exit code 0.
   # ---------------------------------------------------------------------------------------------
   objects-init:
-    image: minio/mc:RELEASE.2025-04-16T18-13-26Z
+    image: quay.io/minio/mc:RELEASE.2025-04-16T18-13-26Z@sha256:aead63c77f9db9107f1696fb08ecb0faeda23729cde94b0f663edf4fe09728e3
     depends_on:
       objects:
         condition: service_healthy
