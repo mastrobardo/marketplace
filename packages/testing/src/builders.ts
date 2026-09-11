@@ -11,6 +11,7 @@ export type UserRole = 'CLIENT' | 'PROVIDER' | 'ADMIN';
 export type UserStatus = 'ACTIVE' | 'SUSPENDED' | 'DELETED';
 export type ProviderKind = 'MANITAS' | 'PRO';
 export type Locale = 'ES' | 'EN';
+export type ActorType = 'USER' | 'SYSTEM';
 
 export interface UserInput {
   id: string;
@@ -174,6 +175,22 @@ export function buildCategory(overrides: Partial<CategoryInput> = {}): CategoryI
   };
 }
 
+export interface AuditRecordInput {
+  id: string;
+  /// The machine's name — `booking`, `job`. Text, not an enum, per the schema.
+  entity: string;
+  entityId: string;
+  action: string;
+  fromState: string;
+  toState: string;
+  actorType: ActorType;
+  /// Nullable by design: the schema keeps no foreign key, so that GDPR erasure can hard-delete a
+  /// user without erasing the ledger of what they did.
+  actorId: string | null;
+  metadata: Record<string, unknown> | null;
+  at: Date;
+}
+
 export function buildProviderCategory(
   overrides: Partial<ProviderCategoryInput> = {},
 ): ProviderCategoryInput {
@@ -181,6 +198,40 @@ export function buildProviderCategory(
     providerProfileId: nextId('ProviderProfile'),
     categoryId: nextId('Category'),
     createdAt: nextAt(),
+    ...overrides,
+  };
+}
+
+/**
+ * A row of the state-machine ledger.
+ *
+ * The default is the shape most tests want: a booking that moved on, recorded by the system. The
+ * `entity`/`action`/`fromState`/`toState` quartet is free text in the schema on purpose (`W1-T05`
+ * §8.2) — an enum there would list every state of every slice — so a test that cares about a
+ * specific machine overrides all four and gets a row that machine would recognise.
+ *
+ * `at` comes from the sequence rather than from a column default: the schema deliberately has no
+ * default, so that there is one source of truth for when a transition happened.
+ */
+export function buildAuditRecord(overrides: Partial<AuditRecordInput> = {}): AuditRecordInput {
+  return {
+    id: nextId('AuditRecord'),
+    entity: 'booking',
+    // The subject's id, and deliberately *not* from `nextId('AuditRecord')` — that would read as
+    // "audit record #2" in a failure message when it means "the booking this is about". There is no
+    // `Booking` table yet (`W1-T05` shipped six tables and it is not among them), so the default is
+    // a placeholder on its own sequence, with a zero prefix that says "not a seeded entity". A test
+    // with a real subject passes its id.
+    entityId: `00000000-0000-4000-8000-${nextOrdinal('AuditRecord.entity').toString(16).padStart(12, '0')}`,
+    action: 'PAYMENT_CAPTURED',
+    fromState: 'PENDING',
+    toState: 'PAID',
+    // SYSTEM, not USER: the ledger's commonest author is the state machine itself, and a test that
+    // cares who acted should have to say so.
+    actorType: 'SYSTEM',
+    actorId: null,
+    metadata: null,
+    at: nextAt(),
     ...overrides,
   };
 }

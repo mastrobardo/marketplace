@@ -11,12 +11,14 @@
  */
 import {
   buildAddress,
+  buildAuditRecord,
   buildCategory,
   buildClientProfile,
   buildProviderCategory,
   buildProviderProfile,
   buildUser,
   type AddressInput,
+  type AuditRecordInput,
   type CategoryInput,
   type ClientProfileInput,
   type ProviderCategoryInput,
@@ -35,6 +37,7 @@ export interface FactoryClient {
   address: CreateDelegate<AddressInput>;
   category: CreateDelegate<CategoryInput>;
   providerCategory: CreateDelegate<ProviderCategoryInput>;
+  auditRecord: CreateDelegate<AuditRecordInput>;
 }
 
 export async function createUser(
@@ -96,4 +99,24 @@ export async function createProviderCategory(
   return client.providerCategory.create({
     data: buildProviderCategory({ ...overrides, providerProfileId, categoryId }),
   });
+}
+
+/**
+ * Persist a row of the state-machine ledger.
+ *
+ * **For a test that needs history to already exist** — an audit view, a page of transitions, an
+ * export. A test *of* a transition asserts on what `transition()` wrote, never on a row this
+ * fabricated: `W1-T07`'s guarantee is that production code cannot change state without recording
+ * it, and a fixture that forges a record proves nothing about that. The law constrains the
+ * application, not the setup of a test that needs a ledger to read.
+ *
+ * No parent is created. `AuditRecord` has no foreign key by design (`W1-T05` §8.2: GDPR erasure
+ * must be able to hard-delete a user without erasing what they did), so there is nothing to
+ * auto-create and `entityId` points wherever the caller says.
+ */
+export async function createAuditRecord(
+  client: FactoryClient,
+  overrides: Partial<AuditRecordInput> = {},
+): Promise<AuditRecordInput> {
+  return client.auditRecord.create({ data: buildAuditRecord(overrides) });
 }

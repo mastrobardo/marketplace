@@ -6,12 +6,14 @@ import { fileURLToPath } from 'node:url';
 import {
   ID_PREFIXES,
   buildAddress,
+  buildAuditRecord,
   buildCategory,
   buildClientProfile,
   buildProviderCategory,
   buildProviderProfile,
   buildUser,
   createAddress,
+  createAuditRecord,
   createCategory,
   createClientProfile,
   createProviderCategory,
@@ -36,6 +38,7 @@ const BUILDERS = {
   Address: buildAddress,
   Category: buildCategory,
   ProviderCategory: buildProviderCategory,
+  AuditRecord: buildAuditRecord,
 } as const;
 
 const CREATORS = {
@@ -45,6 +48,7 @@ const CREATORS = {
   Address: createAddress,
   Category: createCategory,
   ProviderCategory: createProviderCategory,
+  AuditRecord: createAuditRecord,
 } as const;
 
 /**
@@ -68,6 +72,7 @@ function fakeClient(): FactoryClient & { calls: { model: string; data: unknown }
     address: delegate('address'),
     category: delegate('category'),
     providerCategory: delegate('providerCategory'),
+    auditRecord: delegate('auditRecord'),
   } as FactoryClient & { calls: { model: string; data: unknown }[] };
 }
 
@@ -341,6 +346,20 @@ describe('AC10 — every model in the schema has a factory', () => {
 
 describe('AC11..AC13 — the factories write what the builders built', () => {
   beforeEach(resetFactories);
+
+  it('createAuditRecord issues one auditRecord.create and creates no parent', async () => {
+    // No parent, deliberately: `AuditRecord` has no foreign key (W1-T05 §8.2 — GDPR erasure must be
+    // able to hard-delete a user without erasing what they did), so unlike every other factory here
+    // this one writes exactly one row. The count is the assertion.
+    const client = fakeClient();
+    const created = await createAuditRecord(client, { action: 'REFUND_ISSUED' });
+
+    expect(client.calls).toHaveLength(1);
+    expect(client.calls[0]?.model).toBe('auditRecord');
+    expect(client.calls[0]?.data).toEqual(created);
+    expect(created.action).toBe('REFUND_ISSUED');
+    expect(created.actorId).toBeNull();
+  });
 
   it('AC11 — createUser issues exactly one user.create with the built row', async () => {
     const client = fakeClient();
