@@ -1,0 +1,147 @@
+# W12-T16 — the nightly visual regression run, and the axe pass over the real routes.
+#
+# ADR-012 §6 chose this shape over a hosted visual-testing service: Chromatic is the obvious tool
+# and it is a fifth vendor with a snapshot quota, on a stack deliberately kept to four services.
+# The accepted cost is that baselines are renderer- and OS-dependent, so they are generated **only**
+# inside this container image — `packages/ui/visual/fingerprint.json` is that rule as a check
+# rather than as a comment.
+#
+# Nightly, not per-PR, also by ADR. A per-PR screenshot job doubles CI minutes and turns every
+# legitimate design change into a red required check; the per-PR gates stay the ones that measure
+# constraints. Note that `ci.yml` is untouched by this ticket, and its read-only token with it.
+
+name: nightly-visual
+
+on:
+  schedule:
+    # 03:17 UTC. Not on the hour: GitHub's scheduler queues heavily at :00 and a nightly that starts
+    # forty minutes late is a nightly whose logs nobody correlates with anything.
+    - cron: '17 3 * * *'
+  # So it can be run on demand rather than waiting a day to test a change to it.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nightly-visual
+  cancel-in-progress: false
+
+jobs:
+  visual:
+    name: visual
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+
+    # Pinned by digest, not by tag. A tag can be rebuilt with different fonts, which would silently
+    # invalidate every committed baseline and read as 74 regressions on an unchanged tree. The
+    # digest is also half of `fingerprint.json`, so a drift between this line and that file fails
+    # the run instead of producing mystery diffs.
+    container:
+      image: mcr.microsoft.com/playwright:v1.63.0-noble@sha256:eff16c30e6f3f4af0a03fa4b706120d5e9b0891c344a27d64559aff5900a4a27
+
+    env:
+      VISUAL_IMAGE: mcr.microsoft.com/playwright:v1.63.0-noble
+      VISUAL_IMAGE_DIGEST: sha256:eff16c30e6f3f4af0a03fa4b706120d5e9b0891c344a27d64559aff5900a4a27
+
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+
+      # `turbo`, not `pnpm --filter`: the latter does not build the workspace packages an app
+      # imports, which is how a deploy job failed on a clean checkout while every local build passed
+      # (MEM-2026-09-11-19).
+      - name: Build the workbench
+        run: pnpm turbo run build --filter=@marketplace/ui
+      - run: pnpm --filter @marketplace/ui build:storybook
+
+      # VITE_ENABLE_MOCKS, because `GET /categories` is still `W3-T01` and without it every page
+      # renders its degraded shape — the axe pass would then cover the empty variant of each one.
+      # VITE_ENABLE_FAULT_ROUTES, because `W12-T09` correctly made the 500 page unreachable and this
+      # is the only build in which it has a URL (spec §10 Q1).
+      - name: Build the storefront
+        run: pnpm turbo run build --filter=@marketplace/web
+        env:
+          VITE_ENABLE_MOCKS: 'true'
+          VITE_ENABLE_FAULT_ROUTES: 'true'
+
+      - name: Serve the storefront
+        run: |
+          pnpm --filter @marketplace/web exec vite preview --port 4173 --host 127.0.0.1 &
+          npx --yes wait-on@8 http://127.0.0.1:4173 --timeout 60000
+
+      - name: Screenshots and axe
+        run: pnpm --filter @marketplace/ui exec playwright test
+        env:
+          WEB_BASE_URL: http://127.0.0.1:4173
+
+      # `expected`, `actual` and `diff` for every failure — the whole point of the run is that a
+      # human can decide in seconds whether the change was intended, and that needs the images.
+      - name: Upload the diffs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: visual-diffs
+          path: |
+            packages/ui/visual-results
+            packages/ui/visual-report
+          retention-days: 14
+
+      # Read by the reporting job, which runs outside the container because `gh` is not in the
+      # Playwright image.
+      - name: Save the report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: visual-report-json
+          path: packages/ui/visual-results/report.json
+          if-no-files-found: ignore
+          retention-days: 14
+
+  report:
+    name: report
+    needs: visual
+    # `always()`, because the case worth reporting is precisely the one where `visual` failed.
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+
+    # The one place this workflow needs more than read. It is also why baseline regeneration lives
+    # in its own file: that needs `contents: write` too, and widening this job to cover both would
+    # hand the nightly a token it has no use for.
+    permissions:
+      contents: read
+      issues: write
+
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: visual-report-json
+          path: packages/ui/visual-results
+        continue-on-error: true
+
+      # One issue, updated while it stays broken, closed when it clears. A cron that opens a fresh
+      # issue every red night is a cron whose notifications get muted in a week — at which point the
+      # gate is decorative, which is the same dishonesty as failing open, arrived at socially.
+      - name: Open, update or close the issue
+        run: >
+          pnpm tsx packages/ui/visual/report-cli.ts
+          --results packages/ui/visual-results/report.json
+          --run-url ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

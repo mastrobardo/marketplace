@@ -138,13 +138,22 @@ describe('W12-T16 AC10/Q4 — the flake mitigations are configuration, so assert
     expect(VISUAL_CONFIG.expect.toHaveScreenshot.animations).toBe('disabled');
   });
 
-  it('allows a small non-zero pixel budget, and a small one', () => {
-    const allowed = VISUAL_CONFIG.expect.toHaveScreenshot.maxDiffPixelRatio;
+  it('budgets differing pixels absolutely, not as a ratio of the image', () => {
+    const config: Record<string, unknown> = VISUAL_CONFIG.expect.toHaveScreenshot;
 
+    // The ratio form is what this originally used and it is a trap: 0.001 reads as "a thousandth"
+    // and is 1,024 pixels on a 1280×800 shot, which is twice what the AC19 probe actually moves.
+    // The gate passed a real regression while looking strict. Asserted so it cannot come back.
+    expect(
+      config['maxDiffPixelRatio'],
+      'a ratio budget scales with the viewport — use a count',
+    ).toBeUndefined();
+
+    const allowed = config['maxDiffPixels'] as number;
     expect(allowed).toBeGreaterThan(0);
-    // Q4: if the run is flaky, the correct response is to shrink the pinned list, not to raise this
-    // until it is green. A ceiling in a test is how that stays true under deadline pressure.
-    expect(allowed).toBeLessThanOrEqual(0.002);
+    // The probe moves 511 pixels; anti-aliasing noise is single digits. The ceiling has to sit well
+    // below the former. Q4: if the run is flaky, shrink the pinned list rather than raising this.
+    expect(allowed).toBeLessThanOrEqual(100);
   });
 
   it('pins a fixed viewport and scale, because a baseline is only valid for one', () => {

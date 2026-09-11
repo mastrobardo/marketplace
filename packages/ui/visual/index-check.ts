@@ -24,7 +24,23 @@ export interface IndexDiff {
 }
 
 export function diffAgainstIndex(subjects: readonly Subject[], index: StorybookIndex): IndexDiff {
-  const derived = new Set(subjects.map((s) => s.id));
+  return diffIdsAgainstIndex(
+    subjects.map((s) => s.id),
+    index,
+  );
+}
+
+/**
+ * The same comparison against a bare list of ids.
+ *
+ * The nightly cannot use the module derivation — `import.meta.glob` is a Vite feature and Playwright
+ * does not run through Vite — so it compares the *pinned list* against the index instead. Together
+ * with the per-PR assertion that the pinned list equals the module derivation, that gives the
+ * property §4.1 actually wanted: derivation == pinned == index, checked in the two places each
+ * comparison is cheap.
+ */
+export function diffIdsAgainstIndex(ids: readonly string[], index: StorybookIndex): IndexDiff {
+  const derived = new Set(ids);
   const indexed = new Set(
     Object.entries(index.entries)
       .filter(([, entry]) => (entry.type ?? 'story') === 'story')
