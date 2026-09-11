@@ -131,3 +131,55 @@ body {
   color: var(--mp-color-text);
   font: inherit;
 }
+
+/* W12-T09 — the compact search sits between the brand and the nav, and is the first thing to wrap.
+   It is given a max width rather than a fixed one so the header degrades to a stack on a phone
+   without the search box becoming the whole viewport. */
+.mp-header__search {
+  flex: 1 1 20rem;
+  min-width: 0;
+  max-width: 32rem;
+}
+
+.mp-footer__nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--mp-space-4, 1rem);
+  margin-block-end: var(--mp-space-3, 0.75rem);
+}
+
+.mp-footer__rights {
+  margin: 0;
+}
+
+/* The language switcher is a list of links now, not a select. `list-style: none` needs the
+   `role="list"` that browsers strip with it — but this list is labelled and inside a nav, and the
+   axe gate checks the landmark, so the visual reset is safe here. */
+.mp-language__list {
+  display: flex;
+  gap: var(--mp-space-2, 0.5rem);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.mp-language__label {
+  margin-inline-end: var(--mp-space-2, 0.5rem);
+}
+
+.mp-language a.is-current {
+  font-weight: 600;
+  text-decoration: underline;
+}
+
+@media (max-width: 48rem) {
+  .mp-header__inner {
+    flex-wrap: wrap;
+  }
+
+  .mp-header__search {
+    order: 3;
+    flex-basis: 100%;
+    max-width: none;
+  }
+}

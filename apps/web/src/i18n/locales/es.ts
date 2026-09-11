@@ -27,6 +27,41 @@ export const es = {
   'language.es': 'Español',
   'language.en': 'English',
 
+  'nav.search': 'Buscar',
+  'nav.primary': 'Principal',
+  'nav.legal': 'Legal',
+
+  'search.submit': 'Buscar',
+  'search.expand': 'Abrir el buscador',
+  'search.label': 'Buscar profesionales',
+  'search.what.label': 'Servicio',
+  'search.what.placeholder': '¿Qué necesitas?',
+  'search.what.empty': 'No hay servicios que coincidan',
+  'search.where.label': 'Dónde',
+  'search.where.placeholder': 'Código postal o ciudad',
+  'search.where.empty': 'Escribe tu código postal',
+  'search.where.required': 'Dinos dónde necesitas el servicio',
+  'search.when.label': 'Cuándo',
+  'search.when.placeholder': 'Cuando sea',
+  'search.when.urgente': 'Es una urgencia',
+  'search.when.hoy': 'Hoy',
+  'search.when.semana': 'Esta semana',
+  'search.when.flexible': 'Sin prisa',
+  'search.mode.label': 'Cómo',
+  'search.mode.placeholder': 'Como prefieras',
+  'search.mode.quote': 'Pedir presupuesto',
+  'search.mode.booking': 'Reservar directamente',
+
+  'legal.terms.title': 'Términos y condiciones',
+  'legal.privacy.title': 'Política de privacidad',
+  'legal.cookies.title': 'Política de cookies',
+  'legal.pending':
+    'Este documento todavía no está publicado. Lo redacta un abogado y se publicará antes del lanzamiento.',
+
+  'error.title': 'Algo ha fallado',
+  'error.body': 'No hemos podido cargar esta página. Vuelve a intentarlo en un momento.',
+  'error.retry': 'Reintentar',
+
   'footer.rights': 'Todos los derechos reservados',
 } as const;
 

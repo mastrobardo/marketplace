@@ -1,18 +1,17 @@
 import react from '@vitejs/plugin-react';
-import { defineConfig, type Plugin } from 'vite';
+import { defineConfig, loadEnv, type Plugin } from 'vite';
 
 /**
- * Replace the MSW entry point with a no-op in any production build.
+ * Replace the MSW entry point with a no-op.
  *
- * `src/main.tsx` already guards the import with `import.meta.env.DEV`, and that guard is not enough:
- * Rollup resolves a dynamic import while building the module graph, before the `false` branch is
- * minified away, so the chunk is emitted **and referenced** by the entry. Measured, not assumed —
- * `W12-T08` AC17 failed on exactly this, with 511 KB of MSW and the seeded provider catalogue in
- * `dist/assets/browser-*.js`.
+ * `src/main.tsx` already guards the import, and that guard is not enough on its own: Rollup resolves
+ * a dynamic import while building the module graph, before the dead branch is minified away, so the
+ * chunk is emitted **and referenced** by the entry. Measured, not assumed — `W12-T08` AC17 failed on
+ * exactly this, with 511 KB of MSW and the seeded provider catalogue in `dist/assets/browser-*.js`.
  *
  * A guard that depends on a bundler's dead-code elimination is a hope. This is the graph edge not
- * existing: in a production build the module resolves to two empty exports, so there is nothing for
- * Rollup to follow and nothing for it to emit.
+ * existing: the module resolves to two empty exports, so there is nothing to follow and nothing to
+ * emit.
  */
 function stripMocks(): Plugin {
   const STUB = '\0mp:mocks-stub';
@@ -31,8 +30,21 @@ function stripMocks(): Plugin {
   };
 }
 
-export default defineConfig(({ mode }) => ({
-  plugins: [react(), ...(mode === 'production' ? [stripMocks()] : [])],
-  server: { host: '127.0.0.1', port: 5173 },
-  build: { outDir: 'dist', sourcemap: true },
-}));
+export default defineConfig(({ mode }) => {
+  // Read through `loadEnv` rather than `process.env` so the flag resolves the same way here as it
+  // does inside `main.tsx`: one source, so the plugin cannot strip a module the app still imports.
+  const env = loadEnv(mode, process.cwd(), 'VITE_');
+
+  /**
+   * A preview or staging deploy keeps its mocks, because ADR-011 §4's "the storefront does not wait
+   * for them" is only true if the deployed storefront actually has them. The production release
+   * never sets this, so `W1-T09`'s factories cannot reach a real user.
+   */
+  const withMocks = env['VITE_ENABLE_MOCKS'] === 'true';
+
+  return {
+    plugins: [react(), ...(mode === 'production' && !withMocks ? [stripMocks()] : [])],
+    server: { host: '127.0.0.1', port: 5173 },
+    build: { outDir: 'dist', sourcemap: true },
+  };
+});

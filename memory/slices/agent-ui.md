@@ -271,3 +271,127 @@ Keep it to facts that changed how you would work. Task-specific detail stays in 
 - **evidence**: `packages/contracts/src/search.ts`;
   `docs/specs/S10/W12-T08-search-contract.md` §Q4
 - **status**: active
+
+### An error boundary belongs at the level that actually failed
+- **id**: MEM-2026-09-11-16
+- **scope**: slice:S10
+- **fact**: `W12-T09` gives `legal/:doc` its own `ErrorBoundary` instead of letting its 404 reach the
+  root. At the root, a mistyped `/es/legal/nonsense` unmounted the shell — header, compact search and
+  footer gone — even though the shell's loader had succeeded. The root boundary is now reserved for
+  the case where the shell itself threw (unknown `:lang`, categories request failed).
+- **why**: A boundary re-renders from its own level down. Put it above the thing that failed and you
+  discard working UI; put it *at* the thing that failed and the rest of the page survives.
+- **apply**: Every route whose loader can throw a recoverable error gets its own `ErrorBoundary`.
+  Also: a `throw new Response(…, { status: 404 })` is only a route error **from a loader** — thrown
+  during render it is a React error that unmounts the tree, so route-param validation goes in the
+  loader. And distinguish 404 from 500 in the boundary: "this will never exist" and "try again" are
+  different advice, and only the 500 gets a retry button.
+- **evidence**: `apps/web/src/routes/legal.tsx`; `apps/web/src/routes/root.tsx`;
+  `apps/web/tests/routing.test.tsx` AC7/AC8
+- **status**: active
+
+### `/:lang` matches anything, so an unknown language is a soft 404
+- **id**: MEM-2026-09-11-17
+- **scope**: slice:S10
+- **fact**: With the shell mounted at `/:lang`, `/nope` rendered the **Spanish home page at someone
+  else's URL**, HTTP 200. The shell's loader now throws a 404 for a segment that is not a known
+  locale. A sibling `path: '*'` does *not* fix this — it is unreachable beneath `/:lang`.
+- **why**: A soft 404 is invisible to every check except a human reading the address bar.
+- **apply**: Any route with a leading dynamic segment must validate it in the loader. Never add an
+  unreachable catch-all to "handle" it — an unreachable route reads as handled and is worse than
+  absent. Related: the SPA still answers 200 for *every* path including real 404s (measured with
+  curl); a true status needs `W12-T14`'s SSR switch, and it is noted on that ticket.
+- **evidence**: `apps/web/src/routes/root.tsx` loader; `apps/web/src/app/routes.tsx`;
+  `docs/specs/S10/W12-T09-public-shell.md` §10 Q2
+- **status**: active
+
+### A `waitFor` whose condition is already true tests nothing
+- **id**: MEM-2026-09-11-18
+- **scope**: slice:S10
+- **fact**: `W12-T09` AC5 clicked the English link then waited on `data-doc === 'terms'` — already
+  true before the click, because the test starts on `/es/legal/terms`. The wait resolved instantly
+  and the heading assertion raced i18next, which changes language in an effect one tick after the
+  route renders. Passed locally every time, failed in CI.
+- **why**: The `waitFor` looked like synchronisation and was a no-op. This class of test does not
+  fail on the machine that wrote it; it fails on the slowest machine in the fleet.
+- **apply**: Wait for the thing that *changes*, never for something already satisfied by the
+  starting state. In this app that usually means the translated text, not a `data-` attribute or a
+  route param. Related: there is a real one-tick window where the URL says `/en` and the text is
+  still Spanish — the i18next singleton, `W12-T14`'s debt.
+- **evidence**: `apps/web/tests/routing.test.tsx` AC5;
+  `docs/specs/S10/W12-T09-public-shell.run.md` §5
+- **status**: active
+
+### `pnpm --filter <app> build` does not build the workspace packages the app imports
+- **id**: MEM-2026-09-11-19
+- **scope**: slice:S10
+- **fact**: `deploy-preview.yml` and `deploy-staging.yml` built the web app with
+  `pnpm --filter @marketplace/web build`. When `W12-T09` made `apps/web` a **runtime** consumer of
+  `@marketplace/contracts` (which resolves to `dist/`), the deploy job failed with *"Rolldown failed
+  to resolve import"* while every local build passed — `dist/` existed locally because something had
+  built it earlier. Both workflows now use `pnpm turbo run build --filter=…`.
+- **why**: `turbo.json`'s `build` declares `dependsOn: ["^build"]`; `pnpm --filter` has no such
+  notion. The failure is invisible until a clean checkout, so it lands in CI, never in review.
+- **apply**: Any CI step that builds one workspace package goes through `turbo`, not `pnpm --filter`.
+  And when adding the first runtime dependency from an app to a built package, verify by deleting
+  that package's `dist/` and building from clean — do not reason about it.
+- **evidence**: `.github/workflows/deploy-preview.yml`; `.github/workflows/deploy-staging.yml`;
+  `docs/specs/S10/W12-T09-public-shell.run.md` §7
+- **status**: active
+
+### The axe gate covers stories, and the shell is not a story
+- **id**: MEM-2026-09-11-20
+- **scope**: slice:S10
+- **fact**: `W12-T04` runs axe through `@storybook/addon-vitest`, so it only ever sees what has a
+  story file. The shell `W12-T09` built — skip link, landmark set, the header's compact search, the
+  language switcher, the 404 and the 500 — has **no automated a11y coverage**. It is an application
+  composition, not a component: making it a story would mean mounting the router and a `QueryClient`
+  inside Storybook. Agreed with the operator on 2026-09-11 and written into **`W12-T16`**, which
+  already stands up Playwright: the axe pass goes over the real routes (`/es`, `/en`, a legal slot,
+  404, 500).
+- **why**: "We have an axe gate" reads as "accessibility is covered", and the gap is exactly the part
+  every page inherits — a broken skip link or a duplicated unnamed landmark is wrong on all of them
+  at once. `shell.test.tsx` AC11 checks landmark presence and name-uniqueness by hand, which catches
+  those two and nothing else.
+- **apply**: When adding a11y coverage for anything that is not a single component, it goes in the
+  Playwright pass, not Storybook. And do not read `W12-T04` as full a11y coverage — state which
+  surface a gate actually covers.
+- **evidence**: `TODO.md` `W12-T16`; `docs/specs/S10/W12-T09-public-shell.md` §9;
+  `apps/web/tests/shell.test.tsx` AC11
+- **status**: active
+
+### A deployed page may not hard-depend on an endpoint that does not exist
+- **id**: MEM-2026-09-11-21
+- **scope**: slice:S10
+- **fact**: `W12-T09`'s shell loader awaited `GET /categories` without a fallback. The endpoint is
+  `W3-T01` and does not exist, so on the preview deploy it 404'd, the loader rejected, the root
+  boundary caught it, and **the whole storefront was the 500 page** — over one empty dropdown. The
+  loader now degrades to `[]`; `what` is optional in `SearchQuerySchema` and `where`/`when`/`mode`
+  need no endpoint, so the search bar still works.
+- **why**: Operator rule, stated 2026-09-11: *"only working apps should be deployed."* A page that
+  cannot render without a missing endpoint is not shippable, and no unit test noticed — every one of
+  them stubbed the API successfully.
+- **apply**: A loader either mocks what does not exist or degrades without it, and there is a test
+  for the degraded path. Never a bare `await` on an endpoint that is still in the backlog. Second
+  trap from the same incident: `W12-T08`'s `stripMocks` fires on `mode === 'production'`, which
+  includes *preview* — combined with a real `VITE_API_URL`, that deploy had neither a real endpoint
+  nor a mocked one. `VITE_ENABLE_MOCKS=true` is now set for preview and staging and never for the
+  production release.
+- **evidence**: `apps/web/src/routes/root.tsx` loader; `apps/web/vite.config.ts`;
+  `.github/workflows/deploy-preview.yml`; `routing.test.tsx` AC8a/b; `mocks.test.ts` AC19
+- **status**: active
+
+### Asserting only the absence of something lets its absence go unnoticed
+- **id**: MEM-2026-09-11-22
+- **scope**: slice:S10
+- **fact**: `W12-T08` AC17 asserts the production bundle contains no MSW and no factory data. It
+  passes just as happily when the mocks are *never* bundled at all — which is exactly what happened
+  on the `W12-T09` preview. AC19 now asserts the other half: with `VITE_ENABLE_MOCKS=true`, the
+  worker and the seeded catalogue **are** in the bundle.
+- **why**: A one-sided assertion about a flag only tests one of its two states, and the untested
+  state is the one that ships broken.
+- **apply**: Any build flag with two meaningful outcomes gets a test per outcome. Both build tests
+  are slow (~20 s each) and both are worth it — they are the only checks that look at what Rollup
+  actually emitted rather than at what the source says.
+- **evidence**: `apps/web/tests/mocks.test.ts` AC17 + AC19
+- **status**: active

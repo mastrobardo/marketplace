@@ -25,6 +25,11 @@ const ALLOWED = new Set([
   'loader',
   'action',
   'ErrorBoundary',
+  // `W12-T09`: what the router renders while a loader is in flight. R1 names `ErrorBoundary` and
+  // `meta` as the "where relevant" exports and predates this one, but it is the same kind of thing —
+  // a component the *router* calls, not application code the route is leaking. Without it React
+  // Router warns and renders nothing during hydration, which is a blank page on a cold load.
+  'HydrateFallback',
   'meta',
   'handle',
   'shouldRevalidate',

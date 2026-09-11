@@ -24,5 +24,40 @@ export const en = {
   'language.es': 'Español',
   'language.en': 'English',
 
+  'nav.search': 'Search',
+  'nav.primary': 'Primary',
+  'nav.legal': 'Legal',
+
+  'search.submit': 'Search',
+  'search.expand': 'Open the search box',
+  'search.label': 'Search for professionals',
+  'search.what.label': 'Service',
+  'search.what.placeholder': 'What do you need?',
+  'search.what.empty': 'No matching services',
+  'search.where.label': 'Where',
+  'search.where.placeholder': 'Postcode or city',
+  'search.where.empty': 'Type your postcode',
+  'search.where.required': 'Tell us where you need the work done',
+  'search.when.label': 'When',
+  'search.when.placeholder': 'Any time',
+  'search.when.urgente': "It's an emergency",
+  'search.when.hoy': 'Today',
+  'search.when.semana': 'This week',
+  'search.when.flexible': 'No rush',
+  'search.mode.label': 'How',
+  'search.mode.placeholder': 'Either way',
+  'search.mode.quote': 'Request a quote',
+  'search.mode.booking': 'Book directly',
+
+  'legal.terms.title': 'Terms and conditions',
+  'legal.privacy.title': 'Privacy policy',
+  'legal.cookies.title': 'Cookie policy',
+  'legal.pending':
+    'This document is not published yet. It is being drafted by a lawyer and will be published before launch.',
+
+  'error.title': 'Something went wrong',
+  'error.body': 'We could not load this page. Please try again in a moment.',
+  'error.retry': 'Try again',
+
   'footer.rights': 'All rights reserved',
 } satisfies Translations;

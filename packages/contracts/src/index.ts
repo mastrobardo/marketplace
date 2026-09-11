@@ -4,6 +4,7 @@
  * Only `agent-contracts` writes here — everyone else proposes
  * (`agents/policies/contract-change.md`).
  */
+export * from './catalogue.js';
 export * from './errors.js';
 export * from './money.js';
 export * from './pagination.js';
