@@ -78,6 +78,14 @@ jobs:
           cache: pnpm
           cache-dependency-path: pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile
+
+      # `packages/ui`'s stories run as Vitest browser tests (ADR-012 §5), so this job needs a real
+      # browser. It is installed here rather than in a job of its own because that is the whole
+      # point of the addon: the existing runner, the existing job, one `pnpm test`. A separate
+      # script is a suite that stops running the first time someone forgets to call it.
+      - name: Install the browser the story tests run in
+        run: pnpm --filter @marketplace/ui exec playwright install --with-deps chromium
+
       - run: pnpm test
 
   build:

@@ -3,8 +3,16 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Marketplace for reformas, mantenimiento and urgencias — API, web app and shared packages.",
+  "description": "Marketplace for reformas, mantenimiento and urgencias \u2014 API, web app and shared packages.",
   "packageManager": "pnpm@10.13.1",
+  "pnpm": {
+    "peerDependencyRules": {
+      "allowedVersions": {
+        "@storybook/addon-vitest>vitest": "5",
+        "@storybook/addon-vitest>@vitest/browser-playwright": "5"
+      }
+    }
+  },
   "engines": {
     "node": ">=22.11.0",
     "pnpm": ">=10.13.0"
