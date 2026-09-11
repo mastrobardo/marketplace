@@ -7,6 +7,8 @@
  */
 import { describe, expect, it } from 'vitest';
 import {
+  CategoryListSchema,
+  CategorySummarySchema,
   PAGE_LIMIT_DEFAULT,
   POINT_DECIMALS,
   SEARCH_DEFAULT_SORT,
@@ -212,5 +214,38 @@ describe('AC12 — the map pin is coarsened in the contract, not by each caller'
 
   it('rejects a result whose point was not coarsened', () => {
     expect(SearchResultSchema.safeParse(result({ point: SOL })).success).toBe(false);
+  });
+});
+
+describe('W12-T09 — the category list is declared, not implied by a mock', () => {
+  const category = { slug: 'fontaneria', name: 'Fontanería', requiresLicence: false };
+
+  it('accepts a locale-resolved category and rejects the unresolved pair', () => {
+    expect(CategorySummarySchema.safeParse(category).success).toBe(true);
+    expect(
+      CategorySummarySchema.safeParse({
+        slug: 'fontaneria',
+        nameEs: 'Fontanería',
+        nameEn: 'Plumbing',
+      }).success,
+      'the client was handed both names and asked to choose',
+    ).toBe(false);
+  });
+
+  it('requires the licence flag rather than letting it default to false', () => {
+    expect(
+      CategorySummarySchema.safeParse({ slug: 'fontaneria', name: 'Fontanería' }).success,
+    ).toBe(false);
+  });
+
+  it('holds the slug to the same pattern the search query uses', () => {
+    expect(CategorySummarySchema.safeParse({ ...category, slug: 'FONTANERIA' }).success).toBe(
+      false,
+    );
+  });
+
+  it('wraps the tree in `items`, strictly', () => {
+    expect(CategoryListSchema.safeParse({ items: [category] }).success).toBe(true);
+    expect(CategoryListSchema.safeParse({ items: [category], page: {} }).success).toBe(false);
   });
 });

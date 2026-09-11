@@ -1,7 +1,8 @@
 # ADR-011: The web front end — how a page is rendered, and what the storefront is made of
 
 ## Status
-Proposed — 2026-09-11 · implemented by `W12` (milestone `M11 Public storefront`). Companion:
+Proposed — 2026-09-11 · **amended 2026-09-11 (see "Amendment 1" below): URL segments are not
+translated, and SEO is deferred.** Implemented by `W12` (milestone `M11 Public storefront`). Companion:
 [ADR-012](ADR-012-design-system-and-component-workbench.md), which covers the components this
 architecture assembles. Depends on [ADR-006](ADR-006-hosting-and-environments.md) (Cloudflare
 Pages) and [ADR-007](ADR-007-feature-flags.md) (server-side flag evaluation).
@@ -148,12 +149,12 @@ instance, and the route-shape test is what will prove the conversion is complete
 | Route (`es`) | Page | Indexable | Data | Ticket |
 |---|---|---|---|---|
 | `/` → `/es` | Home: hero search, categories, how it works, trust strip, supply CTA | ✅ | categories, counts | `W12-T10` |
-| `/es/buscar?...` | Results: list + map, filters | **`noindex, follow`** | search | `W12-T11` |
-| `/es/servicios/:categoria` | Category landing | ✅ | category, top providers | `W12-T13` |
-| `/es/servicios/:categoria/:ciudad` | Category × city landing — *the SEO surface* | ✅ | category, city, providers | `W12-T13` |
+| `/es/search?...` | Results: list + map, filters | **`noindex, follow`** | search | `W12-T11` |
+| `/es/services/:category` | Category landing | ✅ | category, top providers | `W12-T13` |
+| `/es/services/:category/:city` | Category × city landing — *the SEO surface* | ✅ | category, city, providers | `W12-T13` |
 | `/es/pro/:slug` | Provider profile, public view | ✅ | provider, portfolio, reviews | `W12-T12` |
-| `/es/anuncio/:id` | Listing detail | ✅ | listing, provider | `W12-T12` |
-| `/es/publica-tu-servicio` | Supply-side landing | ✅ | static | `W12-T10` |
+| `/es/listings/:id` | Listing detail | ✅ | listing, provider | `W12-T12` |
+| `/es/become-a-pro` | Supply-side landing | ✅ | static | `W12-T10` |
 | `/es/legal/*` | Terms, privacy, cookies | ✅ | static (`W10-T07`) | `W12-T09` |
 | `*` | 404 / 500 | — | — | `W12-T09` |
 
@@ -168,10 +169,10 @@ combinatorial one — which city and which category pairs exist is a content dec
 flowchart TD
     subgraph Public["Public — no session"]
         Home["/ — hero search"]
-        Landing["/servicios/:cat/:city — indexable"]
-        Results["/buscar — noindex, follow"]
+        Landing["/services/:cat/:city — indexable"]
+        Results["/search — noindex, follow"]
         Provider["/pro/:slug"]
-        Listing["/anuncio/:id"]
+        Listing["/listings/:id"]
     end
     subgraph Gated["Behind the auth wall — W2 onward"]
         Auth["Sign in / sign up"]
@@ -244,7 +245,7 @@ sequenceDiagram
 
     U->>H: picks what · where · when
     H->>H: schema → SearchQuery (zod, packages/contracts)
-    H->>R: navigate /buscar?what=…&where=…&when=…
+    H->>R: navigate /es/search?what=…&where=…&when=…
     R->>L: loader(request)
     L->>C: search(query parsed from the URL)
     C->>A: GET /search?…
@@ -282,12 +283,12 @@ to prevent, and a front end built in isolation is the most likely place to intro
 **Indexing.** Per indexable route: a `meta` export producing `title`, `description`, `canonical`,
 `og:*`; `hreflang` alternates for `es`/`en` plus `x-default`; JSON-LD (`Service` and `LocalBusiness`
 on provider pages, `BreadcrumbList` on landings); a `sitemap.xml` generated from the curated landing
-matrix, not from every URL the router can express; `robots.txt` disallowing `/buscar`.
+matrix, not from every URL the router can express; `robots.txt` disallowing `/search`.
 
-**i18n.** ES is the default and the fallback (already true in `i18n/index.ts`). Localised path
-segments per language — `/es/servicios/...` and `/en/services/...` — because a Spanish URL with
-English segments is worth less in Spanish search results. Route ids stay language-neutral so links
-are written once.
+**i18n.** ES is the default and the fallback (already true in `i18n/index.ts`). The language is the
+first path segment — `/es/...`, `/en/...` — and **everything after it is English in both languages**:
+`/es/search`, never `/es/buscar`. See Amendment 1. Route ids stay language-neutral so links are
+written once.
 
 **Performance budget**, enforced on the preview URL by Lighthouse CI in `W12-T15` and failing the PR:
 
@@ -343,3 +344,47 @@ workbench).
   produces a contract request, in that order, rather than one ticket doing both.
 - **No new services.** Everything above runs on Cloudflare, which M0 already pays for. The four-service
   rule holds.
+
+---
+
+## Amendment 1 — 2026-09-11: URL segments are not translated, and SEO is deferred
+
+Two operator decisions taken while planning `W12-T09`, both reversing what is written above. They
+are recorded here rather than applied silently, because an agent reading only the original text
+would faithfully rebuild what was just rejected.
+
+### 1.1 — URL segments are not translated
+
+**Decided:** the language prefix stays (`/es`, `/en`); every segment after it is English in both
+languages. `/es/search`, `/es/services/fontaneria`, `/es/legal/terms`.
+
+**What it replaces:** §5's *"Localised path segments per language … because a Spanish URL with
+English segments is worth less in Spanish search results"*, and §2's page inventory, which spelled
+all eight public routes in Spanish. The table above has been respelled; treat any Spanish segment
+found elsewhere in this repo as stale.
+
+**The cost, stated plainly:** the original argument was real. A Spanish keyword in the URL is worth
+something in Spanish results, and `W12-T13`'s category × city landing pages were where it would have
+paid off. That value is given up. What is bought is one spelling per route instead of two, no
+per-language segment table, and no redirect layer between them — and with 1.2 below, the thing being
+given up has no near-term buyer anyway.
+
+### 1.2 — SEO is deferred, not traded off
+
+**Decided:** there is nothing in production, so none of the indexing work pays off yet. It becomes
+its own ticket when there is something to index.
+
+**What it replaces:** summary decision 5 (*"a public page is indexable or it does not exist
+commercially"*) as a driver of W12's ordering. Concretely: `W12-T09` ships no `hreflang`; the
+`meta`/canonical/JSON-LD/sitemap/`robots.txt` work in `W12-T14` and the Lighthouse gate in `W12-T15`
+become candidates rather than commitments; and `W12-T13`, whose whole rationale was the SEO surface
+and half the answer to the cold-start risk (`R3`), should have its priority re-derived rather than
+inherited.
+
+**What this does *not* change:** the six route rules (R1–R6) and the SSR-as-a-switch design. Those
+were justified by SEO but are not only worth it for SEO — they are what keeps the rendering decision
+reversible, and they are already gates. `noindex` on search results also stands: it costs nothing to
+keep and is a decision about what *not* to do.
+
+**When SEO returns**, it is a new ticket with a fresh justification against whatever the product
+looks like then — not a resumption of this ADR's plan.

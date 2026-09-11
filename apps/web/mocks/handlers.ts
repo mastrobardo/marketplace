@@ -10,6 +10,7 @@
  * this file is deleted, not migrated.
  */
 import {
+  CategoryListSchema,
   PAGE_LIMIT_DEFAULT,
   SearchQuerySchema,
   coarsenPoint,
@@ -114,16 +115,21 @@ function after(results: SearchResult[], position: CursorPosition | undefined): S
 export const handlers = [
   http.get('*/categories', ({ request }) => {
     const locale = request.headers.get('accept-language') ?? 'es';
-    return HttpResponse.json({
-      items: catalogue.categories
-        .filter((category) => category.isActive)
-        .sort((a, b) => a.position - b.position)
-        .map((category) => ({
-          slug: category.slug,
-          name: locale.startsWith('en') ? category.nameEn : category.nameEs,
-          requiresLicence: category.requiresLicence,
-        })),
-    });
+    // Parsed on the way out, like the search handler: `W12-T09` declared this shape in
+    // `packages/contracts`, so the mock is now checkable against it rather than being its only
+    // definition. A drift here fails a test instead of reaching the header's search box.
+    return HttpResponse.json(
+      CategoryListSchema.parse({
+        items: catalogue.categories
+          .filter((category) => category.isActive)
+          .sort((a, b) => a.position - b.position)
+          .map((category) => ({
+            slug: category.slug,
+            name: locale.startsWith('en') ? category.nameEn : category.nameEs,
+            requiresLicence: category.requiresLicence,
+          })),
+      }),
+    );
   }),
 
   http.get('*/search', ({ request }) => {

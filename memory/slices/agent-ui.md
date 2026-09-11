@@ -271,3 +271,36 @@ Keep it to facts that changed how you would work. Task-specific detail stays in 
 - **evidence**: `packages/contracts/src/search.ts`;
   `docs/specs/S10/W12-T08-search-contract.md` §Q4
 - **status**: active
+
+### An error boundary belongs at the level that actually failed
+- **id**: MEM-2026-09-11-16
+- **scope**: slice:S10
+- **fact**: `W12-T09` gives `legal/:doc` its own `ErrorBoundary` instead of letting its 404 reach the
+  root. At the root, a mistyped `/es/legal/nonsense` unmounted the shell — header, compact search and
+  footer gone — even though the shell's loader had succeeded. The root boundary is now reserved for
+  the case where the shell itself threw (unknown `:lang`, categories request failed).
+- **why**: A boundary re-renders from its own level down. Put it above the thing that failed and you
+  discard working UI; put it *at* the thing that failed and the rest of the page survives.
+- **apply**: Every route whose loader can throw a recoverable error gets its own `ErrorBoundary`.
+  Also: a `throw new Response(…, { status: 404 })` is only a route error **from a loader** — thrown
+  during render it is a React error that unmounts the tree, so route-param validation goes in the
+  loader. And distinguish 404 from 500 in the boundary: "this will never exist" and "try again" are
+  different advice, and only the 500 gets a retry button.
+- **evidence**: `apps/web/src/routes/legal.tsx`; `apps/web/src/routes/root.tsx`;
+  `apps/web/tests/routing.test.tsx` AC7/AC8
+- **status**: active
+
+### `/:lang` matches anything, so an unknown language is a soft 404
+- **id**: MEM-2026-09-11-17
+- **scope**: slice:S10
+- **fact**: With the shell mounted at `/:lang`, `/nope` rendered the **Spanish home page at someone
+  else's URL**, HTTP 200. The shell's loader now throws a 404 for a segment that is not a known
+  locale. A sibling `path: '*'` does *not* fix this — it is unreachable beneath `/:lang`.
+- **why**: A soft 404 is invisible to every check except a human reading the address bar.
+- **apply**: Any route with a leading dynamic segment must validate it in the loader. Never add an
+  unreachable catch-all to "handle" it — an unreachable route reads as handled and is worse than
+  absent. Related: the SPA still answers 200 for *every* path including real 404s (measured with
+  curl); a true status needs `W12-T14`'s SSR switch, and it is noted on that ticket.
+- **evidence**: `apps/web/src/routes/root.tsx` loader; `apps/web/src/app/routes.tsx`;
+  `docs/specs/S10/W12-T09-public-shell.md` §10 Q2
+- **status**: active

@@ -580,16 +580,16 @@ finished pages is how the accessibility and SSR bills both come due at once.
 
 **The storefront — the M11 surface, all of it public.**
 
-- `W12-T09` `[A]` Public shell: header with the compact search, language switcher, footer, 404/500, legal page slots, skip link and landmark structure
+- `W12-T09` `[A]` ✅ Public shell: `/:lang` routing with **untranslated segments** (`/es/search`, never `/es/buscar` — ADR-011 Amendment 1), the compact search in the header over loader-supplied categories, a link-based language switcher that keeps your place and your query string, legal slots that say they are pending, and 404/500 boundaries **at the level that actually failed** — a mistyped legal URL keeps the header. React Query over axios, wired loader-first so R3/R5/R6 all still hold *(issue #209)*
 - `W12-T10` `[A]` Home page: hero search over the schema, category cards as pre-filled searches, how-it-works, trust strip, supply-side CTA — responsive, on seeded content
 - `W12-T11` `[A]` Results page: list + facet rail from the same schema, **map as a deferred chunk the page works without** (`R9`), empty/loading/error states, pagination per `W1-T02`
 - `W12-T12` `[A]` Public provider profile and listing detail: gallery, categories, badges, review summary, and a CTA that stops cleanly at the auth wall — the visible edge of M11
-- `W12-T13` `[A]` Category and category × city landing pages over the **curated** matrix — the SEO surface and half the cold-start answer *(needs `BD-15`)*
+- `W12-T13` `[A]` *(priority open — this ticket's whole rationale was SEO, deferred by ADR-011 Amendment 1; re-derive before starting)* Category and category × city landing pages over the **curated** matrix *(needs `BD-15`)*
 
 **Making it count — indexable, fast, and provably unchanged.**
 
-- `W12-T14` `[A]` Flip the rendering switch: React Router framework mode on Workers, per-request i18n instance (the one known R6 violation today), `meta`/canonical/`hreflang`/JSON-LD, sitemap from the curated matrix, `robots.txt` disallowing `/buscar`
-- `W12-T15` `[A]` Performance budget as a gate: Lighthouse CI on the preview URL (LCP ≤2.5s, INP ≤200ms, CLS ≤0.1, ≤170 KB initial JS), R2 image pipeline with `srcset`/AVIF, font loading strategy
+- `W12-T14` `[A]` Flip the rendering switch: React Router framework mode on Workers, per-request i18n instance (the one known R6 violation today), and a **real HTTP status for 404/500** — today the SPA answers `200` for every path, so `/nope` is a soft 404. The indexing half — `meta`/canonical/`hreflang`/JSON-LD, sitemap, `robots.txt` disallowing `/search` — is **deferred** and splits into its own ticket when there is something in production worth indexing (ADR-011 Amendment 1)
+- `W12-T15` `[A]` *(priority open — its Lighthouse SEO half is deferred with ADR-011 Amendment 1)* Performance budget as a gate: Lighthouse CI on the preview URL (LCP ≤2.5s, INP ≤200ms, CLS ≤0.1, ≤170 KB initial JS), R2 image pipeline with `srcset`/AVIF, font loading strategy
 - `W12-T16` `[A]` Nightly visual regression: Playwright screenshots over a pinned story list, baselines generated **only** inside the CI image
 - `W12-T17` `[M]` `[B]` Landing-page content: the curated city × category matrix and where the prose comes from *(human: `BD-15` — headless CMS vs MDX in the repo)*
 
