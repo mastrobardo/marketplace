@@ -33,6 +33,7 @@ jobs:
       configured: ${{ steps.guard.outputs.configured }}
       app: ${{ steps.guard.outputs.app }}
       db-branch: ${{ steps.guard.outputs.db-branch }}
+      pages-branch: ${{ steps.guard.outputs.pages-branch }}
     steps:
       - uses: actions/checkout@v5
       - uses: pnpm/action-setup@v4
@@ -85,3 +86,33 @@ jobs:
           DB_BRANCH: ${{ needs.preflight.outputs.db-branch }}
           NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
           NEON_PROJECT_ID: ${{ secrets.NEON_PROJECT_ID }}
+
+      # W12-T06 — the workbench's preview deployments.
+      #
+      # Cloudflare Pages keeps every preview deployment it has ever built, and wrangler 3 has no
+      # command to delete one, so this is the REST API with the credentials this job already holds.
+      # Same rule as the two steps above: an absent resource is a success, because a teardown that
+      # fails on something already gone gets re-run and leaves the *rest* of the resources alive.
+      #
+      # `marketplace-web` accumulates its previews the same way and always has — deleting those is
+      # `agent-devops`' call about a pipeline this ticket does not own, and it is written down in
+      # docs/specs/S10/W12-T06-workbench-preview-deploy.md §10 Q1 rather than done quietly here.
+      - name: Delete the workbench preview deployments
+        run: |
+          set -uo pipefail
+          api="https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects/marketplace-ui/deployments"
+
+          ids="$(curl --silent --show-error --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            "$api?per_page=100" \
+            | jq --raw-output --arg branch "$PAGES_BRANCH" \
+              '.result[]? | select(.deployment_trigger.metadata.branch == $branch) | .id' || true)"
+
+          for id in $ids; do
+            curl --silent --show-error --request DELETE \
+              --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+              "$api/$id?force=true" > /dev/null || true
+          done
+        env:
+          PAGES_BRANCH: ${{ needs.preflight.outputs.pages-branch }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
