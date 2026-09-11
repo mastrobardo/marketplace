@@ -113,3 +113,20 @@ Keep it to facts that changed how you would work. Task-specific detail stays in 
   whether the consumer should bundle it instead, and check `dist/index.js` in the build output.
 - **evidence**: `packages/ui/vite.config.ts`; `docs/specs/S10/W12-T02-ui-primitives.run.md`
 - **status**: active
+
+### The workbench is two Vitest projects, and one command runs both
+- **id**: MEM-2026-09-11-07
+- **scope**: slice:S10
+- **fact**: `packages/ui/vitest.config.ts` declares `unit` (jsdom: behaviour, boundaries, tokens,
+  wiring) and `storybook` (real Chromium via `@storybook/addon-vitest`: every story with its `play`).
+  `pnpm test` runs both, so a browser is a genuine prerequisite —
+  `pnpm --filter @marketplace/ui exec playwright install chromium`, and a step in CI's `unit` job.
+  Storybook ≥10.3 applies `preview.tsx`'s annotations to the browser project itself: **do not** add
+  a setup file that calls `setProjectAnnotations`.
+- **why**: A separate `test:stories` script is a suite that stops running the first time someone
+  forgets to call it — and from `W12-T04` that suite is the accessibility gate. The browser
+  prerequisite is the price of the gate being real.
+- **apply**: Adding a component? Its stories are its browser tests; nothing else to wire. Assertions
+  a browser cannot make — a story that was never written — stay in the jsdom project.
+- **evidence**: `docs/specs/S10/W12-T03-storybook-workbench.md` §4.3; `packages/ui/vitest.config.ts`
+- **status**: active

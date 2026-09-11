@@ -769,3 +769,78 @@ describe('the image knows about every workspace package', () => {
     }
   });
 });
+
+/**
+ * `W12-T06` — the component workbench is deployed like everything else here: same vendor, same
+ * credentials, same rule about reading the URL back. ADR-012 §6 calls it "a new Pages *project*,
+ * not a fifth service", and these assertions are what keep that sentence true.
+ */
+describe('AC35 — the workbench is deployed beside the app, not instead of it', () => {
+  it('builds the static workbench and deploys it to its own project', () => {
+    const preview = code(PREVIEW);
+    expect(preview, 'the workbench is never built').toContain(
+      'pnpm --filter @marketplace/ui build:storybook',
+    );
+    expect(preview).toContain('pages deploy packages/ui/storybook-static');
+    expect(preview, 'the workbench would overwrite the web app').toContain(
+      '--project-name marketplace-ui',
+    );
+    // Still there: this is an addition, not a replacement.
+    expect(preview).toContain('--project-name marketplace-web');
+  });
+
+  it('creates the Pages project if it does not exist, without a prompt', () => {
+    // `pages deploy` against an unknown project prompts, and CI has no TTY to answer — the first
+    // run would hang or fail on a blank error rather than saying what is wrong.
+    expect(code(PREVIEW)).toContain('pages project create marketplace-ui');
+  });
+
+  it('reads the workbench URL back from wrangler rather than constructing it', () => {
+    // The same trap as AC34: `*.pages.dev` subdomains are globally unique, so `marketplace-ui` may
+    // be served from `marketplace-ui-x7q.pages.dev`, and a constructed hostname is a dead link.
+    const step = steps(jobs(PREVIEW)['deploy'] ?? {}).find((s) => s.id === 'workbench');
+    expect(step, 'no workbench deploy step').toBeDefined();
+    expect(step?.run ?? '').toContain('pages.dev');
+    expect(step?.run ?? '', 'a guessed URL is worse than none').toContain(
+      'refusing to comment a guessed one',
+    );
+  });
+
+  it('puts the URL in the comment the reviewer already gets', () => {
+    const comment = steps(jobs(PREVIEW)['deploy'] ?? {}).find((s) =>
+      (s.name ?? '').startsWith('Comment'),
+    );
+    expect(comment?.env?.['WORKBENCH_URL']).toBe('${{ steps.workbench.outputs.url }}');
+    expect(String(comment?.with?.['script'] ?? '')).toContain('Components:');
+  });
+
+  it('deploys on merge as well as per pull request', () => {
+    // Otherwise the workbench a reviewer is sent to is whichever branch deployed it last.
+    const staging = code(STAGING);
+    expect(staging).toContain('build:storybook');
+    expect(staging).toContain('--project-name marketplace-ui');
+  });
+
+  it('deletes its preview deployments when the pull request closes', () => {
+    const teardown = code(TEARDOWN);
+    expect(teardown, 'the teardown never mentions the workbench project').toContain(
+      'pages/projects/marketplace-ui/deployments',
+    );
+    expect(teardown, 'the branch to delete is never passed in').toContain(
+      'PAGES_BRANCH: ${{ needs.preflight.outputs.pages-branch }}',
+    );
+  });
+
+  it('adds no new secret, because it is not a new service', () => {
+    // The M0 four-services rule (Fly, Neon, Cloudflare, Sentry). A second Pages project is a
+    // project; a new secret name here would mean somebody had added a vendor.
+    const names = [...code(PREVIEW).matchAll(/secrets\.([A-Z0-9_]+)/g)].map((m) => m[1]);
+    expect([...new Set(names)].sort()).toEqual([
+      'CLOUDFLARE_ACCOUNT_ID',
+      'CLOUDFLARE_API_TOKEN',
+      'FLY_API_TOKEN',
+      'NEON_API_KEY',
+      'NEON_PROJECT_ID',
+    ]);
+  });
+});

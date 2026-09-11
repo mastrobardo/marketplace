@@ -335,3 +335,22 @@ come from real experience.
   necessarily on 5432, and `docker compose port db 5432` is the reliable way to find it.
 - **evidence**: `docs/specs/S1/W1-T07-state-machine.run.md` §Green phase; `apps/api/prisma/migrations/0000_require_postgis`
 - **status**: active
+
+### A turbo-cached test hides a failure when its real input is outside the package
+- **id**: MEM-2026-09-11-16
+- **scope**: repo
+- **fact**: `@marketplace/testing`'s AC10 gate reads `apps/api/prisma/schema.prisma`, which is not
+  part of the input hash turbo computes for `@marketplace/testing#test`. When `W1-T07` added the
+  `AuditRecord` model, the gate started failing — and locally kept replaying a **cached pass** from
+  before the model existed. It surfaced only when an unrelated `pnpm install` invalidated the cache.
+  CI has no shared cache, so CI has been red on `main` since (`unit`, run 34573704861), and the
+  local signal said green the whole time.
+- **why**: The point of a cache is to skip work whose inputs have not changed, and turbo can only
+  know the inputs it is told about. A test that reaches outside its own package is invisible to it,
+  so the cache is not wrong — the task declaration is incomplete.
+- **apply**: A test that reads a file from another package needs that file in the task's `inputs`
+  in `turbo.json`, or the task needs `"cache": false`. And when a local run and CI disagree, run
+  the failing task with `--force` before believing the local one.
+- **evidence**: `docs/specs/S10/W12-T03-storybook-workbench.run.md` §Human input received;
+  `packages/testing/tests/factories.test.ts` AC10; CI run 34573704861 on `main`
+- **status**: active
