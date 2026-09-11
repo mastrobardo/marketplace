@@ -1,0 +1,75 @@
+/*
+ * Three renderings, one form. What differs between them is layout and nothing else — the fields
+ * are the same primitives in the same order, which is the whole point of the declaration.
+ *
+ * Mobile-first, because these users are standing in a flooded kitchen holding a phone: the default
+ * is a stack, and the row is what a wide viewport buys.
+ */
+
+.form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--mp-search-gap);
+  width: 100%;
+}
+
+.fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--mp-search-gap);
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.fields > * {
+  flex: 1 1 var(--mp-search-field-min);
+  min-width: 0;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--mp-search-compact-gap);
+  align-items: center;
+}
+
+/* The hero: the page's primary action, in a band of its own. */
+.hero {
+  padding: var(--mp-search-padding);
+  border: var(--mp-border-width) solid var(--mp-search-border);
+  border-radius: var(--mp-search-radius);
+  background: var(--mp-search-bg);
+}
+
+/* The header: tighter, narrower fields, and it stays on one line for as long as it can. */
+.header {
+  gap: var(--mp-search-compact-gap);
+}
+
+.header .fields {
+  gap: var(--mp-search-compact-gap);
+}
+
+.header .fields > * {
+  flex: 1 1 var(--mp-search-compact-field-min);
+}
+
+/* The rail: a stack, and the submit sits under it rather than beside it. */
+.filters {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.filters .fields {
+  flex-direction: column;
+  flex-wrap: nowrap;
+}
+
+.filters .fields > * {
+  flex: 0 0 auto;
+}
+
+.filters .actions {
+  justify-content: flex-end;
+}

@@ -186,3 +186,54 @@ Keep it to facts that changed how you would work. Task-specific detail stays in 
   negative lookbehind so that re-anchoring it to `:root` still fails.
 - **evidence**: `docs/specs/S10/W12-T05-token-layers-and-themes.run.md` §Red phase
 - **status**: active
+
+### The search bar is a declaration, and the query string is a pure function of it
+- **id**: MEM-2026-09-11-11
+- **scope**: slice:S10
+- **fact**: `packages/ui/src/patterns/search/` holds `schema.ts` (field descriptors and `fieldsFor`),
+  `query.ts` (`toSearchQuery`, `serializeSearchQuery`, `parseSearchQuery`, `missingRequiredFields`)
+  and one `SearchBar` with a `rendering` prop — `hero`, `header`, `filters`. The descriptors are
+  domain-free: a field's `name` is a `string` and its options arrive as `Option[]`, because AC15
+  forbids importing `packages/contracts` here. `SearchQuery` in this package is the *structure*
+  (declared keys → strings); the *meaning* is `SearchQuerySchema` in contracts (`W12-T08`), and the
+  application composes them: `SearchQuerySchema.parse(toSearchQuery(schema, values))`.
+- **why**: Three pages are about to build three search surfaces in three pull requests. One
+  declaration is what stops "the filter exists in the rail but not the hero", and a pure
+  `SearchSchema → SearchQuery` is what lets ADR-011 §3 be true — the UI *defines* the endpoint's
+  input instead of guessing at it a milestone later.
+- **apply**: Adding a filter? One descriptor, and it appears in every rendering. Need the value in a
+  loader? `parseSearchQuery(schema, new URL(request.url).searchParams)` — it is DOM-free and a test
+  asserts that. Need validation? `missingRequiredFields` returns names; the sentence is yours.
+- **evidence**: `packages/ui/src/patterns/search/`; `docs/specs/S10/W12-T07-search-schema.md`
+- **status**: active
+
+### A form in this system reports validation, it does not police the submit
+- **id**: MEM-2026-09-11-12
+- **scope**: slice:S10
+- **fact**: `SearchBar` renders React Aria's `Form` with `validationBehavior="aria"`. With the
+  default (`native`), `isRequired` puts `required` on the hidden input and the browser refuses the
+  submit and shows its own bubble.
+- **why**: That bubble is copy this product does not own, in a style the design system cannot reach,
+  in whatever language the browser chose — against the ES-first rule and against "errors are
+  announced, and the application owns the sentence".
+- **apply**: Any new form pattern in `packages/ui` takes the same prop. The caller gets the values
+  and decides: `missingRequiredFields` names what is empty, `errors` puts a message on a field.
+- **evidence**: `packages/ui/src/patterns/search/SearchBar.tsx`;
+  `docs/specs/S10/W12-T07-search-schema.run.md` §Findings
+- **status**: active
+
+### A story that opens an overlay is a story the axe gate has never seen before
+- **id**: MEM-2026-09-11-13
+- **scope**: slice:S10
+- **fact**: `useComboBox` calls `ariaHideOutside` while its listbox is open: siblings get
+  `aria-hidden` and keep their tab order, which fails axe's `aria-hidden-focus`. `isNonModal` on the
+  popover does not change it — the call is in the hook. One story-scoped rule exclusion exists
+  (`SearchBar` → `SuggestionsLoading`), with issue **#226** open against the primitive.
+- **why**: `W12-T02`'s combobox stories focus the input but never open it, so `W12-T04`'s gate had
+  not met the state until the first pattern needed it. A gate only covers what a story reaches.
+- **apply**: Writing a play that opens an overlay? Expect this, and do not widen the exclusion
+  globally — that is the one move that would make `parameters.a11y.test = 'error'` decorative. Also:
+  select controls by accessible name (a combobox's ▾ trigger carries `aria-expanded` too), and press
+  a disclosure with `.click()` — expanding moves controls under a synthetic pointer.
+- **evidence**: `packages/ui/src/patterns/search/SearchBar.stories.tsx`; issue #226
+- **status**: active

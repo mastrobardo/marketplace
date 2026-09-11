@@ -13,6 +13,12 @@ export interface ButtonProps {
   /** What a screen reader should hear while pending. Required in practice whenever `isPending` can become true. */
   pendingLabel?: string;
   isDisabled?: boolean;
+  /**
+   * Disclosure: this button shows and hides something, and `aria-expanded` says which it is doing.
+   * Added by `W12-T07` for the compact header's *more options* control — a design system whose only
+   * button cannot be a disclosure trigger is one that gets a hand-rolled `<button>` beside it.
+   */
+  isExpanded?: boolean;
   type?: 'button' | 'submit' | 'reset';
   onPress?: () => void;
   children: ReactNode;
@@ -30,6 +36,7 @@ export function Button({
   isPending = false,
   pendingLabel,
   isDisabled = false,
+  isExpanded,
   type = 'button',
   onPress,
   children,
@@ -40,6 +47,7 @@ export function Button({
       type={type}
       isDisabled={isDisabled}
       isPending={isPending}
+      {...(isExpanded !== undefined ? { 'aria-expanded': isExpanded } : {})}
       {...(onPress ? { onPress } : {})}
     >
       <span className={cx(styles['label'])}>{children}</span>

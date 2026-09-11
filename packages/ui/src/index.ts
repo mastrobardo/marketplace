@@ -15,3 +15,24 @@ export { Select, type Option, type SelectProps } from './primitives/Select.js';
 export { Combobox, type ComboboxProps } from './primitives/Combobox.js';
 export { Dialog, type DialogProps } from './primitives/Dialog.js';
 export { Popover, type PopoverProps } from './primitives/Popover.js';
+
+export { SearchBar, type SearchBarProps } from './patterns/search/SearchBar.js';
+export {
+  fieldsFor,
+  collapsedField,
+  accepts,
+  type SearchField,
+  type SearchSchema,
+  type SearchRendering,
+  type CategoryField,
+  type PlaceField,
+  type ChoiceField,
+} from './patterns/search/schema.js';
+export {
+  toSearchQuery,
+  serializeSearchQuery,
+  parseSearchQuery,
+  missingRequiredFields,
+  type SearchQuery,
+  type SearchValues,
+} from './patterns/search/query.js';

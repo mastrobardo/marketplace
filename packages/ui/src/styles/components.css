@@ -58,3 +58,17 @@
   --mp-popover-radius: var(--mp-radius-md);
   --mp-popover-padding: var(--mp-space-4);
 }
+
+/* `W12-T07` — the search bar, the first pattern. Layout, not colour: the fields inside it are
+   primitives that bring their own. What is here is the band the hero sits in and the gaps that make
+   one declaration read as three different controls. */
+:root {
+  --mp-search-gap: var(--mp-space-3);
+  --mp-search-padding: var(--mp-space-4);
+  --mp-search-radius: var(--mp-radius-lg);
+  --mp-search-bg: var(--mp-color-surface);
+  --mp-search-border: var(--mp-color-border);
+  --mp-search-field-min: 12rem;
+  --mp-search-compact-gap: var(--mp-space-2);
+  --mp-search-compact-field-min: 9rem;
+}
