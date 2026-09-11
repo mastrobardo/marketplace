@@ -304,3 +304,37 @@ Keep it to facts that changed how you would work. Task-specific detail stays in 
 - **evidence**: `apps/web/src/routes/root.tsx` loader; `apps/web/src/app/routes.tsx`;
   `docs/specs/S10/W12-T09-public-shell.md` §10 Q2
 - **status**: active
+
+### A `waitFor` whose condition is already true tests nothing
+- **id**: MEM-2026-09-11-18
+- **scope**: slice:S10
+- **fact**: `W12-T09` AC5 clicked the English link then waited on `data-doc === 'terms'` — already
+  true before the click, because the test starts on `/es/legal/terms`. The wait resolved instantly
+  and the heading assertion raced i18next, which changes language in an effect one tick after the
+  route renders. Passed locally every time, failed in CI.
+- **why**: The `waitFor` looked like synchronisation and was a no-op. This class of test does not
+  fail on the machine that wrote it; it fails on the slowest machine in the fleet.
+- **apply**: Wait for the thing that *changes*, never for something already satisfied by the
+  starting state. In this app that usually means the translated text, not a `data-` attribute or a
+  route param. Related: there is a real one-tick window where the URL says `/en` and the text is
+  still Spanish — the i18next singleton, `W12-T14`'s debt.
+- **evidence**: `apps/web/tests/routing.test.tsx` AC5;
+  `docs/specs/S10/W12-T09-public-shell.run.md` §5
+- **status**: active
+
+### `pnpm --filter <app> build` does not build the workspace packages the app imports
+- **id**: MEM-2026-09-11-19
+- **scope**: slice:S10
+- **fact**: `deploy-preview.yml` and `deploy-staging.yml` built the web app with
+  `pnpm --filter @marketplace/web build`. When `W12-T09` made `apps/web` a **runtime** consumer of
+  `@marketplace/contracts` (which resolves to `dist/`), the deploy job failed with *"Rolldown failed
+  to resolve import"* while every local build passed — `dist/` existed locally because something had
+  built it earlier. Both workflows now use `pnpm turbo run build --filter=…`.
+- **why**: `turbo.json`'s `build` declares `dependsOn: ["^build"]`; `pnpm --filter` has no such
+  notion. The failure is invisible until a clean checkout, so it lands in CI, never in review.
+- **apply**: Any CI step that builds one workspace package goes through `turbo`, not `pnpm --filter`.
+  And when adding the first runtime dependency from an app to a built package, verify by deleting
+  that package's `dist/` and building from clean — do not reason about it.
+- **evidence**: `.github/workflows/deploy-preview.yml`; `.github/workflows/deploy-staging.yml`;
+  `docs/specs/S10/W12-T09-public-shell.run.md` §7
+- **status**: active

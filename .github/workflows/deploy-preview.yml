@@ -237,8 +237,12 @@ jobs:
           APP: ${{ needs.preflight.outputs.app }}
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
 
+      # `turbo run`, not `pnpm --filter`: the web app became a runtime consumer of
+      # `@marketplace/contracts` in `W12-T09`, and that package resolves to `dist/`. `pnpm --filter`
+      # builds only the named package, so the import failed to resolve here while passing locally,
+      # where `dist/` happened to exist. `turbo.json`'s `build` already declares `dependsOn: ["^build"]`.
       - name: Build the web app
-        run: pnpm --filter @marketplace/web build
+        run: pnpm turbo run build --filter=@marketplace/web
         env:
           VITE_API_URL: https://${{ needs.preflight.outputs.app }}.fly.dev
 

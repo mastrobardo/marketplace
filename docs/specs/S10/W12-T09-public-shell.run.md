@@ -80,6 +80,55 @@ Correct for an SPA and still a soft 404. Escalated as `Q2`, recommended to wait 
 is where a route can set a status at all), and written into that ticket in `TODO.md` so it is not
 rediscovered.
 
+### 5. A test that passed locally and failed in CI, because it waited on the wrong thing
+
+`AC5` clicked "English" and then `waitFor`-ed on `data-doc === 'terms'` — which was **already true
+before the click**, since the test starts on `/es/legal/terms`. So the wait resolved instantly and the
+heading assertion raced i18next, which changes language in an effect one tick after the route
+renders. Local won the race; CI lost it:
+
+```
+AssertionError: expected 'Términos y condiciones' to be 'Terms and conditions'
+```
+
+Now it waits for the heading text itself. The lesson is not "add a timeout": a `waitFor` whose
+condition is satisfied before the action is a `waitFor` that tests nothing, and it will fail on the
+slowest machine you own rather than the fastest.
+
+Worth recording as behaviour, not just as a test bug: there **is** a one-tick window where the URL
+says `/en` and the text is still Spanish, because i18next is a singleton updated in an effect. That is
+the known R6 debt, and `W12-T14` closes it.
+
+### 6. `HydrateFallback` — one fix, two gates
+
+React Router was warning `No HydrateFallback element provided to render during initial hydration`
+and rendering nothing while the shell's loader ran, which is a blank page on a cold load. Adding one
+tripped two things immediately:
+
+- `route-modules.test.ts`'s `ALLOWED` export set did not contain `HydrateFallback`, so the R1 gate
+  failed. Widened deliberately, with a comment: it is a component the *router* calls, which is what
+  R1 is actually about, and R1's text simply predates it. **The gate was right to ask.**
+- The fallback renders its own `<main>`, so every `await screen.findByRole('main')` in the suite
+  began resolving against the *loading* state. Switched to `findByRole('banner')`, which only the
+  loaded shell has. This was caught by running the suite four times, not once.
+
+### 7. The deploy job failed for a reason unit tests cannot see
+
+`pnpm --filter @marketplace/web build` builds only the named package. `apps/web` became a **runtime**
+consumer of `@marketplace/contracts` in this task, and that package resolves to `dist/` — which
+exists on a developer's machine because something built it earlier, and does not exist on a clean
+runner:
+
+```
+[vite]: Rolldown failed to resolve import "@marketplace/contracts" from "apps/web/src/shared/api.ts"
+```
+
+Both `deploy-preview.yml` and `deploy-staging.yml` now use `pnpm turbo run build --filter=…`, whose
+`build` task already declares `dependsOn: ["^build"]`. Verified by deleting `packages/contracts/dist`
+and building from clean, rather than by reasoning about it. These are `agent-devops` files; the edit
+is two lines and a comment, and it is the direct consequence of this task adding the first runtime
+dependency from `apps/web` to a built workspace package.
+
 ## Deviations from spec
 
 - **ADR-011 amended.** Not a deviation from the spec so much as the spec's precondition: the operator

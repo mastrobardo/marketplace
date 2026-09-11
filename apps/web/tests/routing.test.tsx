@@ -18,7 +18,7 @@ afterEach(() => {
 describe('AC1..AC3 — the language is a path segment, the rest of the path is not translated', () => {
   it('AC1 — a bare / redirects to the default language', async () => {
     renderApp('/');
-    await screen.findByRole('main');
+    await screen.findByRole('banner');
     expect(window.location.pathname === '/' || true).toBe(true);
     // The redirect is observable in what rendered: the Spanish home page, not a blank router.
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe(es['home.title']);
@@ -37,7 +37,7 @@ describe('AC1..AC3 — the language is a path segment, the rest of the path is n
     ] as const) {
       cleanup();
       renderApp(`/${locale}`);
-      await screen.findByRole('main');
+      await screen.findByRole('banner');
       const search = screen.getByRole('search', { name: dictionary['search.label'] });
       expect(search).toBeDefined();
     }
@@ -68,10 +68,14 @@ describe('AC4..AC5 — the language switcher keeps your place', () => {
     expect(toEnglish.getAttribute('href')).toBe('/en/legal/terms?from=footer');
 
     await user.click(toEnglish);
+    // Wait for the heading itself, not for `data-doc` — that was already `terms` before the click,
+    // so waiting on it resolved instantly and then raced i18next, which changes language in an
+    // effect one tick after the route renders. Passed locally, failed in CI. Wait for the thing
+    // that actually changes.
     await waitFor(() => {
-      expect(screen.getByTestId('legal').dataset['doc']).toBe('terms');
+      expect(screen.getByRole('heading', { level: 1 }).textContent).toBe(en['legal.terms.title']);
     });
-    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe(en['legal.terms.title']);
+    expect(screen.getByTestId('legal').dataset['doc']).toBe('terms');
   });
 });
 
@@ -102,7 +106,7 @@ describe('AC6..AC7 — the legal slots exist before the prose does', () => {
 
   it('the footer links to every legal slot in the current language', async () => {
     renderApp('/en');
-    await screen.findByRole('main');
+    await screen.findByRole('banner');
     const footer = screen.getByRole('contentinfo');
     for (const doc of ['terms', 'privacy', 'cookies']) {
       const link = within(footer).getByRole('link', {
@@ -131,7 +135,7 @@ describe('AC9 — the header search submits to the search URL', () => {
   it('navigates to /:lang/search with the query the schema produced', async () => {
     const user = userEvent.setup();
     renderApp('/es');
-    await screen.findByRole('main');
+    await screen.findByRole('banner');
 
     const search = screen.getByRole('search', { name: es['search.label'] });
     await user.click(within(search).getByRole('button', { name: es['search.expand'] }));

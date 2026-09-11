@@ -176,3 +176,22 @@ export function ErrorBoundary(): ReactElement {
     </div>
   );
 }
+
+/**
+ * What renders while the shell's loader is in flight.
+ *
+ * React Router warns without one ("No `HydrateFallback` element provided to render during initial
+ * hydration") and then renders nothing, which is a blank page on a cold load rather than an error
+ * anyone would notice. `role="status"` so the wait is announced instead of being a silent gap.
+ */
+export function HydrateFallback(): ReactElement {
+  return (
+    <div className="mp-shell">
+      <main className="mp-main" id="main">
+        <p role="status" data-testid="shell-loading" className="mp-lead">
+          …
+        </p>
+      </main>
+    </div>
+  );
+}

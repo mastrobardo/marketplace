@@ -1,5 +1,10 @@
 import { Navigate, type RouteObject } from 'react-router';
-import { Component as Root, ErrorBoundary, loader as rootLoader } from '../routes/root.js';
+import {
+  Component as Root,
+  ErrorBoundary,
+  HydrateFallback,
+  loader as rootLoader,
+} from '../routes/root.js';
 import { Component as Home } from '../routes/home.js';
 import {
   Component as Legal,
@@ -33,6 +38,7 @@ export const routes: RouteObject[] = [
     Component: Root,
     loader: rootLoader,
     ErrorBoundary,
+    HydrateFallback,
     children: [
       { index: true, Component: Home },
       {

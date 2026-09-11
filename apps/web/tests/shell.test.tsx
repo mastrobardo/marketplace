@@ -33,7 +33,9 @@ describe('AC1/AC2/AC3 — the shell holds every route', () => {
 
   it('exposes the landmarks the nightly axe run will look for', async () => {
     renderApp('/es');
-    await screen.findByRole('main');
+    // The banner, not `main`: `HydrateFallback` renders a `main` while the loader is in flight, so
+    // waiting on that would assert against the loading state.
+    await screen.findByRole('banner');
     for (const landmark of ['banner', 'navigation', 'main', 'contentinfo'] as const) {
       expect(screen.getAllByRole(landmark).length, `no ${landmark} landmark`).toBeGreaterThan(0);
     }
@@ -41,7 +43,7 @@ describe('AC1/AC2/AC3 — the shell holds every route', () => {
 
   it('names every landmark that appears more than once', async () => {
     renderApp('/es');
-    await screen.findByRole('main');
+    await screen.findByRole('banner');
     // Three navigations now — primary, legal, and the search landmark. Unnamed duplicates are the
     // axe rule `W12-T04` gates on, and they are indistinguishable to a screen-reader user.
     const names = screen.getAllByRole('navigation').map((nav) => nav.getAttribute('aria-label'));
@@ -55,7 +57,7 @@ describe('AC5/AC6/AC13 — Spanish first, English on request', () => {
     expect(i18next.options.lng).toBe('es');
     expect(i18next.options.fallbackLng).toEqual(['es']); // i18next normalises it to a list
     renderApp('/es');
-    await screen.findByRole('main');
+    await screen.findByRole('banner');
     expect(document.documentElement.lang).toBe('es');
     const nav = screen.getByRole('navigation', { name: es['nav.primary'] });
     expect(within(nav).getByText(es['nav.home'])).toBeDefined();
@@ -63,7 +65,7 @@ describe('AC5/AC6/AC13 — Spanish first, English on request', () => {
 
   it('renders English when the URL says English', async () => {
     renderApp('/en');
-    await screen.findByRole('main');
+    await screen.findByRole('banner');
     expect(document.documentElement.lang).toBe('en');
     const nav = screen.getByRole('navigation', { name: en['nav.primary'] });
     expect(within(nav).getByText(en['nav.home'])).toBeDefined();
