@@ -7,6 +7,7 @@
   "include": [
     "src/**/*.ts",
     "src/**/*.tsx",
+    "mocks/**/*.ts",
     "tests/**/*.ts",
     "tests/**/*.tsx",
     "eslint/**/*.js",

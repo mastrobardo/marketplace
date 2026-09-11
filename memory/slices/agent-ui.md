@@ -237,3 +237,37 @@ Keep it to facts that changed how you would work. Task-specific detail stays in 
   a disclosure with `.click()` — expanding moves controls under a synthetic pointer.
 - **evidence**: `packages/ui/src/patterns/search/SearchBar.stories.tsx`; issue #226
 - **status**: active
+
+### `import.meta.env.DEV` does not keep a dynamic import out of the production bundle
+- **id**: MEM-2026-09-11-14
+- **scope**: slice:S10
+- **fact**: `if (import.meta.env.DEV) { await import('../mocks/browser.js') }` in `src/main.tsx`
+  shipped 511 KB of MSW and the whole seeded catalogue as `dist/assets/browser-*.js`, **referenced
+  by the entry chunk**. Rollup resolves a dynamic import while building the module graph, before the
+  `false` branch is minified away. `vite.config.ts` now carries a `stripMocks()` plugin that resolves
+  `mocks/browser` to two empty exports under `mode === 'production'`, so the edge never exists.
+- **why**: The guard is the documented Vite pattern and it reads as sufficient. It is not, and the
+  failure is silent — a working app, a correct dev experience, and test data on the CDN.
+- **apply**: Any dev-only dynamic import in this repo (mocks, debug panels, a11y tooling) needs the
+  resolve-time stub, not the runtime guard. And assert it against `dist`, never against the source:
+  every cheaper test asserts the source looks right, which is not the claim.
+- **evidence**: `apps/web/vite.config.ts`; `apps/web/tests/mocks.test.ts` AC17;
+  `docs/specs/S10/W12-T08-search-contract.run.md` §"AC17 caught a 511 KB mock bundle"
+- **status**: active
+
+### A nullable column cannot be a sortable field
+- **id**: MEM-2026-09-11-15
+- **scope**: slice:S10
+- **fact**: `GET /search` offers one sort, `distanceMetres`. `ratingAvg` is `Decimal?` and
+  `packages/contracts/src/pagination.ts:178` throws on a null sort value by design, because keyset
+  paging over a nullable column loses exactly the rows whose value is null.
+- **why**: The lost rows here are every unrated provider — on a marketplace that has not launched,
+  almost all of them. The bug is invisible in a unit test seeded with five-star providers, and in
+  production it is either a 500 or a silent disappearance.
+- **apply**: Before adding anything to a `sortable` tuple, check the column's nullability in
+  `schema.prisma`. If it is nullable, the fix is a non-null projection the response also carries
+  (`COALESCE(rating_avg, -1) AS ratingSort`), never making the column `NOT NULL DEFAULT 0` — that
+  ranks a new provider below a bad one.
+- **evidence**: `packages/contracts/src/search.ts`;
+  `docs/specs/S10/W12-T08-search-contract.md` §Q4
+- **status**: active

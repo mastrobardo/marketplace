@@ -13,6 +13,10 @@ import { routeRulesPlugin } from './eslint/route-rules.js';
  * point — the first slice agent to create it finds the rules already true.
  */
 export default [
+  // Vendored by `msw init` and regenerated whenever msw is upgraded. It carries its own
+  // `eslint-disable` header, which our config then reports as an unused directive — linting a
+  // generated file to tell it off for silencing lint is a warning nobody can action.
+  { ignores: ['public/mockServiceWorker.js'] },
   ...createEslintConfig({ environment: 'browser' }),
   {
     files: ['src/routes/**/*.{ts,tsx}', 'src/features/**/*.{ts,tsx}'],

@@ -576,7 +576,7 @@ finished pages is how the accessibility and SSR bills both come due at once.
 **The seam — search is a schema, and the schema defines the API's input.**
 
 - `W12-T07` `[A]` ✅ The search bar as a declarative schema: typed field descriptors, three renderings of one declaration (hero, compact header, filter rail) from a single `SearchBar`, and `toSearchQuery`/`serializeSearchQuery`/`parseSearchQuery` as pure, DOM-free functions a Worker can call (`R4`). The descriptors are domain-free — a field's `name` is a string and its options arrive as data — because `packages/ui` may not import `packages/contracts`, which is also why the zod freeze stays `W12-T08`. Nine stories, so every rendering is an axe assertion *(issue #207)*
-- `W12-T08` `[A]` Contract request to `agent-contracts`: `SearchQuery` / `SearchResult` zod schemas, and MSW handlers built **from** the `packages/testing` factories — never a second fixture set alongside them (`W1-T09`)
+- `W12-T08` `[A]` ✅ The search contract: `SearchQuerySchema` composed with `W1-T02`'s `listQuery` so search pages like the other eight lists, `SearchResultSchema` as the public projection of a provider — strict, so the absent `line1`/`userId` are enforced rather than remembered (`W1-T05` §8) — and `SearchResponseSchema` built **on** `pageEnvelope` so the frozen envelope cannot drift. `GET /search` + `GET /categories` as MSW handlers built **from** the `packages/testing` factories, outside `src/` because the `W1-T09` gate is what makes that the only honest place for them. No rating sort: `ratingAvg` is nullable and keyset paging drops null rows, which on a cold-start marketplace is every new provider (`Q4`) *(issue #208)*
 
 **The storefront — the M11 surface, all of it public.**
 
