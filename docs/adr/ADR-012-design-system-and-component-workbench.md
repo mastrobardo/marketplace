@@ -212,7 +212,7 @@ the CI container image, and a local run does not update them.
   ≤170 KB initial-route budget is what keeps the honesty — it will be the first thing to complain.
 - **Stories are mandatory**, which makes each component slower to land. That is the intended trade:
   it converts an end-of-project accessibility pass into a per-PR gate.
-- **A second Pages project needs a teardown path**, or preview deployments accumulate. `W12-T03`
+- **A second Pages project needs a teardown path**, or preview deployments accumulate. `W12-T06`
   mirrors `deploy-preview-teardown.yml` rather than inventing a second mechanism.
 - **`tokens.css` moves** from `apps/web/src/styles` into `packages/ui` when `W12-T01` lands, and
   `apps/web`'s `tokens.test.ts` moves with it. Until then the token gate protects a file with no
