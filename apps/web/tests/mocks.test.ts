@@ -150,29 +150,53 @@ describe('AC17..AC18 — none of this ships, and all of it is typechecked', () =
     }
   });
 
-  // The one slow test in this file, and it earns its seconds: every cheaper version of it asserts
-  // that the *source* looks right, which is not the claim. The claim is about what Rollup emitted.
-  it('AC17 — a production build contains no factory data and no msw', { timeout: 180_000 }, () => {
-    execFileSync('pnpm', ['exec', 'vite', 'build'], { cwd: webRoot, stdio: 'pipe' });
+  /** Every text asset a build emitted, which is what the two assertions below are actually about. */
+  function bundledSources(env: NodeJS.ProcessEnv = {}): string[] {
+    execFileSync('pnpm', ['exec', 'vite', 'build'], {
+      cwd: webRoot,
+      stdio: 'pipe',
+      env: { ...process.env, ...env },
+    });
 
-    const bundled = (dir: string): string[] =>
+    const walk = (dir: string): string[] =>
       readdirSync(dir).flatMap((entry) => {
         const path = join(dir, entry);
-        if (statSync(path).isDirectory()) return bundled(path);
+        if (statSync(path).isDirectory()) return walk(path);
         return /\.(js|css|html)$/.test(entry) ? [path] : [];
       });
 
-    const files = bundled(join(webRoot, 'dist'));
+    const files = walk(join(webRoot, 'dist'));
     expect(files.length, 'the build produced nothing to check').toBeGreaterThan(0);
+    return files.map((file) => readFileSync(file, 'utf8'));
+  }
 
-    for (const file of files) {
-      const source = readFileSync(file, 'utf8');
+  // The two slow tests in this file, and they earn their seconds: every cheaper version asserts that
+  // the *source* looks right, which is not the claim. The claim is about what Rollup emitted.
+  it('AC17 — a production build contains no factory data and no msw', { timeout: 180_000 }, () => {
+    for (const source of bundledSources()) {
       // A seeded id prefix is the tell: it appears in no real data and in every factory row.
-      expect(source, `${file} contains factory-seeded ids`).not.toContain(
+      expect(source, 'a chunk contains factory-seeded ids').not.toContain(
         `${ID_PREFIXES.ProviderProfile}-0000-4000`,
       );
-      expect(source, `${file} contains a seeded provider`).not.toContain('Fontanería Gómez');
-      expect(source, `${file} bundles msw`).not.toMatch(/setupWorker|mockServiceWorker\.js/);
+      expect(source, 'a chunk contains a seeded provider').not.toContain('Fontanería Gómez');
+      expect(source, 'a chunk bundles msw').not.toMatch(/setupWorker|mockServiceWorker\.js/);
     }
+  });
+
+  /**
+   * The other half, and the reason it exists: AC17 alone passes just as happily when the flag is
+   * broken and the mocks are *never* included. That is how `W12-T09` reached a preview deploy with
+   * neither a real `GET /categories` nor a mocked one — an absence nobody was asserting.
+   */
+  it('AC19 — VITE_ENABLE_MOCKS=true keeps them in the bundle', { timeout: 180_000 }, () => {
+    const sources = bundledSources({ VITE_ENABLE_MOCKS: 'true' });
+    expect(
+      sources.some((source) => /setupWorker/.test(source)),
+      'the preview build has no MSW worker, so a deployed storefront has no endpoints',
+    ).toBe(true);
+    expect(
+      sources.some((source) => source.includes('Fontanería Gómez')),
+      'the handlers are bundled but the seeded catalogue is not',
+    ).toBe(true);
   });
 });

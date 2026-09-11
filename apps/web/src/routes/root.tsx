@@ -50,10 +50,21 @@ export async function loader({ params, context }: LoaderFunctionArgs): Promise<S
   const locale: string = lang;
   const { queryClient, api } = context.get(routeContext);
 
-  const categories = await queryClient.ensureQueryData({
-    queryKey: queryKeys.categories(locale),
-    queryFn: () => api.getCategories(locale),
-  });
+  // Categories enrich **one field** of the search box. They are not a precondition for the site, and
+  // treating them as one is how `W12-T09` first reached a deploy: `GET /categories` does not exist
+  // yet (`W3-T01`), the request 404'd, this loader rejected, and the root boundary replaced the
+  // entire storefront with the 500 page. The search bar was unreachable because a dropdown was empty.
+  //
+  // So a failure degrades to an empty list. `what` is optional in `SearchQuerySchema`, and `where`,
+  // `when` and `mode` need no endpoint at all — a search is still a search without the category
+  // list. The rule this encodes: **a deployed page may not hard-depend on an endpoint that does not
+  // exist.** It mocks it or it degrades.
+  const categories = await queryClient
+    .ensureQueryData({
+      queryKey: queryKeys.categories(locale),
+      queryFn: () => api.getCategories(locale),
+    })
+    .catch((): CategorySummary[] => []);
 
   return { locale, categories };
 }

@@ -129,6 +129,39 @@ and building from clean, rather than by reasoning about it. These are `agent-dev
 is two lines and a comment, and it is the direct consequence of this task adding the first runtime
 dependency from `apps/web` to a built workspace package.
 
+### 8. The deploy was broken, and the tests all passed
+
+**Found by the operator on the preview deploy, not by CI**: `404 on categories`, and the storefront
+was the 500 page — so the search bar this task exists to ship could not be reached at all. The rule
+that came with it: *"only working apps should be deployed."*
+
+Two faults, compounding:
+
+1. **The shell loader treated categories as a precondition.** It `await`ed `GET /categories`, which
+   is `W3-T01` and does not exist. The request 404'd, `ensureQueryData` rejected, the root boundary
+   did its job, and one empty dropdown took down the entire site. It degrades to `[]` now: `what` is
+   optional in `SearchQuerySchema`, and `where`, `when` and `mode` need no endpoint at all.
+2. **`stripMocks` fires on `mode === 'production'`, which includes the preview deploy.** Meanwhile
+   `VITE_API_URL` points preview at a real API that has none of these endpoints — so the deployed
+   storefront had neither a real `GET /categories` nor a mocked one. That directly contradicts
+   ADR-011 §4's *"the storefront does not wait for them"*, which is only true if the **deployed**
+   storefront has them. `VITE_ENABLE_MOCKS=true` is now set for preview and staging and never for the
+   production release; `onUnhandledRequest: 'bypass'` means it intercepts only what does not exist.
+
+**Why no test caught it** is the part worth keeping. Every unit test stubbed the API *successfully*,
+so the failure path was never exercised — and `W12-T08` AC17 asserts only that mocks are **absent**
+from a production bundle, which passes exactly as well when they are absent everywhere. A one-sided
+assertion about a flag tests one of its two states, and the untested state is the one that shipped.
+
+Now gated from both sides: `routing.test.tsx` AC8a/b (the site renders and the search still submits
+when `/categories` fails) and `mocks.test.ts` AC19 (with the flag on, the worker and the seeded
+catalogue **are** in the bundle). AC8 previously asserted the opposite of AC8a — that a failing
+categories request produces the 500 page — so it was inverted; the 500 boundary is now driven
+directly in AC8c, because the shell can no longer be made to fail that way, which is the point.
+
+Verified by clean build (`rm -rf` both package `dist/`s, then `turbo run build`) and by serving the
+preview-shaped bundle: `/`, `/es` and `/mockServiceWorker.js` all 200.
+
 ## Deviations from spec
 
 - **ADR-011 amended.** Not a deviation from the spec so much as the spec's precondition: the operator

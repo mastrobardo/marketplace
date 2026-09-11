@@ -107,6 +107,14 @@ jobs:
       - name: Build the web app
         run: pnpm turbo run build --filter=@marketplace/web
         env:
+          # Keep the MSW handlers in this build. ADR-011 §4 — "the storefront does not wait for its
+          # endpoints" — is only true if the *deployed* storefront has them, and `W12-T09` reached a
+          # preview with neither: `stripMocks` had removed the mocks, and `VITE_API_URL` points at a
+          # real API that has no `GET /categories` yet (`W3-T01`). `onUnhandledRequest` is `'bypass'`,
+          # so this intercepts only what does not exist and passes everything real through.
+          # Drop endpoints from `mocks/handlers.ts` as `W3` lands; remove this line when it is empty.
+          # `release-production.yml` deliberately does **not** set it.
+          VITE_ENABLE_MOCKS: 'true'
           VITE_API_URL: https://marketplace-api-staging.fly.dev
 
       # Direct, for the same reason as deploy-preview.yml: the action cannot install wrangler in a

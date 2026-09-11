@@ -359,3 +359,39 @@ Keep it to facts that changed how you would work. Task-specific detail stays in 
 - **evidence**: `TODO.md` `W12-T16`; `docs/specs/S10/W12-T09-public-shell.md` §9;
   `apps/web/tests/shell.test.tsx` AC11
 - **status**: active
+
+### A deployed page may not hard-depend on an endpoint that does not exist
+- **id**: MEM-2026-09-11-21
+- **scope**: slice:S10
+- **fact**: `W12-T09`'s shell loader awaited `GET /categories` without a fallback. The endpoint is
+  `W3-T01` and does not exist, so on the preview deploy it 404'd, the loader rejected, the root
+  boundary caught it, and **the whole storefront was the 500 page** — over one empty dropdown. The
+  loader now degrades to `[]`; `what` is optional in `SearchQuerySchema` and `where`/`when`/`mode`
+  need no endpoint, so the search bar still works.
+- **why**: Operator rule, stated 2026-09-11: *"only working apps should be deployed."* A page that
+  cannot render without a missing endpoint is not shippable, and no unit test noticed — every one of
+  them stubbed the API successfully.
+- **apply**: A loader either mocks what does not exist or degrades without it, and there is a test
+  for the degraded path. Never a bare `await` on an endpoint that is still in the backlog. Second
+  trap from the same incident: `W12-T08`'s `stripMocks` fires on `mode === 'production'`, which
+  includes *preview* — combined with a real `VITE_API_URL`, that deploy had neither a real endpoint
+  nor a mocked one. `VITE_ENABLE_MOCKS=true` is now set for preview and staging and never for the
+  production release.
+- **evidence**: `apps/web/src/routes/root.tsx` loader; `apps/web/vite.config.ts`;
+  `.github/workflows/deploy-preview.yml`; `routing.test.tsx` AC8a/b; `mocks.test.ts` AC19
+- **status**: active
+
+### Asserting only the absence of something lets its absence go unnoticed
+- **id**: MEM-2026-09-11-22
+- **scope**: slice:S10
+- **fact**: `W12-T08` AC17 asserts the production bundle contains no MSW and no factory data. It
+  passes just as happily when the mocks are *never* bundled at all — which is exactly what happened
+  on the `W12-T09` preview. AC19 now asserts the other half: with `VITE_ENABLE_MOCKS=true`, the
+  worker and the seeded catalogue **are** in the bundle.
+- **why**: A one-sided assertion about a flag only tests one of its two states, and the untested
+  state is the one that ships broken.
+- **apply**: Any build flag with two meaningful outcomes gets a test per outcome. Both build tests
+  are slow (~20 s each) and both are worth it — they are the only checks that look at what Rollup
+  actually emitted rather than at what the source says.
+- **evidence**: `apps/web/tests/mocks.test.ts` AC17 + AC19
+- **status**: active

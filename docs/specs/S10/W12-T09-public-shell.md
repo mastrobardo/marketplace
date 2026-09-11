@@ -150,7 +150,8 @@ All of M11 is public (ADR-011 §2). There is no session in the storefront yet.
 | `/nope` — unknown language | 404 from the shell's own boundary (the shell is what failed) |
 | `/es/anything-unknown` | 404 **inside** the shell — header, search and footer retained |
 | `/es/legal/nonsense` | 404 inside the shell, from the legal route's own boundary |
-| `GET /categories` fails | 500 page with a **working retry** (`useRevalidator`), distinguishable from the 404 |
+| `GET /categories` fails or does not exist | **the site renders**, with an empty category list. A missing enhancement to one field may not take down the storefront — see §10 Q4 |
+| A loader throws anything unexpected | 500 page with a **working retry** (`useRevalidator`), distinguishable from the 404 |
 | Unknown locale passed to `changeLanguage` | ignored; the UI stays in the last good language |
 
 A 404 and a 500 give different advice — *"this will never exist"* versus *"try again"* — so they are
@@ -168,7 +169,10 @@ that cannot work is worse than saying nothing.
 | AC5 | Given `/es/legal/terms?from=footer`, when switching to English, then the href is `/en/legal/terms?from=footer` and the page stays put | `routing.test.tsx` |
 | AC6 | Given each of terms/privacy/cookies, when rendered, then the heading is in the reading language and the pending notice is shown | `routing.test.tsx` |
 | AC7 | Given `/es/legal/nonsense`, when rendered, then a 404 appears **with the banner and contentinfo still present** | `routing.test.tsx` |
-| AC8 | Given a failing categories request, when the shell loads, then the 500 page renders, marked `500`, distinct from the 404 | `routing.test.tsx` |
+| AC8a | Given a failing categories request, when the shell loads, then **the site renders**, not the 500 page | `routing.test.tsx` |
+| AC8b | Given no categories at all, when the search is submitted with a `where`, then it still navigates | `routing.test.tsx` |
+| AC8c | Given a loader that throws unexpectedly, when the boundary renders, then it is marked `500`, distinct from the 404, and offers a retry | `routing.test.tsx` |
+| AC19 | Given `VITE_ENABLE_MOCKS=true`, when built, then the worker and the seeded catalogue **are** in the bundle | `mocks.test.ts` |
 | AC9 | Given the header search, when submitted with a `where`, then the app navigates to `/:lang/search?…` | `routing.test.tsx` |
 | AC10 | Given any route, when rendered, then there is exactly one `h1` | `shell.test.tsx` |
 | AC11 | Given any route, when rendered, then banner/navigation/main/contentinfo all exist and **every duplicated landmark is uniquely named** | `shell.test.tsx` |
@@ -236,3 +240,18 @@ Unchanged and still owned by `W12-T14`. What this task adds is that the URL is n
 truth for language and i18next *follows* it, in an effect. So the singleton is now a cache of a
 value the route already knows, which is a strictly smaller problem than it was: the conversion in
 `W12-T14` has one writer to replace rather than a control to redesign.
+
+### Q4 — a deployed page may not hard-depend on an endpoint that does not exist
+
+Not really an open question any more — it is a rule the operator stated after this task's first
+preview deploy served the 500 page, and it is recorded here because it outlives the ticket:
+
+> **A deploy must be usable on its own.** A storefront page either has its endpoint mocked
+> (`VITE_ENABLE_MOCKS`, on for preview and staging, never for the production release) or it degrades
+> without it. Never a bare `await` on something still in the backlog.
+
+The second half is the subtler trap and it is worth stating separately: `W12-T08`'s `stripMocks`
+plugin keys off `mode === 'production'`, which includes **preview**. Combined with a `VITE_API_URL`
+pointing at a real API that has not implemented the endpoint yet, a preview deploy ends up with
+neither a real endpoint nor a mocked one — the worst of both, and invisible to every unit test,
+because unit tests stub the API successfully.

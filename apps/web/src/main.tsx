@@ -13,10 +13,18 @@ if (container === null) throw new Error('No #root element in index.html');
 await setupI18n();
 
 // The MSW handlers live outside `src/` on purpose — they import the `packages/testing` factories,
-// which `W1-T09`'s gate forbids any production module from touching. `import.meta.env.DEV` is the
-// literal `false` in a production build, so Rollup drops this branch and the import with it
-// (`W12-T08` AC17 asserts that against the built bundle).
-if (import.meta.env.DEV) {
+// which `W1-T09`'s gate forbids any production module from touching.
+//
+// `VITE_ENABLE_MOCKS` is what makes a preview deploy reviewable. ADR-011 §4 says the storefront does
+// not wait for its endpoints — but `W12-T08`'s `stripMocks` plugin removed them from *every*
+// production-mode build, preview included, while `VITE_API_URL` pointed preview at a real API that
+// has none of them yet. The result was a deployed storefront with neither. `onUnhandledRequest` is
+// `'bypass'`, so with this on, MSW answers only the endpoints that do not exist and everything real
+// goes straight through to the API.
+//
+// It is never set for the production release, so factory data cannot ship — `W12-T08` AC17 asserts
+// that against the built bundle, and AC19 asserts the flag actually works.
+if (import.meta.env.DEV || import.meta.env['VITE_ENABLE_MOCKS'] === 'true') {
   const { startMocks } = await import('../mocks/browser.js');
   await startMocks();
 }

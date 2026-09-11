@@ -1,9 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { cleanup, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
+import { RouterProvider, createMemoryRouter } from 'react-router';
 import userEvent from '@testing-library/user-event';
 import { changeLanguage, setupI18n } from '../src/i18n/index.js';
 import { es } from '../src/i18n/locales/es.js';
 import { en } from '../src/i18n/locales/en.js';
+import { ErrorBoundary } from '../src/routes/root.js';
 import { renderApp, stubApi } from './app-harness.js';
 
 beforeEach(async () => {
@@ -117,17 +119,69 @@ describe('AC6..AC7 — the legal slots exist before the prose does', () => {
   });
 });
 
-describe('AC8 — the 500 page', () => {
-  it('renders the error page, distinguishable from a 404, when the shell loader throws', async () => {
+describe('AC8 — a missing endpoint degrades, it does not take the site down', () => {
+  /**
+   * The regression this exists to prevent, and it is not hypothetical: `GET /categories` does not
+   * exist yet (`W3-T01`), so on the first `W12-T09` preview deploy the shell loader rejected, the
+   * root boundary caught it, and **the whole storefront was the 500 page**. The search bar could not
+   * be reached because one dropdown had no data.
+   */
+  it('AC8a — renders the site when the categories request fails', async () => {
     renderApp(
       '/es',
       stubApi({ getCategories: () => Promise.reject(new Error('categories are down')) }),
     );
-    expect(await screen.findByTestId('error-page', undefined, { timeout: 5_000 })).toBeDefined();
+
+    expect(await screen.findByRole('banner', undefined, { timeout: 5_000 })).toBeDefined();
+    expect(screen.queryByTestId('error-page'), 'a missing dropdown took the site down').toBeNull();
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe(es['home.title']);
+  });
+
+  it('AC8b — the search still submits without any categories', async () => {
+    const user = userEvent.setup();
+    renderApp(
+      '/es',
+      stubApi({ getCategories: () => Promise.reject(new Error('categories are down')) }),
+    );
+    await screen.findByRole('banner', undefined, { timeout: 5_000 });
+
+    // `what` is optional in `SearchQuerySchema`; `where` is the required one, and it is free text.
+    const search = screen.getByRole('search', { name: es['search.label'] });
+    await user.click(within(search).getByRole('button', { name: es['search.expand'] }));
+    const where = await within(search).findByRole('combobox', { name: es['search.where.label'] });
+    await user.type(where, '28013');
+    await user.keyboard('{Escape}');
+    await user.click(within(search).getByRole('button', { name: es['search.submit'] }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('not-found')).toBeDefined();
+    });
+  });
+
+  it('AC8c — the 500 page still exists, and is distinguishable from the 404', async () => {
+    // Driven directly rather than through the shell, because the shell can no longer be made to
+    // fail this way — which is the point of AC8a. The boundary itself still has to be right.
+    const router = createMemoryRouter(
+      [
+        {
+          path: '/',
+          loader: () => {
+            throw new Error('something genuinely unexpected');
+          },
+          Component: () => null,
+          ErrorBoundary,
+        },
+      ],
+      { initialEntries: ['/'] },
+    );
+    render(<RouterProvider router={router} />);
+
+    expect(await screen.findByTestId('error-page')).toBeDefined();
     expect(screen.getByTestId('error-page').dataset['status']).toBe('500');
     // A 404's "this will never exist" and a 500's "try again" are different advice, and telling a
     // visitor to retry a URL that cannot work is worse than saying nothing.
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe(es['error.title']);
+    expect(screen.getByRole('button', { name: es['error.retry'] })).toBeDefined();
   });
 });
 

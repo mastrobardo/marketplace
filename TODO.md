@@ -580,6 +580,13 @@ finished pages is how the accessibility and SSR bills both come due at once.
 
 **The storefront — the M11 surface, all of it public.**
 
+> **A deploy must be usable on its own.** A storefront page may not hard-depend on an endpoint that
+> does not exist yet: it is mocked (`VITE_ENABLE_MOCKS`, on for preview and staging, never for the
+> production release) or the page degrades without it. `W12-T09` broke this — the shell's loader
+> treated `GET /categories` as a precondition, the endpoint 404'd, and the entire deployed storefront
+> became the 500 page over one empty dropdown. Both halves are now gates: `routing.test.tsx` AC8a/b
+> and `mocks.test.ts` AC19.
+
 - `W12-T09` `[A]` ✅ Public shell: `/:lang` routing with **untranslated segments** (`/es/search`, never `/es/buscar` — ADR-011 Amendment 1), the compact search in the header over loader-supplied categories, a link-based language switcher that keeps your place and your query string, legal slots that say they are pending, and 404/500 boundaries **at the level that actually failed** — a mistyped legal URL keeps the header. React Query over axios, wired loader-first so R3/R5/R6 all still hold *(issue #209)*
 - `W12-T10` `[A]` Home page: hero search over the schema, category cards as pre-filled searches, how-it-works, trust strip, supply-side CTA — responsive, on seeded content
 - `W12-T11` `[A]` Results page: list + facet rail from the same schema, **map as a deferred chunk the page works without** (`R9`), empty/loading/error states, pagination per `W1-T02`
