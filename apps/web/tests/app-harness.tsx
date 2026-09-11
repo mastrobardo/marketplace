@@ -1,14 +1,17 @@
 import { render, type RenderResult } from '@testing-library/react';
 import {
+  ProviderIdSchema,
   SearchQuerySchema,
   type CategorySummary,
+  type ProviderProfile,
   type SearchResponse,
 } from '@marketplace/contracts';
 import { type SearchQuery } from '@marketplace/ui';
 import { App } from '../src/app/App.js';
-import { type ApiClient } from '../src/shared/api.js';
+import { ApiError, type ApiClient } from '../src/shared/api.js';
 import { buildCatalogue } from '../../../apps/web/mocks/catalogue.js';
 import { searchCatalogue } from '../../../apps/web/mocks/search.js';
+import { profileFromCatalogue, seededProviderIds } from '../../../apps/web/mocks/provider.js';
 
 /**
  * Render the real `App` at a path, with the API stubbed.
@@ -45,6 +48,18 @@ export function searchFor(
   return searchCatalogue(query, locale);
 }
 
+/** The seeded ids, so a test links to a provider that exists rather than to a uuid it invented. */
+export function providerIds(): string[] {
+  return seededProviderIds();
+}
+
+/** The profile the MSW handler would return, for a test that needs to know what it is asserting. */
+export function profileFor(id: string, locale: string): ProviderProfile {
+  const profile = profileFromCatalogue(id, locale);
+  if (profile === undefined) throw new Error(`No seeded provider "${id}"`);
+  return profile;
+}
+
 export function stubApi(overrides: Partial<ApiClient> = {}): ApiClient {
   return {
     getCategories: (locale) => Promise.resolve(categoriesFor(locale)),
@@ -52,6 +67,18 @@ export function stubApi(overrides: Partial<ApiClient> = {}): ApiClient {
     // the endpoint would reject, or the page learns a behaviour the dev server does not have.
     search: (query: SearchQuery, locale: string) =>
       Promise.resolve(searchCatalogue(SearchQuerySchema.parse(query), locale)),
+    // Rejects exactly as the handler answers — a 404 for an id nobody seeded, and a refusal for one
+    // that is not a uuid at all. A stub that resolved `undefined` would let the page's not-found
+    // path pass without ever being the path the endpoint actually drives.
+    getProvider: (id: string, locale: string) => {
+      if (!ProviderIdSchema.safeParse(id).success) {
+        return Promise.reject(new ApiError(400, 'VALIDATION_FAILED'));
+      }
+      const profile = profileFromCatalogue(id, locale);
+      return profile === undefined
+        ? Promise.reject(new ApiError(404, 'NOT_FOUND'))
+        : Promise.resolve(profile);
+    },
     ...overrides,
   };
 }

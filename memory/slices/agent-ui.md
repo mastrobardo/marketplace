@@ -562,3 +562,71 @@ Keep it to facts that changed how you would work. Task-specific detail stays in 
   React Aria control types.
 - **evidence**: `apps/web/tests/results.test.tsx` AC12
 - **status**: active
+
+### A 4xx is an answer; retrying it is a blank screen with extra steps
+- **id**: MEM-2026-09-11-33
+- **scope**: slice:S10
+- **fact**: `createQueryClient` set `retry: 1` for every failure. The profile page's 404 was therefore
+  retried, and the not-found page did not render until the retry delay had elapsed — a visitor
+  following a dead link waited on `shell-loading` before being told anything. `shared/query.ts` now
+  retries 5xx and network failures only.
+- **why**: A 404 and a 400 are decisions the server has already made; asking again gets the same
+  answer more slowly. The cost lands entirely on the one visitor who most needs a fast answer.
+- **apply**: Any retry policy needs a status predicate. And it applies to the already-shipped pages
+  too — the search route was retrying its own 400s.
+- **evidence**: `apps/web/src/shared/query.ts`; `apps/web/tests/provider.test.tsx` AC20
+- **status**: active
+
+### A mock has to outlast the retry policy, or the test is about something else
+- **id**: MEM-2026-09-11-34
+- **scope**: slice:S10
+- **fact**: AC21 stubbed **one** rejection and expected the error boundary. React Query's remaining
+  `retry: 1` consumed it, the second call resolved, and the page rendered — the test failed while
+  asserting entirely correct behaviour. It needs two rejections.
+- **why**: The number of times a stub must fail is a property of the *client's* policy, not of the
+  page. Change the policy and every such test silently starts testing the happy path.
+- **apply**: When stubbing a failure, count the attempts the client will make. Say so in a comment,
+  so the next reader does not "fix" the test by deleting a rejection.
+- **evidence**: `apps/web/tests/provider.test.tsx` AC21
+- **status**: active
+
+### An `aria-labelledby` id built from a translated string leaves the section with no role
+- **id**: MEM-2026-09-11-35
+- **scope**: slice:S10
+- **fact**: `PendingSection` used `id={`pending-${title}`}`. A translated heading contains spaces, so
+  the reference resolved to nothing, so the `<section>` had no accessible name — and a `<section>`
+  without one is not a `region` at all. Three sections were plain `div`s to the accessibility tree
+  and pixel-identical to the correct markup.
+- **why**: The failure is silent in every channel except a screen reader and a role query. Nothing
+  about the rendered page looks wrong.
+- **apply**: `useId`, always. Never derive a DOM id from user-visible or translated text.
+- **evidence**: `apps/web/src/routes/provider.tsx`; `apps/web/tests/provider.test.tsx` AC19
+- **status**: active
+
+### A loader that reads `error.response.status` has the transport in it
+- **id**: MEM-2026-09-11-36
+- **scope**: slice:S10
+- **fact**: The profile loader must tell a 404 (a page, with a way out) from everything else (the
+  error boundary, with a retry). `shared/api.ts` now throws `ApiError` with a normalised `status`,
+  and is the only module that knows HTTP is underneath. `status` is `undefined` for a request that
+  never got an answer.
+- **why**: `W1-T03` replaces this hand-written client with a generated one. Every loader that had
+  reached into an `AxiosError` would have needed editing on that day.
+- **apply**: Route modules branch on `ApiError.status`, never on a library's error shape. A network
+  failure is not a 500 — do not invent a status for it.
+- **evidence**: `apps/web/src/shared/api.ts`; `apps/web/src/routes/provider.tsx`
+- **status**: active
+
+### Read `schema.prisma` before planning a page, not after
+- **id**: MEM-2026-09-11-37
+- **scope**: slice:S10
+- **fact**: `W12-T12`'s title named a gallery, badges, reviews and a listing detail. `PortfolioItem`,
+  `Badge`, `Review` and `Listing` are all in `TODO.md` §3's domain sketch and in **no migration** —
+  the schema has seven models. `W12-T11` hit the same class: ADR-011 and the backlog both named
+  `/pro/:slug`, and there is no slug column.
+- **why**: §3 is a *sketch*, frozen early so agents would not each invent a schema. It is not an
+  inventory of what exists, and an ADR written before the schema can be equally stale.
+- **apply**: Before specifying a page, check every field it promises against `schema.prisma`. What is
+  missing is a scoping decision for the operator, not a detail to discover mid-implementation.
+- **evidence**: `docs/specs/S10/W12-T12-provider-profile.md` §1; ADR-011 Amendment 3
+- **status**: active

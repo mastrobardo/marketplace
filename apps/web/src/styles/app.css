@@ -353,3 +353,51 @@ body {
   white-space: nowrap;
   border: 0;
 }
+
+/* W12-T12 — the provider profile.
+
+   Three of this page's sections say that something is not here yet (`PortfolioItem`, `Badge` and
+   `Review` have no models), so the ones that *are* here have to read as the page rather than as a
+   preamble to the absences. The header carries identity and the three facts a visitor decides on;
+   everything below it is an ordinary section. */
+.mp-profile__facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--mp-space-2) var(--mp-space-4);
+  margin-block: var(--mp-space-4) 0;
+}
+
+.mp-profile__facts > p {
+  margin: 0;
+}
+
+/* Categories as chips, not as cards: a category here is a short word and a link back into search,
+   and `mp-card-grid`'s 16rem minimum would stretch "Fontanería" across a third of the viewport. */
+.mp-chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--mp-space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.mp-chip-list a {
+  display: inline-block;
+  padding: var(--mp-space-2) var(--mp-space-3);
+  border: 1px solid var(--mp-color-border);
+  border-radius: var(--mp-radius-md);
+  background: var(--mp-color-surface);
+  color: var(--mp-color-text);
+  text-decoration: none;
+}
+
+.mp-chip-list a:hover {
+  border-color: var(--mp-color-accent);
+}
+
+/* `.mp-pending` carries a top margin for `become-a-pro`, where it is the last thing on the page.
+   Inside a section it already has a heading above it. */
+.mp-section > .mp-pending {
+  margin-block-start: 0;
+}

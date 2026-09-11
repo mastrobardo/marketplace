@@ -65,6 +65,13 @@ export interface CatalogueProvider {
    * null is the quote-only provider the `?mode=booking` filter exists to exclude.
    */
   hourlyRateCents: number | null;
+  /**
+   * And the third of the same kind (`W12-T12` §10 Q3): `bio` is a column
+   * (`schema.prisma:128`) and `ProviderProfileInput` has no field for it. It is carried here
+   * because `W12-T12`'s profile page is the first thing that renders it — a seeded world where
+   * every provider's bio is null would leave that page's only prose untested.
+   */
+  bio: string | null;
 }
 
 export interface Catalogue {
@@ -140,6 +147,7 @@ export function buildCatalogue(): Catalogue {
     hourlyRateCents: number | null;
     offset: [number, number];
     city: string;
+    bio: string | null;
   }[] = [
     {
       displayName: 'Fontanería Gómez',
@@ -150,6 +158,7 @@ export function buildCatalogue(): Catalogue {
       hourlyRateCents: 4_200,
       offset: [400, 250],
       city: 'Madrid',
+      bio: 'Veinte años arreglando fugas, calderas y todo lo que gotea en el centro de Madrid.',
     },
     {
       displayName: 'Electricidad Nadal',
@@ -162,6 +171,7 @@ export function buildCatalogue(): Catalogue {
       hourlyRateCents: null,
       offset: [1_900, -700],
       city: 'Madrid',
+      bio: 'Instalaciones y boletines eléctricos. Presupuesto cerrado antes de empezar.',
     },
     {
       displayName: 'Manitas Rivas',
@@ -173,6 +183,7 @@ export function buildCatalogue(): Catalogue {
       hourlyRateCents: 2_400,
       offset: [-800, 1_500],
       city: 'Madrid',
+      bio: null,
     },
     {
       displayName: 'Cerrajería 24h Chamberí',
@@ -183,6 +194,7 @@ export function buildCatalogue(): Catalogue {
       hourlyRateCents: 5_500,
       offset: [2_300, -300],
       city: 'Madrid',
+      bio: 'Aperturas de urgencia, cambios de bombín y refuerzos de puerta, a cualquier hora.',
     },
     {
       displayName: 'Clima Costa',
@@ -194,6 +206,7 @@ export function buildCatalogue(): Catalogue {
       // Far enough out that a radius filter has something to exclude.
       offset: [41_000, 12_000],
       city: 'Alcalá de Henares',
+      bio: 'Aire acondicionado y bombas de calor: instalación, mantenimiento y puesta a punto.',
     },
   ];
 
@@ -220,6 +233,7 @@ export function buildCatalogue(): Catalogue {
       categorySlugs: row.slugs,
       ratingAvg: row.ratingAvg,
       hourlyRateCents: row.hourlyRateCents,
+      bio: row.bio,
     };
   });
 

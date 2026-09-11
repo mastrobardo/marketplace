@@ -10,9 +10,16 @@
  * has it as the geo-search API, and ADR-011 §4's table naming `W3-T04` is the id that is wrong
  * (`W12-T11` §10 Q1). When it lands, this file is deleted, not migrated.
  */
-import { CategoryListSchema, SearchQuerySchema, errorEnvelope } from '@marketplace/contracts';
+import {
+  CategoryListSchema,
+  ProviderIdSchema,
+  ProviderProfileSchema,
+  SearchQuerySchema,
+  errorEnvelope,
+} from '@marketplace/contracts';
 import { HttpResponse, http } from 'msw';
 import { buildCatalogue } from './catalogue.js';
+import { profileFromCatalogue } from './provider.js';
 import { searchCatalogue } from './search.js';
 
 /** One world per page load, so two requests in a session agree with each other. */
@@ -60,5 +67,42 @@ export const handlers = [
     }
 
     return HttpResponse.json(searchCatalogue(parsed.data, locale));
+  }),
+
+  /**
+   * `GET /providers/:id` — `W12-T12`. Three answers, and the order is the contract's.
+   *
+   * A malformed id is a 400 before anything is looked up, because `:id` is `z.uuid()` in the route
+   * and an endpoint that answers 404 for `not-a-uuid` teaches the storefront that the two are the
+   * same thing. They are not: one is a request nobody should have sent, the other is a provider who
+   * is gone, and only the second deserves "no longer listed" in front of a visitor.
+   */
+  http.get('*/providers/:id', ({ params, request }) => {
+    const locale = request.headers.get('accept-language') ?? 'es';
+    const id = ProviderIdSchema.safeParse(params['id']);
+
+    if (!id.success) {
+      return HttpResponse.json(
+        errorEnvelope('VALIDATION_FAILED', 'The provider id is not a uuid.', crypto.randomUUID(), {
+          issues: id.error.issues.map((issue) => ({
+            path: 'id',
+            message: issue.message,
+          })),
+        }),
+        { status: 400 },
+      );
+    }
+
+    const profile = profileFromCatalogue(id.data, locale);
+    if (profile === undefined) {
+      return HttpResponse.json(
+        errorEnvelope('NOT_FOUND', 'No such provider.', crypto.randomUUID()),
+        { status: 404 },
+      );
+    }
+
+    // Parsed on the way out, like the other two: the strictness and the coarse-point refinement are
+    // what make the projection's exclusions a test rather than a convention.
+    return HttpResponse.json(ProviderProfileSchema.parse(profile));
   }),
 ];

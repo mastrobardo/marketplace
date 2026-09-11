@@ -1,8 +1,9 @@
 # ADR-011: The web front end — how a page is rendered, and what the storefront is made of
 
 ## Status
-Proposed — 2026-09-11 · **amended 2026-09-11 (see "Amendment 1" and "Amendment 2" below): URL segments are not
-translated, and SEO is deferred.** Implemented by `W12` (milestone `M11 Public storefront`). Companion:
+Proposed — 2026-09-11 · **amended 2026-09-11 (see "Amendment 1", "Amendment 2" and "Amendment 3"
+below): URL segments are not translated, SEO is deferred, and a provider profile is addressed by
+id.** Implemented by `W12` (milestone `M11 Public storefront`). Companion:
 [ADR-012](ADR-012-design-system-and-component-workbench.md), which covers the components this
 architecture assembles. Depends on [ADR-006](ADR-006-hosting-and-environments.md) (Cloudflare
 Pages) and [ADR-007](ADR-007-feature-flags.md) (server-side flag evaluation).
@@ -152,7 +153,7 @@ instance, and the route-shape test is what will prove the conversion is complete
 | `/es/search?...` | Results: list + map, filters | **`noindex, follow`** | search | `W12-T11` |
 | `/es/services/:category` | Category landing | ✅ | category, top providers | `W12-T13` |
 | `/es/services/:category/:city` | Category × city landing — *the SEO surface* | ✅ | category, city, providers | `W12-T13` |
-| `/es/pro/:slug` | Provider profile, public view | ✅ | provider, portfolio, reviews | `W12-T12` |
+| `/es/pro/:id` | Provider profile, public view | ✅ | provider (portfolio and reviews: no columns — see Amendment 3) | `W12-T12` |
 | `/es/listings/:id` | Listing detail | ✅ | listing, provider | `W12-T12` |
 | `/es/become-a-pro` | Supply-side landing | ✅ | static | `W12-T10` |
 | `/es/legal/*` | Terms, privacy, cookies | ✅ | static (`W10-T07`) | `W12-T09` |
@@ -410,3 +411,24 @@ loaders, its `QueryClient` comes through `getContext`, and its query-string func
 DOM-free. The arrow is later, not cancelled, and it is cheap precisely because those held.
 
 **Escalated by** `W12-T10` §10 Q1 and answered by the operator on 2026-09-11.
+
+## Amendment 3 — 2026-09-11: a provider profile is addressed by id, not by slug
+
+**Decided:** the public profile route is `/:lang/pro/:id`, where `:id` is the provider's uuid.
+
+**What it replaces:** §2's page inventory row, which read `/es/pro/:slug`, and by extension
+`TODO.md`'s `W3-T07` line naming the endpoint `GET /providers/:slug`.
+
+**Why:** there is no slug column. `Category` has one (`W1-T05`) and `ProviderProfile` does not —
+`apps/api/prisma/schema.prisma:123` — and nothing in the backlog adds one. `W12-T11` already ships
+every result row as `` `/${locale}/pro/${item.id}` `` against a `z.uuid()`, so the inventory row was
+describing a route that could not be built. Writing a slug into a page ticket would mean inventing a
+column, a uniqueness rule, a collision policy for two providers called *Fontanería Gómez*, and a
+redirect from the id form — four provider-slice decisions, taken sideways, to improve a share link
+for a product with no supply yet.
+
+**What this does not change:** a slug stays desirable and stays possible. It is additive — a column,
+a unique index, and a second lookup — and the day it lands, `/pro/:id` becomes a redirect rather than
+a mistake. Filed against the provider slice (`W12-T12` §10 Q1).
+
+**Escalated by** `W12-T12` §10 Q1 and answered by the operator on 2026-09-11.

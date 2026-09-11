@@ -80,6 +80,11 @@
   --mp-empty-border: var(--mp-color-border);
   --mp-empty-description-fg: var(--mp-color-text-muted);
 
+  --mp-wall-bg: var(--mp-color-surface-muted);
+  --mp-wall-border: var(--mp-color-border);
+  --mp-wall-fg: var(--mp-color-text);
+  --mp-wall-description-fg: var(--mp-color-text-muted);
+
   --mp-popover-bg: var(--mp-color-surface);
   --mp-popover-border: var(--mp-color-border);
   --mp-popover-radius: var(--mp-radius-md);

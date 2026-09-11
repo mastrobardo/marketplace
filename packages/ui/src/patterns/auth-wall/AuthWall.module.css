@@ -1,0 +1,24 @@
+.wall {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mp-space-2);
+  padding: var(--mp-space-6) var(--mp-space-4);
+  border: var(--mp-border-width) dashed var(--mp-wall-border);
+  border-radius: var(--mp-radius-md);
+  background: var(--mp-wall-bg);
+}
+
+/* Dashed, and only here: the border is doing the same job as the copy. A solid card reads as a
+   finished component that happens to be empty; a dashed one reads as a place something will go. */
+
+.title {
+  margin: 0;
+  font-size: var(--mp-font-size-lg);
+  color: var(--mp-wall-fg);
+}
+
+.description {
+  margin: 0;
+  max-width: 52ch;
+  color: var(--mp-wall-description-fg);
+}
