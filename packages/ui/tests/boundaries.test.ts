@@ -113,3 +113,62 @@ describe('AC18 — colour lives in the token layer and nowhere else', () => {
     }
   });
 });
+
+describe('AC20 — a size and a shadow are tokens, for the same reason a colour is', () => {
+  // Same exclusion as AC18 and for the same reason: `src/styles` *is* the token layer, and the
+  // question here is about components.
+  const TOKEN_LAYER = join(src, 'styles');
+  const sheets = files()
+    .filter((file) => extname(file) === '.css')
+    .filter((file) => !file.startsWith(TOKEN_LAYER));
+
+  /**
+   * The value of `property` on this line, or null if it does not declare one.
+   *
+   * Read the value rather than pattern-match the absence of `var(`. The first version of this was
+   * `${property}\\s*:\\s*(?!var\\()` and it reported every compliant line as a violation: `\\s*` is
+   * free to match zero characters, so the lookahead was tested against " var(…)" — which does not
+   * begin with `var(` — and passed. A negative lookahead behind a variable-width match asserts
+   * almost nothing, and it fails in the direction that looks like a working gate.
+   */
+  const declaredValue = (line: string, property: string): string | null => {
+    const match = new RegExp(`(?:^|[;{\\s])${property}\\s*:([^;}]*)`, 'i').exec(line);
+    return match === null ? null : (match[1] ?? '').trim();
+  };
+
+  /** `font-size: 14px` yes; `font-size: var(…)` no; `box-shadow: none` no — absence has no token. */
+  const isRaw = (line: string, property: string): boolean => {
+    const value = declaredValue(line, property);
+    return value !== null && value !== '' && value !== 'none' && !value.startsWith('var(');
+  };
+
+  it('detects a raw value, so the loops below are not vacuous', () => {
+    // `W12-T18` landed this gate on a package that already passed it. A gate written against code
+    // that never violated it has never been observed to fail, which is indistinguishable from a
+    // gate that cannot fail — so the detector is exercised on violations, on legitimate values and
+    // on near-misses before it is trusted with the real files.
+    expect(sheets.length, 'no component stylesheets').toBeGreaterThan(0);
+    expect(isRaw('  font-size: 14px;', 'font-size')).toBe(true);
+    expect(isRaw('  font-size: var(--mp-font-size-sm);', 'font-size')).toBe(false);
+    expect(isRaw('  box-shadow: 0 1px 2px rgb(0 0 0 / 10%);', 'box-shadow')).toBe(true);
+    expect(isRaw('  box-shadow: var(--mp-card-shadow);', 'box-shadow')).toBe(false);
+    expect(isRaw('  box-shadow: none;', 'box-shadow')).toBe(false);
+    // Neither a longer property name nor a token whose *name* contains one may read as a match.
+    expect(isRaw('  --mp-card-box-shadow-x: 1px;', 'box-shadow')).toBe(false);
+    expect(isRaw('  -webkit-box-shadow: 0 1px 2px #000;', 'box-shadow')).toBe(false);
+  });
+
+  for (const property of ['font-size', 'box-shadow']) {
+    it(`names no raw ${property} in a component stylesheet`, () => {
+      for (const sheet of sheets) {
+        const offending = readFileSync(sheet, 'utf8')
+          .split('\n')
+          .filter((line) => isRaw(line, property));
+        expect(
+          offending,
+          `${relative(src, sheet)} writes a ${property} the design system cannot theme`,
+        ).toEqual([]);
+      }
+    });
+  }
+});

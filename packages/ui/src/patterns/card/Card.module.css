@@ -10,6 +10,7 @@
   border-radius: var(--mp-card-radius);
   background: var(--mp-card-bg);
   color: var(--mp-card-fg);
+  box-shadow: var(--mp-card-shadow);
   /* Spanish runs 15–20% longer than English, and a grid of cards is where that shows up first. */
   min-width: 0;
 }
@@ -17,6 +18,9 @@
 .linked:hover {
   border-color: var(--mp-card-border-hover);
   background: var(--mp-card-bg-hover);
+  /* The hover is a lift, not just a tint. On the page background these two surfaces are one
+     Radix step apart, which is a deliberate whisper — the shadow is what makes it read. */
+  box-shadow: var(--mp-card-shadow-hover);
 }
 
 .eyebrow {
@@ -29,8 +33,9 @@
 .title {
   margin: 0;
   font-size: var(--mp-font-size-lg);
-  /* A card title is a heading in the outline, not a headline on the page. */
-  line-height: var(--mp-font-line-height);
+  /* A card title is a heading in the outline, not a headline on the page — but it is no longer
+     set at body leading either, which is what made a two-line title read as a paragraph. */
+  line-height: var(--mp-font-line-height-lg);
 }
 
 .description {

@@ -14,6 +14,8 @@ import { extname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   COMBINATIONS,
+  channels,
+  composedPairs,
   contrastRatio,
   family,
   isComponent,
@@ -227,19 +229,50 @@ describe('AC5 — a component token reads a role, never a value', () => {
   });
 });
 
-describe('AC6 — every theme is readable, measured rather than assumed', () => {
-  const PAIRS: [string, string, number][] = [
+describe('AC6 — every theme is readable, and the pair list is derived, not remembered', () => {
+  /**
+   * The page-level pairs. These have no component family to be derived from — there is no
+   * `--mp-page-bg` token, the page just uses the semantic layer directly — so they stay written
+   * down, and they keep their per-pair minimum: a focus ring and a solid accent are non-text
+   * contrast at 3:1 (WCAG 1.4.11), the rest is body text at 4.5:1.
+   */
+  const SEMANTIC_PAIRS: [string, string, number][] = [
     ['--mp-color-text', '--mp-color-bg', 4.5],
     ['--mp-color-text', '--mp-color-surface', 4.5],
     ['--mp-color-text-muted', '--mp-color-bg', 4.5],
+    ['--mp-color-text-muted', '--mp-color-surface', 4.5],
     ['--mp-color-accent-contrast', '--mp-color-accent', 4.5],
     ['--mp-color-accent', '--mp-color-bg', 3],
     ['--mp-color-focus', '--mp-color-bg', 3],
   ];
 
+  const derived = composedPairs(graph);
+
+  it('derives the pairs the components actually compose', () => {
+    // The guard first, and it is the point of the whole change. An empty or shrunken derivation
+    // would make every assertion below pass by measuring nothing — the `database` job's failure
+    // mode (`memory/repo/gotchas.md`), which is the one this AC exists to stop repeating.
+    expect(derived.length, 'the derivation found no pairs').toBeGreaterThan(15);
+
+    // The pair that was missing from the six hand-written entries, and is what every `Card`
+    // description renders in. If the derivation ever stops finding it, it has regressed to the
+    // thing it replaced.
+    expect(derived).toContainEqual({
+      foreground: '--mp-card-description-fg',
+      background: '--mp-card-bg',
+    });
+
+    // And the rule that keeps over-measuring honest: a foreground with its own background is
+    // measured against that one only. Without it this pair appears, and it is white on white.
+    expect(derived).not.toContainEqual({
+      foreground: '--mp-listbox-option-focus-fg',
+      background: '--mp-listbox-bg',
+    });
+  });
+
   for (const combination of COMBINATIONS) {
-    it(`meets WCAG AA in ${label(combination)}`, () => {
-      const failures = PAIRS.map(([foreground, background, minimum]) => {
+    it(`meets WCAG AA on every semantic pair in ${label(combination)}`, () => {
+      const failures = SEMANTIC_PAIRS.map(([foreground, background, minimum]) => {
         const ratio = contrastRatio(
           resolve(graph, foreground, combination).value,
           resolve(graph, background, combination).value,
@@ -248,6 +281,117 @@ describe('AC6 — every theme is readable, measured rather than assumed', () => 
           ? null
           : `${foreground} on ${background}: ${ratio}:1, needs ${minimum}:1`;
       }).filter((failure) => failure !== null);
+      expect(failures).toEqual([]);
+    });
+
+    it(`meets WCAG AA on every composed pair in ${label(combination)}`, () => {
+      const failures = derived
+        .map(({ foreground, background }) => {
+          const front = resolve(graph, foreground, combination).value;
+          const back = resolve(graph, background, combination).value;
+          // A scrim is `rgb(0 0 0 / 45%)` and has no measurable ratio against anything opaque.
+          // Skipping it is correct; skipping it silently is not, so the guard above counts pairs
+          // and this returns null only for values the measurer genuinely cannot read.
+          if (!channels(front) || !channels(back)) return null;
+          const ratio = contrastRatio(front, back);
+          return ratio >= 4.5 ? null : `${foreground} on ${background}: ${ratio}:1, needs 4.5:1`;
+        })
+        .filter((failure) => failure !== null);
+      expect(failures).toEqual([]);
+    });
+  }
+});
+
+describe('the resolver itself — a sibling is not an ancestor', () => {
+  // `W12-T18` found this by hitting it: the elevation set is the first value in the package to read
+  // one token twice (`--mp-palette-shadow-65`, once per shadow layer), and the cycle check reported
+  // it as "refers to itself". The check was reading the *visited* list rather than the chain of
+  // tokens the current one is nested inside. Pinned here because the bug was unreachable for three
+  // tickets and would be again the moment elevation changed shape.
+  const fixture = [
+    {
+      path: 'fixture.css',
+      css: `:root {
+        --mp-palette-x: #010203;
+        --mp-twice: 0 1px var(--mp-palette-x), 0 2px var(--mp-palette-x);
+        --mp-loop-a: var(--mp-loop-b);
+        --mp-loop-b: var(--mp-loop-a);
+      }`,
+    },
+  ];
+  const declarations = parse(fixture);
+  const combination = COMBINATIONS[0] as (typeof COMBINATIONS)[number];
+
+  it('resolves a value that reads the same token twice', () => {
+    expect(resolve(declarations, '--mp-twice', combination).value).toBe(
+      '0 1px #010203, 0 2px #010203',
+    );
+  });
+
+  it('still refuses a genuine cycle', () => {
+    expect(() => resolve(declarations, '--mp-loop-a', combination)).toThrow(/refers to itself/);
+  });
+});
+
+describe('AC19 — a type size without a leading is a headline that reads as body text', () => {
+  it('gives every --mp-font-size-* a matching --mp-font-line-height-*', () => {
+    const sizes = declared.filter((token) => token.startsWith('--mp-font-size-'));
+    expect(sizes.length, 'no type sizes are declared').toBeGreaterThan(4);
+
+    const missing = sizes
+      .map((size) => size.replace('--mp-font-size-', '--mp-font-line-height-'))
+      .filter((leading) => !declared.includes(leading));
+    expect(
+      missing,
+      'one ratio for every size is why the h1 reads as large body text (spec §4.2)',
+    ).toEqual([]);
+  });
+
+  for (const combination of COMBINATIONS) {
+    it(`resolves every leading to a unitless number in ${label(combination)}`, () => {
+      const leadings = declared.filter((token) => token.startsWith('--mp-font-line-height'));
+      const bad = leadings.filter((token) => {
+        const value = resolve(graph, token, combination).value;
+        return !/^\d+(?:\.\d+)?$/.test(value);
+      });
+      expect(bad, 'a leading with a unit does not scale with the font size').toEqual([]);
+    });
+  }
+});
+
+describe('AC21 — the display steps are fluid', () => {
+  /** `clamp(1.75rem, 1.4rem + 1.75vw, 2.5rem)` → the first and last arguments, in rem. */
+  function bounds(value: string): [number, number] | null {
+    const inner = /^clamp\(([\s\S]+)\)$/.exec(value.trim());
+    if (!inner) return null;
+    const parts = (inner[1] ?? '').split(',');
+    if (parts.length !== 3) return null;
+    const rem = (part: string): number | null => {
+      const match = /^\s*(-?\d+(?:\.\d+)?)rem\s*$/.exec(part);
+      return match ? Number(match[1]) : null;
+    };
+    const [min, max] = [rem(parts[0] ?? ''), rem(parts[2] ?? '')];
+    return min === null || max === null ? null : [min, max];
+  }
+
+  for (const combination of COMBINATIONS) {
+    it(`clamps the display sizes between a smaller floor and a larger ceiling in ${label(combination)}`, () => {
+      const display = declared.filter((token) => token.startsWith('--mp-font-size-display'));
+      expect(display.length, 'no display step exists — the h1 is still body-sized').toBeGreaterThan(
+        0,
+      );
+
+      const failures = display
+        .map((token) => {
+          const value = resolve(graph, token, combination).value;
+          const range = bounds(value);
+          if (!range) return `${token} is not a clamp() of two rem bounds: ${value}`;
+          const [min, max] = range;
+          return min < max
+            ? null
+            : `${token} has a floor that is not below its ceiling: ${min}rem … ${max}rem`;
+        })
+        .filter((failure) => failure !== null);
       expect(failures).toEqual([]);
     });
   }

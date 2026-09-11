@@ -20,31 +20,63 @@
 [data-theme='default'] {
   /* ---------------------------------------------------------------- primitive */
 
-  /* Warm neutrals at the light end, cool at the dark end — the ramp as it was drawn. */
-  --mp-palette-stone-0: #ffffff;
-  --mp-palette-stone-50: #fbfaf9;
-  --mp-palette-stone-100: #f2f0ee;
-  --mp-palette-stone-200: #e0dcd7;
-  --mp-palette-stone-400: #a6a1ac;
-  --mp-palette-stone-500: #6b6560;
-  --mp-palette-stone-700: #3a3841;
-  --mp-palette-stone-800: #292830;
-  --mp-palette-stone-850: #1f1e24;
-  --mp-palette-stone-900: #1c1a18;
-  --mp-palette-stone-950: #16151a;
+  /*
+   * The ramp (`W12-T18`). Every value is **vendored from Radix Colors** (MIT) — the scale and step
+   * are named on each line — and copied in as a literal rather than installed. ADR-012 §4 says a
+   * theme is a palette plus the mapping over it and nothing else; a theme that declared
+   * `--mp-palette-sand-2: var(--sand-2)` would be a theme that no longer resolves on its own,
+   * because `tokens.test.ts` walks a graph of `--mp-*` declarations and `--sand-2` is not in it.
+   * It also keeps the dependency count, and the bundle `W12-T15` is over budget on, where it was.
+   *
+   * Radix earns its place because its twelve steps are defined by **role**, not by lightness —
+   * 1–2 page background, 3–5 component background, 6–8 borders, 9–10 solid fills, 11 muted text,
+   * 12 high-contrast text. That is nearly the set of semantic names `W12-T05` already chose, so
+   * the mapping below is a table rather than a judgement call.
+   *
+   * `sand` is the warm neutral the old hand-drawn ramp was reaching for. `brown` is the clay: it is
+   * the one warm accent that clears 4.5:1 **both** as a solid fill under white text and as text on
+   * a near-white surface, which is what lets one `--mp-color-accent` do both jobs. Orange cannot —
+   * `orange-11` measures 4.43:1 on `sand-1`, and the derived AC6 is what found that.
+   */
 
-  --mp-palette-clay-400: #e8935c;
-  --mp-palette-clay-600: #b4531f;
+  /* Radix `sand` — steps 1, 2, 3, 7, 11, 12 (light) and the same steps of `sand-dark`. */
+  --mp-palette-sand-1: #fdfdfc;
+  --mp-palette-sand-2: #f9f9f8;
+  --mp-palette-sand-3: #f1f0ef;
+  --mp-palette-sand-7: #cfceca;
+  --mp-palette-sand-11: #63635e;
+  --mp-palette-sand-12: #21201c;
 
-  --mp-palette-blue-300: #8ab4f8;
-  --mp-palette-blue-700: #1d4ed8;
+  --mp-palette-sand-dark-1: #111110;
+  --mp-palette-sand-dark-2: #191918;
+  --mp-palette-sand-dark-3: #222221;
+  --mp-palette-sand-dark-7: #494844;
+  --mp-palette-sand-dark-11: #b5b3ad;
+  --mp-palette-sand-dark-12: #eeeeec;
 
-  --mp-palette-red-200: #f2b8b5;
-  --mp-palette-red-700: #b3261e;
+  /* Radix `brown` step 11 — the clay accent, solid fill and accent text both. */
+  --mp-palette-brown-11: #815e46;
+  --mp-palette-brown-dark-11: #dbb594;
 
-  --mp-palette-green-300: #7fd3a3;
-  --mp-palette-green-700: #1f6f43;
+  /* Radix `blue`, `red`, `grass` — step 11, the text-contrast step, in each scheme. */
+  --mp-palette-blue-11: #0d74ce;
+  --mp-palette-blue-dark-11: #70b8ff;
 
+  --mp-palette-red-11: #ce2c31;
+  --mp-palette-red-dark-11: #ff9592;
+
+  --mp-palette-grass-11: #2a7e3b;
+  --mp-palette-grass-dark-11: #71d083;
+
+  /*
+   * Shadow alphas. Not a Radix scale — a shadow is the absence of light, not a hue, and Radix does
+   * not ship one. The geometry of the elevation set below follows Open Props `--shadow-1` and
+   * `--shadow-2`; the colour is ours, because Open Props' version resolves through
+   * `--shadow-color` and `--shadow-strength`, two more names outside this namespace.
+   */
+  --mp-palette-shadow-09: rgb(0 0 0 / 9%);
+  --mp-palette-shadow-12: rgb(0 0 0 / 12%);
+  --mp-palette-shadow-20: rgb(0 0 0 / 20%);
   --mp-palette-shadow-45: rgb(0 0 0 / 45%);
   --mp-palette-shadow-65: rgb(0 0 0 / 65%);
 
@@ -52,21 +84,39 @@
 
   /* Roles, not shades. `--mp-color-danger`, never `--mp-color-red-700`: the design system should
      be able to change the red without renaming anything. */
-  --mp-color-bg: light-dark(var(--mp-palette-stone-50), var(--mp-palette-stone-950));
-  --mp-color-surface: light-dark(var(--mp-palette-stone-0), var(--mp-palette-stone-850));
-  --mp-color-surface-muted: light-dark(var(--mp-palette-stone-100), var(--mp-palette-stone-800));
-  --mp-color-border: light-dark(var(--mp-palette-stone-200), var(--mp-palette-stone-700));
-  --mp-color-text: light-dark(var(--mp-palette-stone-900), var(--mp-palette-stone-100));
-  --mp-color-text-muted: light-dark(var(--mp-palette-stone-500), var(--mp-palette-stone-400));
-  --mp-color-accent: light-dark(var(--mp-palette-clay-600), var(--mp-palette-clay-400));
-  --mp-color-accent-contrast: light-dark(var(--mp-palette-stone-0), var(--mp-palette-stone-900));
-  --mp-color-focus: light-dark(var(--mp-palette-blue-700), var(--mp-palette-blue-300));
-  --mp-color-danger: light-dark(var(--mp-palette-red-700), var(--mp-palette-red-200));
-  --mp-color-success: light-dark(var(--mp-palette-green-700), var(--mp-palette-green-300));
+  --mp-color-bg: light-dark(var(--mp-palette-sand-2), var(--mp-palette-sand-dark-1));
+  --mp-color-surface: light-dark(var(--mp-palette-sand-1), var(--mp-palette-sand-dark-2));
+  --mp-color-surface-muted: light-dark(var(--mp-palette-sand-3), var(--mp-palette-sand-dark-3));
+  --mp-color-border: light-dark(var(--mp-palette-sand-7), var(--mp-palette-sand-dark-7));
+  --mp-color-text: light-dark(var(--mp-palette-sand-12), var(--mp-palette-sand-dark-12));
+  --mp-color-text-muted: light-dark(var(--mp-palette-sand-11), var(--mp-palette-sand-dark-11));
+  --mp-color-accent: light-dark(var(--mp-palette-brown-11), var(--mp-palette-brown-dark-11));
+  --mp-color-accent-contrast: light-dark(var(--mp-palette-sand-1), var(--mp-palette-sand-dark-1));
+  --mp-color-focus: light-dark(var(--mp-palette-blue-11), var(--mp-palette-blue-dark-11));
+  --mp-color-danger: light-dark(var(--mp-palette-red-11), var(--mp-palette-red-dark-11));
+  --mp-color-success: light-dark(var(--mp-palette-grass-11), var(--mp-palette-grass-dark-11));
 
   /* The scrim over a modal. It was the one literal left in the component layer, where the colour
      gate could not see it, because the gate exempted the token file wholesale. */
   --mp-color-overlay: light-dark(var(--mp-palette-shadow-45), var(--mp-palette-shadow-65));
+
+  /*
+   * Elevation (`W12-T18`). Before this, the two shadow entries were read by `Dialog` and `Popover`
+   * and by nothing else, so every surface in the product was flat and nothing had hierarchy. The
+   * geometry is Open Props `--shadow-1` (resting) and `--shadow-2` (raised); `overlay` is the
+   * heavier pair the two overlay components were already reaching for.
+   *
+   * Dark schemes get more opacity, not less: a shadow on a near-black background is nearly
+   * invisible at the alpha that reads correctly on white.
+   */
+  --mp-elevation-resting: 0 1px 2px -1px
+    light-dark(var(--mp-palette-shadow-12), var(--mp-palette-shadow-45));
+  --mp-elevation-raised:
+    0 3px 5px -2px light-dark(var(--mp-palette-shadow-09), var(--mp-palette-shadow-45)),
+    0 7px 14px -5px light-dark(var(--mp-palette-shadow-12), var(--mp-palette-shadow-65));
+  --mp-elevation-overlay:
+    0 10px 20px -5px light-dark(var(--mp-palette-shadow-20), var(--mp-palette-shadow-65)),
+    0 20px 40px -10px light-dark(var(--mp-palette-shadow-12), var(--mp-palette-shadow-65));
 
   --mp-font-family: system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
 }

@@ -60,6 +60,17 @@
   --mp-color-overlay: light-dark(var(--mp-palette-shadow-75), var(--mp-palette-shadow-85));
 
   /*
+   * Elevation, the high-contrast reading of it (`W12-T18`). The same three names the default theme
+   * declares — AC3 compares the sets — but this theme states depth with a hard, offset edge rather
+   * than a soft gradient, because a blurred shadow is exactly the cue that disappears for the
+   * reader this theme exists for. The doubled `--mp-border-width` below is already carrying most of
+   * the hierarchy; these put the rest of it somewhere a component can read.
+   */
+  --mp-elevation-resting: 0 2px 0 0 light-dark(var(--mp-palette-ink-1000), var(--mp-palette-ink-0));
+  --mp-elevation-raised: 0 4px 0 0 light-dark(var(--mp-palette-ink-1000), var(--mp-palette-ink-0));
+  --mp-elevation-overlay: 0 6px 0 0 light-dark(var(--mp-palette-ink-1000), var(--mp-palette-ink-0));
+
+  /*
    * The font pairing. Atkinson Hyperlegible was drawn for low vision and is the right first choice
    * here; it is named rather than loaded, so a reader who has it installed gets it and everyone
    * else gets the system stack. Acquiring a webfont is a performance decision with a budget

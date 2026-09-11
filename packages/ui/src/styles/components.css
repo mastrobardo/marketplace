@@ -52,6 +52,7 @@
   --mp-dialog-radius: var(--mp-radius-lg);
   --mp-dialog-padding: var(--mp-space-6);
   --mp-dialog-max-width: 32rem;
+  --mp-dialog-shadow: var(--mp-elevation-overlay);
 
   --mp-card-gap: var(--mp-space-2);
   --mp-card-padding: var(--mp-space-4);
@@ -63,6 +64,8 @@
   --mp-card-border-hover: var(--mp-color-accent);
   --mp-card-description-fg: var(--mp-color-text-muted);
   --mp-card-eyebrow-fg: var(--mp-color-accent);
+  --mp-card-shadow: var(--mp-elevation-resting);
+  --mp-card-shadow-hover: var(--mp-elevation-raised);
 
   --mp-row-gap: var(--mp-space-2);
   --mp-row-padding: var(--mp-space-4);
@@ -75,6 +78,8 @@
   --mp-row-meta-fg: var(--mp-color-text-muted);
   --mp-row-badge-bg: var(--mp-color-surface-muted);
   --mp-row-badge-fg: var(--mp-color-text);
+  --mp-row-shadow: var(--mp-elevation-resting);
+  --mp-row-shadow-hover: var(--mp-elevation-raised);
 
   --mp-empty-bg: var(--mp-color-surface);
   --mp-empty-border: var(--mp-color-border);
@@ -89,6 +94,7 @@
   --mp-popover-border: var(--mp-color-border);
   --mp-popover-radius: var(--mp-radius-md);
   --mp-popover-padding: var(--mp-space-4);
+  --mp-popover-shadow: var(--mp-elevation-overlay);
 }
 
 /* `W12-T07` — the search bar, the first pattern. Layout, not colour: the fields inside it are
@@ -103,4 +109,5 @@
   --mp-search-field-min: 12rem;
   --mp-search-compact-gap: var(--mp-space-2);
   --mp-search-compact-field-min: 9rem;
+  --mp-search-shadow: var(--mp-elevation-raised);
 }
