@@ -1,0 +1,356 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Marketplace storefront — the layers, and the path a search takes",
+    "output": "storefront-architecture.html",
+    "quality_profile": "showcase",
+    "viewBox": [
+      1310,
+      630
+    ],
+    "views": [
+      {
+        "id": "design-system",
+        "label": "Design system",
+        "focus": [
+          "tokens",
+          "primitives",
+          "patterns",
+          "workbench"
+        ],
+        "note": "ADR-012: tokens to primitives to patterns, with every component deployed to a workbench reviewers can click."
+      },
+      {
+        "id": "data-path",
+        "label": "What a search does",
+        "focus": [
+          "pages",
+          "schema",
+          "client",
+          "api",
+          "db"
+        ],
+        "note": "One declaration produces the query; the same call runs in the browser today and on a Worker after the rendering switch."
+      },
+      {
+        "id": "boundary",
+        "label": "Where M11 ends",
+        "focus": [
+          "edge",
+          "pages",
+          "authwall",
+          "fixtures"
+        ],
+        "note": "The public storefront stops at the auth wall, and builds against stand-in data until the search API exists."
+      }
+    ]
+  },
+  "components": [
+    {
+      "id": "tokens",
+      "type": "frontend",
+      "label": "Design tokens",
+      "sublabel": "primitive → semantic → component",
+      "pos": [
+        70,
+        530
+      ],
+      "size": [
+        190,
+        64
+      ],
+      "tag": "tokens.css"
+    },
+    {
+      "id": "primitives",
+      "type": "frontend",
+      "label": "Primitives",
+      "sublabel": "Button · Field · Select · Combobox",
+      "pos": [
+        70,
+        370
+      ],
+      "size": [
+        190,
+        64
+      ],
+      "tag": "React Aria"
+    },
+    {
+      "id": "patterns",
+      "type": "frontend",
+      "label": "Patterns",
+      "sublabel": "SearchBar · Card · ResultRow",
+      "pos": [
+        70,
+        210
+      ],
+      "size": [
+        190,
+        64
+      ]
+    },
+    {
+      "id": "workbench",
+      "type": "cloud",
+      "label": "Storybook workbench",
+      "sublabel": "deployed per pull request",
+      "pos": [
+        70,
+        50
+      ],
+      "size": [
+        190,
+        64
+      ],
+      "tag": "axe per story"
+    },
+    {
+      "id": "edge",
+      "type": "cloud",
+      "label": "Cloudflare Pages",
+      "sublabel": "static today, Workers at W12-T14",
+      "pos": [
+        410,
+        50
+      ],
+      "size": [
+        190,
+        64
+      ]
+    },
+    {
+      "id": "pages",
+      "type": "frontend",
+      "label": "Storefront pages",
+      "sublabel": "home · results · provider · landing",
+      "pos": [
+        410,
+        210
+      ],
+      "size": [
+        190,
+        64
+      ]
+    },
+    {
+      "id": "schema",
+      "type": "frontend",
+      "label": "Search schema",
+      "sublabel": "one declaration, three renderings",
+      "pos": [
+        750,
+        210
+      ],
+      "size": [
+        190,
+        64
+      ]
+    },
+    {
+      "id": "client",
+      "type": "backend",
+      "label": "Generated client",
+      "sublabel": "packages/contracts",
+      "pos": [
+        750,
+        370
+      ],
+      "size": [
+        190,
+        64
+      ]
+    },
+    {
+      "id": "api",
+      "type": "backend",
+      "label": "Fastify API",
+      "sublabel": "search · providers · listings",
+      "pos": [
+        750,
+        530
+      ],
+      "size": [
+        190,
+        64
+      ]
+    },
+    {
+      "id": "db",
+      "type": "database",
+      "label": "PostgreSQL + PostGIS",
+      "sublabel": "radius, never the map",
+      "pos": [
+        1080,
+        530
+      ],
+      "size": [
+        190,
+        64
+      ]
+    },
+    {
+      "id": "fixtures",
+      "type": "external",
+      "label": "MSW fixtures",
+      "sublabel": "packages/testing factories",
+      "pos": [
+        1080,
+        370
+      ],
+      "size": [
+        190,
+        64
+      ]
+    },
+    {
+      "id": "authwall",
+      "type": "security",
+      "label": "Auth wall",
+      "sublabel": "accounts, jobs, payments",
+      "pos": [
+        410,
+        370
+      ],
+      "size": [
+        190,
+        64
+      ],
+      "tag": "M11 ends here"
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "packages/ui — domain-free, imports no contracts",
+      "wraps": [
+        "tokens",
+        "primitives",
+        "patterns"
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "tokens-to-primitives",
+      "from": "tokens",
+      "to": "primitives",
+      "label": "semantic tokens only",
+      "fromSide": "top",
+      "toSide": "bottom"
+    },
+    {
+      "id": "primitives-to-patterns",
+      "from": "primitives",
+      "to": "patterns",
+      "label": "composed",
+      "fromSide": "top",
+      "toSide": "bottom"
+    },
+    {
+      "id": "patterns-to-workbench",
+      "from": "patterns",
+      "to": "workbench",
+      "label": "every state, reviewable",
+      "fromSide": "top",
+      "toSide": "bottom",
+      "labelDy": -30
+    },
+    {
+      "id": "patterns-to-pages",
+      "from": "patterns",
+      "to": "pages",
+      "label": "composed into pages",
+      "variant": "emphasis"
+    },
+    {
+      "id": "edge-to-pages",
+      "from": "edge",
+      "to": "pages",
+      "label": "serves HTML",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "labelDy": 24
+    },
+    {
+      "id": "pages-to-schema",
+      "from": "pages",
+      "to": "schema",
+      "label": "what · where · when",
+      "variant": "emphasis"
+    },
+    {
+      "id": "schema-to-client",
+      "from": "schema",
+      "to": "client",
+      "label": "SearchQuery in the URL",
+      "variant": "emphasis",
+      "labelDy": 24
+    },
+    {
+      "id": "client-to-api",
+      "from": "client",
+      "to": "api",
+      "label": "GET /search",
+      "variant": "emphasis",
+      "labelDy": 24
+    },
+    {
+      "id": "api-to-db",
+      "from": "api",
+      "to": "db",
+      "label": "PostGIS radius",
+      "fromSide": "right",
+      "toSide": "left"
+    },
+    {
+      "id": "fixtures-to-client",
+      "from": "fixtures",
+      "to": "client",
+      "label": "stands in for the API",
+      "variant": "dashed",
+      "fromSide": "left",
+      "toSide": "right"
+    },
+    {
+      "id": "pages-to-authwall",
+      "from": "pages",
+      "to": "authwall",
+      "label": "CTA stops here",
+      "variant": "security",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "labelDy": 24
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Design system — ADR-012",
+      "items": [
+        "React Aria supplies behaviour; tokens supply the only appearance",
+        "Every story is an accessibility test — a violation fails the PR",
+        "A theme is one file, and a second theme proves the swap is real"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Storefront — ADR-011",
+      "items": [
+        "One declaration renders hero, header bar and filter rail",
+        "The query lives in the URL — a page renders from the request alone",
+        "Results are noindex; the curated city matrix is what gets indexed"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "Boundaries that matter",
+      "items": [
+        "M11 ends at the auth wall; M1/M3/M4 arrive into a front end that exists",
+        "packages/ui never imports packages/contracts",
+        "Fixtures come from the shared test factories, never a second set"
+      ]
+    }
+  ]
+}
