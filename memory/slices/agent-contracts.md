@@ -155,4 +155,60 @@ Keep it to facts that changed how you would work. Task-specific detail stays in 
   the implementation existed, it never went red: restore the stub, rebuild, run it, and say in the
   run record that the red was reconstructed.
 - **evidence**: `docs/specs/S1/W1-T09-test-factories.run.md` §Red phase
+### A state change goes through `transition()`, and its recorder is not optional
+- **id**: MEM-2026-09-10-09
+- **scope**: slice:S1
+- **fact**: `W1-T07` put one mechanism in `packages/contracts/src/state-machine.ts` for all six
+  machines `TODO.md` §3 names. `defineMachine` validates the table at module load — unknown states,
+  two rules for one `(from, event)`, unreachable states, and dead ends not declared `terminal` are
+  all definition errors. `transition(machine, request, record)` takes the recorder as a **required
+  third parameter**, so a caller cannot obtain the new state without having supplied something that
+  persists the audit record.
+- **why**: The alternative — returning the record and trusting the caller to write it — makes
+  "every transition is recorded" a thing review has to notice on thirteen agents' pull requests.
+  As a required parameter it is a thing the type checker enforces once.
+- **apply**: Reviewing a slice with a status column: grep its updates for `status:` and
+  `state:`. Any assignment not downstream of a `transition()` call is a review finding. Declare the
+  machine at module scope, never per request, or `defineMachine`'s checks run on every call instead
+  of at boot. Guards are synchronous and pure by design: load what the guard needs first and pass
+  it as `context`.
+- **evidence**: `packages/contracts/src/state-machine.ts`;
+  `docs/specs/S1/W1-T07-state-machine.md` §4
+- **status**: active
+
+### `audit_record` is append-only and its `actor_id` deliberately dangles
+- **id**: MEM-2026-09-10-10
+- **scope**: slice:S1
+- **fact**: A trigger raises `AUDIT_RECORD_IMMUTABLE` on any `UPDATE` or `DELETE` of
+  `audit_record`, and `actor_id` carries **no foreign key** to `app_user`. A `CHECK` named
+  `audit_record_actor_pairing_check` enforces `(actor_type = 'SYSTEM') = (actor_id IS NULL)`, which
+  is the same rule `AuditRecordSchema`'s discriminated union states in zod.
+- **why**: `W2-T08` (GDPR erasure) may hard-delete a user row. `ON DELETE CASCADE` would erase the
+  ledger of what that user did, and `RESTRICT` would block the erasure the law requires — so the
+  column stores a uuid nothing guarantees still resolves. This is the one place in the schema where
+  that is correct. The trigger exists because "nobody updates the audit table" holds right up to
+  the first backfill migration.
+- **apply**: A wrong audit record is corrected by writing a new one, never by editing it — do not
+  write a migration that backfills this table. Joining `actor_id` to `app_user` must be a LEFT
+  join; an inner join silently drops the actions of erased users, which is the opposite of what an
+  audit query is for. `pnpm db:reset` is unaffected: `prisma migrate reset` drops the schema, and
+  row triggers do not fire on `TRUNCATE`.
+- **evidence**: `apps/api/prisma/migrations/0006_audit_record/migration.sql`;
+  `docs/specs/S1/W1-T07-state-machine.md` §8.2
+- **status**: active
+
+### When the deliverable is a database object, hold it out of the contract freeze
+- **id**: MEM-2026-09-10-11
+- **scope**: slice:S1
+- **fact**: Refines [[MEM-2026-09-10-03]] for DDL. The pipeline puts the Prisma freeze *before* the
+  red phase, so a trigger or a `CHECK` written in that step makes its tests pass on their first ever
+  run. In `W1-T07` the freeze landed only what `prisma migrate diff` produced — table, enum,
+  indexes — and the trigger and `CHECK` were added in the green phase, so all 26 criteria went red.
+- **why**: A constraint test that has never failed is not evidence the constraint works; it is
+  evidence the test ran. This is the only technique found so far that gives DDL an honest red
+  phase, and it cost one `psql` call to drop two objects from the dev database.
+- **apply**: Split the migration mentally into "what Prisma generates" (freeze) and "what I wrote by
+  hand" (green). Never edit a migration that has already merged — this works only because the
+  migration was still on the branch.
+- **evidence**: `docs/specs/S1/W1-T07-state-machine.run.md` §Red phase
 - **status**: active

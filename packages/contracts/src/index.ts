@@ -7,3 +7,4 @@
 export * from './errors.js';
 export * from './money.js';
 export * from './pagination.js';
+export * from './state-machine.js';
