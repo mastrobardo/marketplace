@@ -255,3 +255,101 @@ body {
   background: var(--mp-color-surface-muted);
   color: var(--mp-color-text-muted);
 }
+
+/* W12-T11 — the results page: a rail and a list, one column on a phone.
+   The rail comes first in the source because it is what a visitor changes; on a wide screen the
+   grid puts it to the left without reordering the DOM, so the tab order matches the reading order. */
+.mp-results {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--mp-space-8);
+  align-items: start;
+}
+
+@media (min-width: 60rem) {
+  .mp-results {
+    grid-template-columns: 18rem 1fr;
+  }
+}
+
+.mp-results__rail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mp-space-4);
+  min-width: 0;
+}
+
+.mp-results__main {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mp-space-4);
+  min-width: 0;
+}
+
+.mp-results__count {
+  margin: 0;
+  color: var(--mp-color-text-muted);
+  font-size: var(--mp-font-size-sm);
+}
+
+.mp-results__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mp-space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.mp-facets h2,
+.mp-facets h3 {
+  margin-block: var(--mp-space-4) var(--mp-space-2);
+  font-size: var(--mp-font-size-base);
+}
+
+.mp-facets__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mp-space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--mp-font-size-sm);
+}
+
+.mp-facets__count {
+  color: var(--mp-color-text-muted);
+}
+
+/* The map's own region. It has a reserved height so that the chunk arriving later does not shove
+   the list down the page — a layout shift is a CLS cost and W12-T15 gates on it. */
+.mp-map {
+  min-height: 12rem;
+  display: flex;
+  border: 1px solid var(--mp-color-border);
+  border-radius: var(--mp-radius-md);
+  background: var(--mp-color-surface-muted);
+}
+
+.mp-map__placeholder {
+  margin: auto;
+  padding: var(--mp-space-4);
+  color: var(--mp-color-text-muted);
+  font-size: var(--mp-font-size-sm);
+  text-align: center;
+}
+
+/* Visible to a screen reader, not to the eye — for a heading that names a region whose purpose is
+   already obvious visually. `clip-path` rather than `display: none`, which removes it from the
+   accessibility tree and would leave the landmark unnamed. */
+.mp-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}

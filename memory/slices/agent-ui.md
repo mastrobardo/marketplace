@@ -498,3 +498,67 @@ Keep it to facts that changed how you would work. Task-specific detail stays in 
   today. Verify the list against `.github/workflows/` rather than against what the last task ran.
 - **evidence**: PR #231 run 34637469143; `docs/specs/S10/W12-T10-home-page.run.md` §8
 - **status**: active
+
+### A deferred import is a claim about the bundler, so assert the bundler's output
+- **id**: MEM-2026-09-11-29
+- **scope**: slice:S10
+- **fact**: `W12-T11` splits the map with `lazy(() => import('./ResultsMap.js'))` per ADR-011 §6/`R9`.
+  Flattening that to a static import leaves **every behavioural test passing** — the page renders, the
+  map shows, nothing errors — while the module moves into the entry chunk. `mocks.test.ts` AC14 reads
+  the emitted chunks instead, and it was proven by deliberately flattening the import and watching it
+  fail before it was believed.
+- **why**: Code-splitting has no observable behaviour when it stops working; it only has a cost. This
+  is the same class as `W12-T08`'s one-sided mock assertion and `W12-T04`'s axe gate — a check that
+  can only pass is not a check.
+- **apply**: Any claim about *how* code is delivered — a chunk, a tree-shake, a flag-stripped module —
+  is asserted against build output and probed red once. Behavioural tests cannot see it.
+- **evidence**: `apps/web/tests/mocks.test.ts` AC14; `apps/web/src/features/search/MapRegion.tsx`;
+  `docs/specs/S10/W12-T11-results-page.run.md` §1
+- **status**: active
+
+### A schema that transforms on the way in cannot be serialised on the way out
+- **id**: MEM-2026-09-11-30
+- **scope**: slice:S10
+- **fact**: `SearchQuerySchema` *decodes* `cursor` into a `CursorPosition` and parses `sort` into an
+  array (`W1-T02`). The first `ApiClient.search` took that parsed output and serialised it with
+  `String(value)`, which would have requested `?cursor=[object Object]` on page two. The client now
+  takes the query **as strings** — the shape a URL holds — and the caller validates before sending.
+- **why**: A parse that transforms is one-directional by design. Reconstructing the input from the
+  output needs the contract's encoders and re-derives a string the caller already had. The same
+  property is load-bearing elsewhere: because a bad cursor *fails validation*, a stale shared link can
+  be detected and degraded to page one instead of 500ing.
+- **apply**: When a contract schema transforms, the client boundary takes the **input** shape, not the
+  output. Watch for this when `W1-T03` generates the real client — if it takes the parsed type, that
+  is the seam to change deliberately, not to cast around.
+- **evidence**: `apps/web/src/shared/api.ts`; `apps/web/src/routes/search.tsx` loader;
+  `results.test.tsx` AC11
+- **status**: active
+
+### A nested list inside a list item is ambiguous to a screen reader and to a query
+- **id**: MEM-2026-09-11-31
+- **scope**: slice:S10
+- **fact**: `ResultRow` rendered badges as a `<ul>`, and each row is an `<li>` in the results list. So
+  `getAllByRole('listitem')` returned rows *and* badges — one test read a badge as a result, another
+  compared row *n* to provider *n* across two offset lists. Badges are spans in a `<p>` now.
+- **why**: The test failure was the symptom; the markup was the bug. "PRO" and "Licencia verificada"
+  read as a phrase, and nesting a list inside a row makes "the items in this list" genuinely
+  ambiguous — which is why the query could not answer it either.
+- **apply**: Two or three short labels are a phrase, not a list. Reserve list semantics for the level
+  the reader is actually navigating.
+- **evidence**: `packages/ui/src/patterns/results/ResultRow.tsx`; `apps/web/tests/results.test.tsx` AC3/AC4
+- **status**: active
+
+### A React Aria Select is named by its label *and* its value
+- **id**: MEM-2026-09-11-32
+- **scope**: slice:S10
+- **fact**: The Select trigger's accessible name is "Cuándo Cuando sea" — label plus current value —
+  while a Combobox's is the label alone. An assertion written against the comboboxes (`what`, `where`)
+  passed and then failed on the first `choice` field. `results.test.tsx` AC12 matches by substring
+  across `combobox` and `button` roles.
+- **why**: Correct for a screen reader, and invisible until a test meets both control types. Also:
+  `getByLabelText` is the weaker query here — it asks whether a node carries the text, not whether a
+  visitor can reach a control by that name.
+- **apply**: Assert fields by control role + accessible name, substring-matched, whenever a form mixes
+  React Aria control types.
+- **evidence**: `apps/web/tests/results.test.tsx` AC12
+- **status**: active

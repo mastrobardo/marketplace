@@ -150,6 +150,26 @@ describe('AC17..AC18 — none of this ships, and all of it is typechecked', () =
     }
   });
 
+  /** Every emitted JS chunk, by path — what "its own chunk" is a claim about. */
+  function bundledChunks(env: NodeJS.ProcessEnv = {}): { path: string; source: string }[] {
+    execFileSync('pnpm', ['exec', 'vite', 'build'], {
+      cwd: webRoot,
+      stdio: 'pipe',
+      env: { ...process.env, ...env },
+    });
+
+    const walk = (dir: string): string[] =>
+      readdirSync(dir).flatMap((entry) => {
+        const path = join(dir, entry);
+        if (statSync(path).isDirectory()) return walk(path);
+        return entry.endsWith('.js') ? [path] : [];
+      });
+
+    const files = walk(join(webRoot, 'dist'));
+    expect(files.length, 'the build produced no JavaScript').toBeGreaterThan(0);
+    return files.map((path) => ({ path, source: readFileSync(path, 'utf8') }));
+  }
+
   /** Every text asset a build emitted, which is what the two assertions below are actually about. */
   function bundledSources(env: NodeJS.ProcessEnv = {}): string[] {
     execFileSync('pnpm', ['exec', 'vite', 'build'], {
@@ -181,6 +201,34 @@ describe('AC17..AC18 — none of this ships, and all of it is typechecked', () =
       expect(source, 'a chunk contains a seeded provider').not.toContain('Fontanería Gómez');
       expect(source, 'a chunk bundles msw').not.toMatch(/setupWorker|mockServiceWorker\.js/);
     }
+  });
+
+  /**
+   * `W12-T11` AC14 — the map is deferred, asserted against what Rollup emitted.
+   *
+   * This is the only check that can see it. A refactor that turns `lazy(() => import(…))` into a
+   * static import still **works**: every behavioural test passes, the page renders, and the map has
+   * quietly moved into the initial bundle — which is the exact cost `R9` exists to avoid and which
+   * ADR-011 §6 calls "the budget's main threat". Same shape as AC17/AC19 above: assert the output,
+   * not the source.
+   */
+  it('AC14 — the map is its own chunk, absent from the entry', { timeout: 180_000 }, () => {
+    const chunks = bundledChunks();
+    const marker = 'results.map.pending';
+
+    const carrying = chunks.filter((chunk) => chunk.source.includes(marker));
+    expect(carrying.length, 'no chunk contains the map module').toBeGreaterThan(0);
+
+    // The entry is the largest chunk Vite emits for an SPA; naming it by hash would be a test that
+    // breaks on every build. The claim is the important part: whatever the entry is, the *module*
+    // is not alone in it — there is a separate chunk that carries it.
+    const entry = chunks.reduce((largest, chunk) =>
+      chunk.source.length > largest.source.length ? chunk : largest,
+    );
+    expect(
+      carrying.some((chunk) => chunk.path !== entry.path),
+      'the map module is only in the entry chunk — the dynamic import was flattened',
+    ).toBe(true);
   });
 
   /**

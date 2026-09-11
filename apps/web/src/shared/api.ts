@@ -15,11 +15,24 @@
  * rather than as a module singleton, for the same reason R6 exists: on a Worker a module-scope
  * client outlives the request that configured it.
  */
-import { CategoryListSchema, type CategorySummary } from '@marketplace/contracts';
+import {
+  CategoryListSchema,
+  SearchResponseSchema,
+  type CategorySummary,
+  type SearchResponse,
+} from '@marketplace/contracts';
+import { type SearchQuery } from '@marketplace/ui';
 import axios, { type AxiosInstance } from 'axios';
 
 export interface ApiClient {
   getCategories: (locale: string) => Promise<CategorySummary[]>;
+  /**
+   * Takes the query as **strings** — the shape that goes in a URL — not `SearchQuerySchema`'s parsed
+   * output. That output is transformed: `cursor` comes out as a decoded `CursorPosition` and `sort`
+   * as an array, so serialising it back would need the contract's encoders and would re-derive a
+   * string the caller already had. The caller validates, then sends what the URL said.
+   */
+  search: (query: SearchQuery, locale: string) => Promise<SearchResponse>;
 }
 
 /**
@@ -41,6 +54,16 @@ export function createApiClient(
         headers: { 'Accept-Language': locale },
       });
       return CategoryListSchema.parse(response.data).items;
+    },
+
+    async search(query, locale) {
+      const params = new URLSearchParams(Object.entries(query));
+      const response = await http.get<unknown>(`search?${params.toString()}`, {
+        headers: { 'Accept-Language': locale },
+      });
+      // Parsed on the way in, like the categories call. A client that trusts the wire is a second
+      // definition of the API shape; one that parses is a consumer of the single definition.
+      return SearchResponseSchema.parse(response.data);
     },
   };
 }

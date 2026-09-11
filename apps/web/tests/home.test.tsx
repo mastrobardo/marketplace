@@ -62,10 +62,10 @@ describe('AC1..AC3 — the hero is the first thing on the page and it searches',
     await user.keyboard('{Escape}');
     await user.click(within(hero()).getByRole('button', { name: es['search.submit'] }));
 
-    // `W12-T11` builds the page; until then the correct landing is the 404, which is what proves
-    // the navigation happened at all.
+    // Until `W12-T11` this asserted the 404 — the deliberate intermediate state argued in that
+    // task's §10 Q1. The page exists now, so the assertion is the real landing.
     await waitFor(() => {
-      expect(screen.getByTestId('not-found')).toBeDefined();
+      expect(screen.getByTestId('results')).toBeDefined();
     });
   });
 

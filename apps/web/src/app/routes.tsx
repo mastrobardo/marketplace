@@ -8,6 +8,11 @@ import {
 import { Component as Home, loader as homeLoader } from '../routes/home.js';
 import { Component as BecomeAPro } from '../routes/become-a-pro.js';
 import {
+  Component as Search,
+  ErrorBoundary as SearchErrorBoundary,
+  loader as searchLoader,
+} from '../routes/search.js';
+import {
   Component as Legal,
   ErrorBoundary as LegalErrorBoundary,
   loader as legalLoader,
@@ -44,6 +49,14 @@ export const routes: RouteObject[] = [
       { index: true, Component: Home, loader: homeLoader },
       // Not `/es/hazte-profesional`: the language is the only translated segment (Amendment 1).
       { path: 'become-a-pro', Component: BecomeAPro },
+      // Its own boundary, not the shell's: a failed search must keep the filter rail, which is the
+      // only way a visitor can fix the query that failed.
+      {
+        path: 'search',
+        Component: Search,
+        loader: searchLoader,
+        ErrorBoundary: SearchErrorBoundary,
+      },
       {
         path: 'legal/:doc',
         Component: Legal,

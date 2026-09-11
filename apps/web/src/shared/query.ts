@@ -45,4 +45,8 @@ export function createQueryClient(): QueryClient {
 /** The key builders, in one place, so a loader and its component cannot disagree about a key. */
 export const queryKeys = {
   categories: (locale: string) => ['categories', locale] as const,
+  // The serialised query is the key, because it is also the URL: two searches that produce one URL
+  // are one cache entry, and `toSearchQuery` already emits keys in schema order so they cannot
+  // differ by ordering alone.
+  search: (locale: string, query: string) => ['search', locale, query] as const,
 };
