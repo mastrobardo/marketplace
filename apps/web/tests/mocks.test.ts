@@ -12,10 +12,11 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ID_PREFIXES } from '@marketplace/testing';
-import { SearchResponseSchema } from '@marketplace/contracts';
+import { ProviderProfileSchema, SearchResponseSchema } from '@marketplace/contracts';
 import { setupServer } from 'msw/node';
 import { buildCatalogue } from '../mocks/catalogue.js';
 import { handlers } from '../mocks/handlers.js';
+import { seededProviderIds } from '../mocks/provider.js';
 
 const webRoot = fileURLToPath(new URL('..', import.meta.url));
 
@@ -32,6 +33,11 @@ afterAll(() => {
 
 const search = async (query: string) => {
   const response = await fetch(`http://api.test/search?${query}`);
+  return { status: response.status, body: (await response.json()) as unknown };
+};
+
+const provider = async (id: string) => {
+  const response = await fetch(`http://api.test/providers/${id}`);
   return { status: response.status, body: (await response.json()) as unknown };
 };
 
@@ -246,5 +252,65 @@ describe('AC17..AC18 — none of this ships, and all of it is typechecked', () =
       sources.some((source) => source.includes('Fontanería Gómez')),
       'the handlers are bundled but the seeded catalogue is not',
     ).toBe(true);
+  });
+});
+
+/**
+ * `W12-T12` AC10..AC13 — `GET /providers/:id`.
+ *
+ * AC11 is the one worth having. Every other assertion here checks that the endpoint answers
+ * correctly; AC11 checks that the *two* endpoints agree with each other, which is the failure that
+ * would reach a visitor as a working list of links to nothing.
+ */
+describe('AC10..AC13 — the provider endpoint', () => {
+  it('AC10 — answers a seeded id with a row that parses as the contract', async () => {
+    const [id] = seededProviderIds();
+    const { status, body } = await provider(id ?? '');
+
+    expect(status).toBe(200);
+    const parsed = ProviderProfileSchema.safeParse(body);
+    expect(parsed.success, JSON.stringify(parsed.error?.issues)).toBe(true);
+  });
+
+  it('AC10 — publishes no account id, no address line and no stored coordinate', async () => {
+    const [id] = seededProviderIds();
+    const { body } = await provider(id ?? '');
+    const wire = JSON.stringify(body);
+
+    // The strict schema already refuses these; this asserts it against the wire rather than the
+    // object, because "the handler forgot to strip it" and "the schema let it through" are two
+    // different bugs and only one of them is caught upstream.
+    for (const forbidden of ['userId', 'baseAddressId', 'line1', 'line2', 'email']) {
+      expect(wire, `${forbidden} reached the wire`).not.toContain(forbidden);
+    }
+    expect(wire, 'a stored-precision coordinate reached the wire').not.toContain('40.416775');
+  });
+
+  it('AC11 — every id the search returns resolves, so no result row links to a 404', async () => {
+    const { body } = await search('where=28013');
+    const results = SearchResponseSchema.parse(body);
+    expect(results.items.length).toBeGreaterThan(0);
+
+    const statuses = await Promise.all(
+      results.items.map(async (item) => [item.id, (await provider(item.id)).status] as const),
+    );
+    expect(statuses.filter(([, status]) => status !== 200)).toEqual([]);
+  });
+
+  it('AC12 — a well-formed id nobody seeded is a NOT_FOUND envelope', async () => {
+    const { status, body } = await provider('00000000-0000-4000-8000-00000000dead');
+
+    expect(status).toBe(404);
+    expect(body).toMatchObject({ error: { code: 'NOT_FOUND' } });
+    expect((body as { error: { requestId?: string } }).error.requestId).toBeTruthy();
+  });
+
+  it('AC13 — a malformed id is VALIDATION_FAILED, not NOT_FOUND', async () => {
+    const { status, body } = await provider('not-a-uuid');
+
+    // A request nobody should have sent and a provider who is gone are different answers. Collapsing
+    // them would put "no longer listed" in front of a visitor who followed a corrupted link.
+    expect(status).toBe(400);
+    expect(body).toMatchObject({ error: { code: 'VALIDATION_FAILED' } });
   });
 });

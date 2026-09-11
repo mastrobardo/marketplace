@@ -13,6 +13,11 @@ import {
   loader as searchLoader,
 } from '../routes/search.js';
 import {
+  Component as Provider,
+  ErrorBoundary as ProviderErrorBoundary,
+  loader as providerLoader,
+} from '../routes/provider.js';
+import {
   Component as Legal,
   ErrorBoundary as LegalErrorBoundary,
   loader as legalLoader,
@@ -56,6 +61,14 @@ export const routes: RouteObject[] = [
         Component: Search,
         loader: searchLoader,
         ErrorBoundary: SearchErrorBoundary,
+      },
+      // Its own boundary too, and for a second reason beyond the shell rule: a profile has two
+      // failure modes — gone, and broken — and only one of them is an error.
+      {
+        path: 'pro/:id',
+        Component: Provider,
+        loader: providerLoader,
+        ErrorBoundary: ProviderErrorBoundary,
       },
       {
         path: 'legal/:doc',

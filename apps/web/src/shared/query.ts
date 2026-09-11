@@ -18,7 +18,7 @@
  */
 import { QueryClient } from '@tanstack/react-query';
 import { createContext } from 'react-router';
-import { type ApiClient } from './api.js';
+import { ApiError, type ApiClient } from './api.js';
 
 /** What every loader is handed. One place to add to when a second dependency appears. */
 export interface RouteContext {
@@ -35,7 +35,19 @@ export function createQueryClient(): QueryClient {
         // The loader has already awaited the data by the time a component renders, so an immediate
         // background refetch on mount would be a second request for something we just fetched.
         staleTime: 60_000,
-        retry: 1,
+        /**
+         * Retry a failure that might be transient; never one the server has already decided.
+         *
+         * A 404 is an answer — the provider is gone, and asking again a second later gets the same
+         * answer more slowly. A 400 is the request's own fault. Retrying either buys nothing and
+         * costs the visitor the retry delay before they are told anything at all, which on the
+         * profile page is a blank screen in front of a page that was ready immediately.
+         */
+        retry: (failureCount, error) => {
+          const status = error instanceof ApiError ? error.status : undefined;
+          if (status !== undefined && status >= 400 && status < 500) return false;
+          return failureCount < 1;
+        },
         refetchOnWindowFocus: false,
       },
     },
@@ -49,4 +61,5 @@ export const queryKeys = {
   // are one cache entry, and `toSearchQuery` already emits keys in schema order so they cannot
   // differ by ordering alone.
   search: (locale: string, query: string) => ['search', locale, query] as const,
+  provider: (locale: string, id: string) => ['provider', locale, id] as const,
 };

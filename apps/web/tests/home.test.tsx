@@ -212,6 +212,18 @@ describe('AC12..AC13 — the supply-side landing, and where it stops', () => {
     expect(screen.getByText(es['pro.pending'])).toBeDefined();
   });
 
+  it('AC26 — states it through the shared AuthWall, not its own paragraph', async () => {
+    renderApp('/es/become-a-pro');
+    await screen.findByTestId('become-a-pro');
+
+    // `W12-T12` §4.5: two call sites is what makes this a component rather than a guess. The
+    // assertion is the region, because that is the part a bare `<p>` did not have.
+    const wall = screen.getByRole('region', { name: es['pro.title'] });
+    expect(wall.textContent).toContain(es['pro.pending']);
+    expect(within(wall).queryByRole('button')).toBeNull();
+    expect(within(wall).queryByRole('link')).toBeNull();
+  });
+
   it('AC13 — renders in English at /en/become-a-pro', async () => {
     renderApp('/en/become-a-pro');
     await screen.findByTestId('become-a-pro');

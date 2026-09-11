@@ -8,5 +8,6 @@ export * from './catalogue.js';
 export * from './errors.js';
 export * from './money.js';
 export * from './pagination.js';
+export * from './provider.js';
 export * from './search.js';
 export * from './state-machine.js';

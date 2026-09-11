@@ -28,6 +28,7 @@ import {
 } from '@marketplace/contracts';
 import { isLocale, LOCALES } from '../i18n/index.js';
 import { loadCategories } from '../shared/categories.js';
+import { formatDistance, formatRate } from '../shared/format.js';
 import { queryKeys, routeContext } from '../shared/query.js';
 import { searchSchema, type Translate } from '../features/search/schema.js';
 import { searchPath, useSearchSubmission } from '../features/search/navigation.js';
@@ -117,22 +118,6 @@ const FILTER_LABELS: Record<string, TranslationKey> = {
   when: 'results.filter.when',
   mode: 'results.filter.mode',
 };
-
-/** Metres to something a person reads. `Intl` so that es-ES gets "1,2 km" and en gets "1.2 km". */
-function formatDistance(metres: number, locale: string): string {
-  const kilometres = metres / 1000;
-  return kilometres >= 1
-    ? `${new Intl.NumberFormat(locale, { maximumFractionDigits: 1 }).format(kilometres)} km`
-    : `${new Intl.NumberFormat(locale).format(metres)} m`;
-}
-
-/**
- * Integer cents to currency (`W1-T06`). es-ES puts the euro after the number and uses a decimal
- * comma; a hard-coded `€${cents / 100}` is wrong in the product's first language.
- */
-function formatRate(cents: number, locale: string): string {
-  return new Intl.NumberFormat(locale, { style: 'currency', currency: 'EUR' }).format(cents / 100);
-}
 
 export function Component(): ReactElement {
   const { locale, response, query, categories } = useLoaderData<ResultsData>();

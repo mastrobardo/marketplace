@@ -1,6 +1,6 @@
 import { type ReactElement } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Card } from '@marketplace/ui';
+import { AuthWall, Card } from '@marketplace/ui';
 import { type TranslationKey } from '../i18n/locales/es.js';
 
 /**
@@ -17,9 +17,10 @@ import { type TranslationKey } from '../i18n/locales/es.js';
  * that tells a visitor only that something is broken; ADR-011 asks for *"a real boundary the
  * milestone can be demoed against, not an unfinished edge"*, and a boundary you can read is one.
  *
- * The shared auth-wall component is `W12-T12`'s (*"a CTA that stops cleanly at the auth wall"*).
- * This page states the boundary in words; building the component here would be inventing the thing
- * that ticket is for.
+ * The shared auth-wall component **is** `W12-T12`'s, and it now exists — so this page uses it
+ * rather than its own paragraph. That was the plan when this file was written: *"building the
+ * component here would be inventing the thing that ticket is for."* A shared component with one
+ * call site is a guess about the second; this is the second.
  */
 const BENEFITS: { key: string; title: TranslationKey; body: TranslationKey }[] = [
   { key: 'leads', title: 'pro.benefits.leads.title', body: 'pro.benefits.leads.body' },
@@ -46,7 +47,7 @@ export function Component(): ReactElement {
         </ul>
       </section>
 
-      <p className="mp-pending">{t('pro.pending')}</p>
+      <AuthWall title={t('pro.title')} description={t('pro.pending')} />
     </article>
   );
 }
