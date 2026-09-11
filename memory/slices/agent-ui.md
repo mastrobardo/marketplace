@@ -338,3 +338,24 @@ Keep it to facts that changed how you would work. Task-specific detail stays in 
 - **evidence**: `.github/workflows/deploy-preview.yml`; `.github/workflows/deploy-staging.yml`;
   `docs/specs/S10/W12-T09-public-shell.run.md` §7
 - **status**: active
+
+### The axe gate covers stories, and the shell is not a story
+- **id**: MEM-2026-09-11-20
+- **scope**: slice:S10
+- **fact**: `W12-T04` runs axe through `@storybook/addon-vitest`, so it only ever sees what has a
+  story file. The shell `W12-T09` built — skip link, landmark set, the header's compact search, the
+  language switcher, the 404 and the 500 — has **no automated a11y coverage**. It is an application
+  composition, not a component: making it a story would mean mounting the router and a `QueryClient`
+  inside Storybook. Agreed with the operator on 2026-09-11 and written into **`W12-T16`**, which
+  already stands up Playwright: the axe pass goes over the real routes (`/es`, `/en`, a legal slot,
+  404, 500).
+- **why**: "We have an axe gate" reads as "accessibility is covered", and the gap is exactly the part
+  every page inherits — a broken skip link or a duplicated unnamed landmark is wrong on all of them
+  at once. `shell.test.tsx` AC11 checks landmark presence and name-uniqueness by hand, which catches
+  those two and nothing else.
+- **apply**: When adding a11y coverage for anything that is not a single component, it goes in the
+  Playwright pass, not Storybook. And do not read `W12-T04` as full a11y coverage — state which
+  surface a gate actually covers.
+- **evidence**: `TODO.md` `W12-T16`; `docs/specs/S10/W12-T09-public-shell.md` §9;
+  `apps/web/tests/shell.test.tsx` AC11
+- **status**: active

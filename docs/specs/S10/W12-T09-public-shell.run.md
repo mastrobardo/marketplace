@@ -175,5 +175,6 @@ The operator's plan review changed the task three times, and every change is loa
   browser-only SPA, and it will only ever bite after `W12-T14`.
 - **What is not proven**: no axe assertion runs against the new shell. `W12-T04`'s gate covers
   Storybook stories, and the shell is not a story — `shell.test.tsx` asserts landmark presence and
-  uniqueness by hand, which is a weaker check than axe. Worth a story or a Playwright pass in
-  `W12-T16`.
+  uniqueness by hand, which is a weaker check than axe. **Raised with the operator, agreed, and
+  written into `W12-T16`** (2026-09-11): that ticket already stands up Playwright, so the axe pass
+  goes over the real routes rather than trying to make the shell into a story.

@@ -191,6 +191,12 @@ previously implied by a mock.
 - **Legal prose.** `W10-T07`, `[H]`.
 - **All SEO.** No `hreflang`, no `meta`, no canonical, no JSON-LD — ADR-011 Amendment 1.2.
 - **A real HTTP 404 status.** See Q2.
+- **An axe pass over the shell.** Agreed with the operator on 2026-09-11 and moved to `W12-T16`,
+  which is the ticket that already stands up Playwright. `W12-T04`'s gate runs axe over *stories*,
+  and the shell is not a story — it is an application composition, so it cannot become one without
+  mounting the router inside Storybook. Until then `shell.test.tsx` AC11 checks landmark presence
+  and name-uniqueness by hand, which catches the two failures this task could plausibly introduce
+  and nothing else.
 - **Auth, sessions, and any authenticated shell.** There is no session in M11.
 
 ## 10. Open questions
