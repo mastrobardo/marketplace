@@ -1,133 +1,56 @@
 /*
- * Design tokens — the only place a colour, a spacing step, a radius or a font value is written.
+ * Design tokens — the entry point, and the switching model.
  *
  * `agent-ui` owns this file, and since `W12-T01` it lives in the design system rather than next to
  * the app that used to be its only consumer. Reach it as `@marketplace/ui/tokens.css`: it is served
  * from source and needs no build, because a consumer that must compile the package before it can
  * read a colour is a consumer that will hardcode the colour.
  *
- * packages/ui is built on these names, and a component that needs a value it cannot find here needs
- * a new token, not a literal. `tests/tokens.test.ts` fails the build if a stylesheet hardcodes a
- * colour, and fails it again if a colour is defined for light but not for dark. `W12-T05` layers
- * these into primitive → semantic → component and adds `[data-theme]` switching.
+ * `W12-T05` split what was one flat file into the three layers ADR-012 §3 describes. Nothing here
+ * declares a token any more; this file says what order the layers cascade in, and how a page picks
+ * a theme and a scheme.
+ *
+ *   scale.css        primitive   a value with no meaning — 4px steps, radii, type sizes
+ *   themes/*.css     primitive   the --mp-palette-* ramp
+ *                    semantic    the roles over it: --mp-color-accent, --mp-font-family
+ *   components.css   component   the uses: --mp-button-bg. Reads the semantic layer only.
+ *
+ * A component stylesheet reads the component and semantic layers. It may not read a palette value,
+ * and `tests/tokens.test.ts` fails the build if it does — along with a colour literal anywhere but
+ * a theme file, a `var()` that names nothing, and a semantic token that fails to resolve in any of
+ * the four theme × scheme combinations.
  *
  * Namespace `--mp-` so tokens never collide with a third-party stylesheet (a map widget, a Stripe
  * element) that shares the document.
  */
 
+@import './scale.css';
+@import './themes/default.css';
+@import './themes/contrast.css';
+@import './components.css';
+
+/*
+ * The scheme switch (ADR-012 §4). Before `W12-T05` the dark palette lived behind
+ * `@media (prefers-color-scheme: dark)` alone, so a scheme could be detected and never chosen.
+ *
+ * It is now `color-scheme` plus `light-dark()` in the theme files: the media query is still the
+ * default, `[data-scheme]` overrides it in either direction, and — this is the part a media query
+ * could not do — each semantic colour is written **once**, with both values in it. The alternative,
+ * a second copy of the palette under a `[data-scheme='dark']` selector, is a palette maintained in
+ * two places, which is how one of them ends up missing a token.
+ *
+ * The selectors are deliberately not anchored to `:root`: a theme or a scheme applies to a subtree,
+ * so a container can carry one. That is what lets `Theme.stories.tsx` show all four combinations on
+ * one screen, and what makes the workbench's toolbars reach a story rather than only the document.
+ */
 :root {
   color-scheme: light dark;
-
-  /* Colour — semantic names, not shades. `--mp-color-danger`, never `--mp-color-red-500`:
-     the design system should be able to change the red without renaming anything. */
-  --mp-color-bg: #fbfaf9;
-  --mp-color-surface: #ffffff;
-  --mp-color-surface-muted: #f2f0ee;
-  --mp-color-border: #e0dcd7;
-  --mp-color-text: #1c1a18;
-  --mp-color-text-muted: #6b6560;
-  --mp-color-accent: #b4531f;
-  --mp-color-accent-contrast: #ffffff;
-  --mp-color-focus: #1d4ed8;
-  --mp-color-danger: #b3261e;
-  --mp-color-success: #1f6f43;
-
-  /* Spacing — a 4px scale. Every margin and padding is one of these. */
-  --mp-space-1: 0.25rem;
-  --mp-space-2: 0.5rem;
-  --mp-space-3: 0.75rem;
-  --mp-space-4: 1rem;
-  --mp-space-6: 1.5rem;
-  --mp-space-8: 2rem;
-  --mp-space-12: 3rem;
-
-  --mp-radius-sm: 0.25rem;
-  --mp-radius-md: 0.5rem;
-  --mp-radius-lg: 1rem;
-  --mp-radius-full: 9999px;
-
-  --mp-font-family: system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-  --mp-font-size-sm: 0.875rem;
-  --mp-font-size-base: 1rem;
-  --mp-font-size-lg: 1.25rem;
-  --mp-font-size-xl: 1.75rem;
-  --mp-font-weight-regular: 400;
-  --mp-font-weight-bold: 650;
-  --mp-font-line-height: 1.55;
-
-  --mp-layout-max-width: 68rem;
 }
 
-/*
- * Dark theme. Every --mp-color-* above has a counterpart here; the token test enforces it, because
- * a half-converted palette is how text ends up black on near-black.
- */
-@media (prefers-color-scheme: dark) {
-  :root {
-    --mp-color-bg: #16151a;
-    --mp-color-surface: #1f1e24;
-    --mp-color-surface-muted: #292830;
-    --mp-color-border: #3a3841;
-    --mp-color-text: #f2f0ee;
-    --mp-color-text-muted: #a6a1ac;
-    --mp-color-accent: #e8935c;
-    --mp-color-accent-contrast: #1c1a18;
-    --mp-color-focus: #8ab4f8;
-    --mp-color-danger: #f2b8b5;
-    --mp-color-success: #7fd3a3;
-  }
+[data-scheme='light'] {
+  color-scheme: light;
 }
 
-/*
- * Component tokens — the third layer. A component's stylesheet reads only these and the semantic
- * tokens above; it never reaches for a palette value, and it never writes a literal. Added by
- * `W12-T02` with the primitives that consume them; `W12-T05` formalises the three layers and makes
- * the layering itself a test.
- */
-:root {
-  --mp-button-radius: var(--mp-radius-md);
-  --mp-button-padding-block: var(--mp-space-2);
-  --mp-button-padding-inline: var(--mp-space-4);
-  --mp-button-font-weight: var(--mp-font-weight-bold);
-  --mp-button-min-height: 2.75rem; /* 44px — the touch target this product is used with. */
-  --mp-button-bg: var(--mp-color-surface);
-  --mp-button-fg: var(--mp-color-text);
-  --mp-button-border: var(--mp-color-border);
-  --mp-button-bg-primary: var(--mp-color-accent);
-  --mp-button-fg-primary: var(--mp-color-accent-contrast);
-  --mp-button-bg-danger: var(--mp-color-danger);
-  --mp-button-fg-danger: var(--mp-color-accent-contrast);
-
-  --mp-field-gap: var(--mp-space-1);
-  --mp-field-label-color: var(--mp-color-text);
-  --mp-field-description-color: var(--mp-color-text-muted);
-  --mp-field-error-color: var(--mp-color-danger);
-  --mp-field-border: var(--mp-color-border);
-  --mp-field-border-invalid: var(--mp-color-danger);
-  --mp-field-bg: var(--mp-color-surface);
-  --mp-field-fg: var(--mp-color-text);
-  --mp-field-radius: var(--mp-radius-sm);
-  --mp-field-padding-block: var(--mp-space-2);
-  --mp-field-padding-inline: var(--mp-space-3);
-  --mp-field-min-height: 2.75rem;
-
-  --mp-listbox-bg: var(--mp-color-surface);
-  --mp-listbox-border: var(--mp-color-border);
-  --mp-listbox-radius: var(--mp-radius-md);
-  --mp-listbox-option-selected-bg: var(--mp-color-surface-muted);
-  --mp-listbox-option-focus-bg: var(--mp-color-accent);
-  --mp-listbox-option-focus-fg: var(--mp-color-accent-contrast);
-  --mp-listbox-empty-color: var(--mp-color-text-muted);
-
-  --mp-overlay-scrim: rgb(0 0 0 / 45%);
-  --mp-dialog-bg: var(--mp-color-surface);
-  --mp-dialog-border: var(--mp-color-border);
-  --mp-dialog-radius: var(--mp-radius-lg);
-  --mp-dialog-padding: var(--mp-space-6);
-  --mp-dialog-max-width: 32rem;
-
-  --mp-popover-bg: var(--mp-color-surface);
-  --mp-popover-border: var(--mp-color-border);
-  --mp-popover-radius: var(--mp-radius-md);
-  --mp-popover-padding: var(--mp-space-4);
+[data-scheme='dark'] {
+  color-scheme: dark;
 }

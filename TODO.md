@@ -566,12 +566,12 @@ finished pages is how the accessibility and SSR bills both come due at once.
 
 **The foundation — rules and components before pages.**
 
-- `W12-T01` `[A]` `packages/ui`: package, build, exports; `tokens.css` moves in from `apps/web`; the ADR-011 route rules as lint (**no browser global at module scope, no module-scope mutable cache, no fetch in a component**) plus a DOM-free route-module test — *the gates land before there is anything to retrofit*
-- `W12-T02` `[A]` First primitives on React Aria Components — Button, Field, TextInput, Select, Combobox, Dialog, Popover — each with stories for default, focus, disabled, loading, error and long-text (ES runs ~20% longer than EN)
-- `W12-T03` `[A]` Storybook 10 workbench in `packages/ui`: theme and locale toolbars, stories run as Vitest browser tests via `@storybook/addon-vitest` — the runner the repo already has, not a second harness
-- `W12-T04` `[A]` `parameters.a11y.test = 'error'` on every story: an axe violation fails the PR like any other test. This is `W10-T05` paid down per pull request instead of as an audit at the end
-- `W12-T05` `[A]` Three token layers (primitive → semantic → component), `[data-theme]` switching alongside `prefers-color-scheme`, **a second theme that proves the swap is real**, and `tokens.test.ts` extended with layering + per-theme completeness
-- `W12-T06` `[A]` Deploy the workbench to its own Cloudflare Pages project — per PR and on merge, URL commented beside the app preview, teardown mirroring `deploy-preview-teardown.yml`. A new Pages *project*, not a fifth service
+- `W12-T01` `[A]` ✅ `packages/ui` — package, Vite library build, exports map, and `tokens.css` moved in from `apps/web`; the three ADR-011 route rules as ESLint config in `apps/web/eslint.config.js` plus a DOM-free route-module test. The gates landed before there was anything to retrofit *(issue #201)*
+- `W12-T02` `[A]` ✅ Seven primitives on React Aria Components — Button, Field, TextInput, Select, Combobox, Dialog, Popover — with stories for default, focus, disabled, loading, error and long-text. React Aria stays `external` in the build: an 8.81 KB entry point rather than 339 KB, which is ADR-011's JS budget kept a task before it is measured *(issue #202)*
+- `W12-T03` `[A]` ✅ Storybook 10 workbench in `packages/ui`: theme and locale toolbars, and every story running as a Vitest browser test in a real Chromium through `@storybook/addon-vitest`. Two projects, one `pnpm test` — a separate script is a suite that stops running the first time someone forgets it *(issue #203)*
+- `W12-T04` `[A]` ✅ `parameters.a11y.test = 'error'`, set globally rather than per story: an axe violation fails the PR like any other assertion. Proven by a deliberate red probe before being believed. `W10-T05` paid down per pull request instead of as an audit at the end *(issue #204)*
+- `W12-T05` `[A]` ✅ Three token layers in four files (`scale`, `themes/default`, `themes/contrast`, `components`), `[data-theme]` and `[data-scheme]` over `color-scheme` + `light-dark()` so a colour is written once and a scheme can be *chosen*, a high-contrast second theme, and a `tokens.test.ts` that resolves the whole graph in all four `theme × scheme` combinations — layering, completeness both ways, every `var()` naming something, and WCAG AA measured rather than assumed *(issue #205)*
+- `W12-T06` `[A]` ✅ The workbench deployed to its own Cloudflare Pages project (`marketplace-ui`) — per PR and on merge, URL read back from wrangler and commented beside the app preview, teardown mirroring `deploy-preview-teardown.yml` *(issue #206)*
 
 **The seam — search is a schema, and the schema defines the API's input.**
 

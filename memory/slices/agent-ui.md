@@ -130,3 +130,59 @@ Keep it to facts that changed how you would work. Task-specific detail stays in 
   a browser cannot make — a story that was never written — stay in the jsdom project.
 - **evidence**: `docs/specs/S10/W12-T03-storybook-workbench.md` §4.3; `packages/ui/vitest.config.ts`
 - **status**: active
+
+### A theme is a file, and a scheme is `color-scheme` — not a second copy of the palette
+- **id**: MEM-2026-09-11-08
+- **scope**: slice:S10
+- **fact**: `@marketplace/ui/tokens.css` is an entry point that `@import`s four layers:
+  `scale.css` (primitive, no colour), `themes/default.css` and `themes/contrast.css` (the
+  `--mp-palette-*` ramp plus the semantic mapping over it), and `components.css`
+  (`--mp-button-*`, read by one component). `[data-theme]` picks the theme, `[data-scheme]`
+  overrides `prefers-color-scheme`, and each colour is written **once** as
+  `light-dark(light, dark)`. Both selectors are deliberately unanchored — a theme applies to a
+  subtree, not only to the document.
+- **why**: The obvious alternative — a dark palette under the media query and again under a
+  `[data-scheme='dark']` selector — is a palette maintained in two places, which is how one of them
+  ends up missing a token. And `light-dark()` resolves against the *consuming* element's
+  `color-scheme`, which is what lets one page show all four `theme × scheme` combinations at once.
+- **apply**: Adding a colour? It goes in **both** theme files, as a role, and `tokens.test.ts` fails
+  if only one has it. Adding a component? Its tokens go in `components.css` and read the semantic
+  layer — a `var(--mp-palette-…)` outside a theme file is a build failure. Styling a container that
+  needs its own theme? Put the attribute on the container; it works.
+- **evidence**: `packages/ui/src/styles/`; `docs/specs/S10/W12-T05-token-layers-and-themes.md` §4
+- **status**: active
+
+### The token gate resolves the graph now, so "it is declared somewhere" is no longer evidence
+- **id**: MEM-2026-09-11-09
+- **scope**: slice:S10
+- **fact**: `tests/token-graph.ts` parses the four stylesheets, models the cascade for a given
+  `theme × scheme` (`:root`, `[data-theme]`, `[data-scheme]`, `prefers-color-scheme`, specificity
+  then source order), and follows `var()` and `light-dark()` to a literal. `tokens.test.ts` uses it
+  to check layering, completeness in both directions, that every `var(--mp-…)` names something, and
+  WCAG AA on six colour pairs in all four combinations. It **throws** on a broken chain rather than
+  returning `undefined`.
+- **why**: The old gate matched strings — a token was "defined for dark" if its name appeared after
+  the media query. With two themes and three layers that proves nothing, and ADR-012 §3's word is
+  *resolves*.
+- **apply**: Need to know what a token actually equals in a theme? `resolve(graph, token, {theme,
+  scheme})`. Writing a new token gate? Extend this rather than re-deriving a parser. And the model
+  is a model: the runtime check is `Foundations/Themes`' `play` function, which asks a real browser.
+- **evidence**: `packages/ui/tests/token-graph.ts`; `packages/ui/src/styles/Theme.stories.tsx`
+- **status**: active
+
+### Three of five red-phase failures were the test, not the code
+- **id**: MEM-2026-09-11-10
+- **scope**: slice:S10
+- **fact**: `W12-T05`'s first full red run failed five ways. `--trigger-width` is React Aria's own
+  property and not ours to resolve; a theme's `--mp-palette-*` references resolve only *inside* that
+  theme, so sweeping every reference in every combination asks the contrast ramp to exist under the
+  default theme; and the `:root[data-scheme='…']` assertion had been written from the plan, which
+  the implementation had correctly moved past.
+- **why**: A gate written before the code is a gate written against an imagined shape. That is the
+  point of writing it first — but it means a red run is evidence about *both* sides, and reaching
+  for the implementation first would have anchored the design to a guess.
+- **apply**: When a new gate fails, ask which of the two is wrong before fixing either. And when you
+  loosen an assertion to make it pass, loosen it *precisely* — the scheme selector assertion grew a
+  negative lookbehind so that re-anchoring it to `:root` still fails.
+- **evidence**: `docs/specs/S10/W12-T05-token-layers-and-themes.run.md` §Red phase
+- **status**: active

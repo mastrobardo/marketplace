@@ -1,0 +1,81 @@
+/*
+ * The second theme — high contrast.
+ *
+ * It exists because a theming system with one theme is an untested theming system (ADR-012 §4):
+ * the usual failure is discovering that half the "tokens" were literals all along, and the only
+ * way to find out is to swap everything at once and look. So this file differs on every axis a
+ * theme has — all twelve colours, the font pairing, the radii, and the density — and
+ * `Theme.stories.tsx` renders it beside the default so the difference is looked at rather than
+ * asserted.
+ *
+ * It is not a demo palette. Black on white, white on black, the WCAG AA floor cleared by a wide
+ * margin in both schemes, square corners and doubled edges: it is the theme to offer a user who
+ * needs one, and `W12-T09` is where the product learns to offer it. A second *brand* theme would
+ * have proved the swap just as well and would have had nobody to serve.
+ *
+ * Selected by `[data-theme='contrast']` on any element — the root for a page, a container for a
+ * story. Deliberately *not* applied from `@media (prefers-contrast: more)`: see `scale.css`.
+ */
+[data-theme='contrast'] {
+  /* ---------------------------------------------------------------- primitive */
+
+  --mp-palette-ink-0: #ffffff;
+  --mp-palette-ink-100: #ebebeb;
+  --mp-palette-ink-300: #d6d6d6;
+  --mp-palette-ink-800: #333333;
+  --mp-palette-ink-900: #1f1f1f;
+  --mp-palette-ink-980: #0a0a0a;
+  --mp-palette-ink-1000: #000000;
+
+  --mp-palette-amber-300: #ffb072;
+  --mp-palette-amber-900: #7a2600;
+
+  --mp-palette-indigo-300: #9fb4ff;
+  --mp-palette-indigo-900: #0000c8;
+
+  --mp-palette-crimson-300: #ff9d9d;
+  --mp-palette-crimson-900: #9a0000;
+
+  --mp-palette-emerald-300: #6ef0a8;
+  --mp-palette-emerald-900: #005c2e;
+
+  --mp-palette-shadow-75: rgb(0 0 0 / 75%);
+  --mp-palette-shadow-85: rgb(0 0 0 / 85%);
+
+  /* ----------------------------------------------------------------- semantic */
+
+  /* The same twelve names as the default theme. The test compares the two sets in both
+     directions — a theme that is missing a role is a theme with an unstyled component in it. */
+  --mp-color-bg: light-dark(var(--mp-palette-ink-0), var(--mp-palette-ink-1000));
+  --mp-color-surface: light-dark(var(--mp-palette-ink-0), var(--mp-palette-ink-980));
+  --mp-color-surface-muted: light-dark(var(--mp-palette-ink-100), var(--mp-palette-ink-900));
+  --mp-color-border: light-dark(var(--mp-palette-ink-1000), var(--mp-palette-ink-0));
+  --mp-color-text: light-dark(var(--mp-palette-ink-1000), var(--mp-palette-ink-0));
+  --mp-color-text-muted: light-dark(var(--mp-palette-ink-800), var(--mp-palette-ink-300));
+  --mp-color-accent: light-dark(var(--mp-palette-amber-900), var(--mp-palette-amber-300));
+  --mp-color-accent-contrast: light-dark(var(--mp-palette-ink-0), var(--mp-palette-ink-1000));
+  --mp-color-focus: light-dark(var(--mp-palette-indigo-900), var(--mp-palette-indigo-300));
+  --mp-color-danger: light-dark(var(--mp-palette-crimson-900), var(--mp-palette-crimson-300));
+  --mp-color-success: light-dark(var(--mp-palette-emerald-900), var(--mp-palette-emerald-300));
+  --mp-color-overlay: light-dark(var(--mp-palette-shadow-75), var(--mp-palette-shadow-85));
+
+  /*
+   * The font pairing. Atkinson Hyperlegible was drawn for low vision and is the right first choice
+   * here; it is named rather than loaded, so a reader who has it installed gets it and everyone
+   * else gets the system stack. Acquiring a webfont is a performance decision with a budget
+   * attached — `W12-T15` — and this task does not make it quietly.
+   */
+  --mp-font-family:
+    'Atkinson Hyperlegible', system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial,
+    sans-serif;
+
+  /* Radius and density overrides — the two axes a theme may touch beyond colour and type. */
+  --mp-radius-sm: 0;
+  --mp-radius-md: 0.125rem;
+  --mp-radius-lg: 0.25rem;
+
+  --mp-font-weight-bold: 800;
+
+  --mp-border-width: 2px;
+  --mp-focus-ring-width: 3px;
+}

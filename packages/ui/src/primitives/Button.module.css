@@ -5,7 +5,7 @@
   gap: var(--mp-space-2);
   min-height: var(--mp-button-min-height);
   padding: var(--mp-button-padding-block) var(--mp-button-padding-inline);
-  border: 1px solid var(--mp-button-border);
+  border: var(--mp-border-width) solid var(--mp-button-border);
   border-radius: var(--mp-button-radius);
   background: var(--mp-button-bg);
   color: var(--mp-button-fg);
@@ -20,7 +20,7 @@
 }
 
 .button[data-focus-visible] {
-  outline: 2px solid var(--mp-color-focus);
+  outline: var(--mp-focus-ring-width) solid var(--mp-color-focus);
   outline-offset: 2px;
 }
 

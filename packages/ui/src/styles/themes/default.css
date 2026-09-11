@@ -1,0 +1,72 @@
+/*
+ * The default theme — the product's appearance, and the only one before `W12-T05`.
+ *
+ * A theme is a file (ADR-012 §4): a `--mp-palette-*` ramp, the semantic mapping over it, a font
+ * pairing, and any radius or density override it wants. Nothing else. This one changes no radius
+ * and no density, which is what makes it the default rather than a variant.
+ *
+ * **Only a theme file may read `--mp-palette-*`.** The ramp is a set of values; the mapping below
+ * is what they are *for*. A component that reaches past the mapping to a ramp entry is a component
+ * pinned to one theme, and `tests/tokens.test.ts` fails the build on it.
+ *
+ * Each colour is written once, with `light-dark()` carrying both schemes. The scheme itself is
+ * chosen by `color-scheme` in `tokens.css` — `prefers-color-scheme` by default, `[data-scheme]`
+ * when the page says so.
+ *
+ * Every value here is the value this file shipped with before the split: the layering is a
+ * refactor, and the product's appearance does not move.
+ */
+:root,
+[data-theme='default'] {
+  /* ---------------------------------------------------------------- primitive */
+
+  /* Warm neutrals at the light end, cool at the dark end — the ramp as it was drawn. */
+  --mp-palette-stone-0: #ffffff;
+  --mp-palette-stone-50: #fbfaf9;
+  --mp-palette-stone-100: #f2f0ee;
+  --mp-palette-stone-200: #e0dcd7;
+  --mp-palette-stone-400: #a6a1ac;
+  --mp-palette-stone-500: #6b6560;
+  --mp-palette-stone-700: #3a3841;
+  --mp-palette-stone-800: #292830;
+  --mp-palette-stone-850: #1f1e24;
+  --mp-palette-stone-900: #1c1a18;
+  --mp-palette-stone-950: #16151a;
+
+  --mp-palette-clay-400: #e8935c;
+  --mp-palette-clay-600: #b4531f;
+
+  --mp-palette-blue-300: #8ab4f8;
+  --mp-palette-blue-700: #1d4ed8;
+
+  --mp-palette-red-200: #f2b8b5;
+  --mp-palette-red-700: #b3261e;
+
+  --mp-palette-green-300: #7fd3a3;
+  --mp-palette-green-700: #1f6f43;
+
+  --mp-palette-shadow-45: rgb(0 0 0 / 45%);
+  --mp-palette-shadow-65: rgb(0 0 0 / 65%);
+
+  /* ----------------------------------------------------------------- semantic */
+
+  /* Roles, not shades. `--mp-color-danger`, never `--mp-color-red-700`: the design system should
+     be able to change the red without renaming anything. */
+  --mp-color-bg: light-dark(var(--mp-palette-stone-50), var(--mp-palette-stone-950));
+  --mp-color-surface: light-dark(var(--mp-palette-stone-0), var(--mp-palette-stone-850));
+  --mp-color-surface-muted: light-dark(var(--mp-palette-stone-100), var(--mp-palette-stone-800));
+  --mp-color-border: light-dark(var(--mp-palette-stone-200), var(--mp-palette-stone-700));
+  --mp-color-text: light-dark(var(--mp-palette-stone-900), var(--mp-palette-stone-100));
+  --mp-color-text-muted: light-dark(var(--mp-palette-stone-500), var(--mp-palette-stone-400));
+  --mp-color-accent: light-dark(var(--mp-palette-clay-600), var(--mp-palette-clay-400));
+  --mp-color-accent-contrast: light-dark(var(--mp-palette-stone-0), var(--mp-palette-stone-900));
+  --mp-color-focus: light-dark(var(--mp-palette-blue-700), var(--mp-palette-blue-300));
+  --mp-color-danger: light-dark(var(--mp-palette-red-700), var(--mp-palette-red-200));
+  --mp-color-success: light-dark(var(--mp-palette-green-700), var(--mp-palette-green-300));
+
+  /* The scrim over a modal. It was the one literal left in the component layer, where the colour
+     gate could not see it, because the gate exempted the token file wholesale. */
+  --mp-color-overlay: light-dark(var(--mp-palette-shadow-45), var(--mp-palette-shadow-65));
+
+  --mp-font-family: system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+}

@@ -354,3 +354,22 @@ come from real experience.
 - **evidence**: `docs/specs/S10/W12-T03-storybook-workbench.run.md` §Human input received;
   `packages/testing/tests/factories.test.ts` AC10; CI run 34573704861 on `main`
 - **status**: active
+
+### `light-dark()` survives the build, but not in a form you can grep for
+- **id**: MEM-2026-09-11-17
+- **scope**: repo
+- **fact**: `packages/ui/src/styles/themes/*.css` write every colour once as
+  `light-dark(var(--light), var(--dark))`. Vite's Lightning CSS lowers this to a custom-property
+  space-toggle — `--lightningcss-light` / `--lightningcss-dark` — emitted under
+  `@media (prefers-color-scheme: dark)` **and** under every rule that declares `color-scheme`,
+  which includes `[data-scheme='light']` and `[data-scheme='dark']`. So the behaviour is intact and
+  `light-dark(` appears **zero times** in `apps/web/dist/assets/*.css`.
+- **why**: Someone debugging a theme will grep the built CSS, find no `light-dark(`, and conclude
+  the mechanism was dropped or the browser target is too old. It was neither.
+- **apply**: Debug themes against the source, not `dist`. If you must check `dist`, grep for
+  `--lightningcss-` and read which selectors set the toggle — that list is the answer to "does the
+  explicit scheme override still work". And do not "fix" the source by hand-writing the toggle:
+  the lowering is the build's job and it tracks the browser target.
+- **evidence**: `docs/specs/S10/W12-T05-token-layers-and-themes.run.md` §Findings;
+  `apps/web/dist/assets/index-*.css`
+- **status**: active

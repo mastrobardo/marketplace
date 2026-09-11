@@ -47,26 +47,48 @@ describe('AC4/AC5 — the toolbars reach the story', () => {
     render(<Decorated />);
   }
 
-  it('offers both toolbars, Spanish first', () => {
+  it('offers all three toolbars, Spanish first', () => {
     const globalTypes = preview.globalTypes as Record<string, { toolbar?: { items: unknown[] } }>;
-    expect(Object.keys(globalTypes)).toEqual(expect.arrayContaining(['theme', 'locale']));
-    expect((preview as Preview).initialGlobals).toMatchObject({ locale: 'es-ES', theme: 'light' });
+    expect(Object.keys(globalTypes)).toEqual(expect.arrayContaining(['theme', 'scheme', 'locale']));
+    expect((preview as Preview).initialGlobals).toMatchObject({
+      locale: 'es-ES',
+      theme: 'default',
+      scheme: 'light',
+    });
+  });
+
+  it('names the themes that exist, and only those', () => {
+    // `W12-T05` ships two. A toolbar offering a third would be a toolbar offering a theme with no
+    // file behind it, which looks like a broken palette rather than a missing one.
+    const globalTypes = preview.globalTypes as Record<
+      string,
+      { toolbar?: { items: { value: string }[] } }
+    >;
+    expect(globalTypes['theme']?.toolbar?.items.map((item) => item.value)).toEqual([
+      'default',
+      'contrast',
+    ]);
+    expect(globalTypes['scheme']?.toolbar?.items.map((item) => item.value)).toEqual([
+      'light',
+      'dark',
+    ]);
   });
 
   it('applies the locale to the document, so React Aria speaks it too', () => {
-    renderWith({ theme: 'light', locale: 'en-GB' });
+    renderWith({ theme: 'default', scheme: 'light', locale: 'en-GB' });
     expect(screen.getByText('historia')).toBeDefined();
     expect(document.documentElement.lang).toBe('en-GB');
   });
 
-  it('applies the theme to the story container and to the root', () => {
-    // Presence, not appearance: `tokens.css` still switches on `prefers-color-scheme`, and
-    // `W12-T05` is what gives `[data-theme]` a palette. Wiring it here means that task is a
-    // stylesheet change, and this assertion keeps holding when it lands.
-    renderWith({ theme: 'dark', locale: 'es-ES' });
-    expect(document.querySelector('[data-theme="dark"]')).not.toBeNull();
+  it('applies both attributes to the story container and to the root', () => {
+    // Two axes, independently: `W12-T05` made `[data-theme]` pick the palette file and
+    // `[data-scheme]` override `prefers-color-scheme`, so a reviewer can look at
+    // `Alto contraste/Claro` — which is neither toolbar's default.
+    renderWith({ theme: 'contrast', scheme: 'dark', locale: 'es-ES' });
+    expect(document.querySelector('[data-theme="contrast"][data-scheme="dark"]')).not.toBeNull();
     // The root too: an overlay is portalled to `document.body`, outside the story's container.
-    expect(document.documentElement.dataset['theme']).toBe('dark');
+    expect(document.documentElement.dataset['theme']).toBe('contrast');
+    expect(document.documentElement.dataset['scheme']).toBe('dark');
   });
 });
 
