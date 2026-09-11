@@ -21,6 +21,12 @@ const preview: Preview = {
   parameters: {
     layout: 'centered',
     controls: { expanded: true },
+
+    // `W12-T05` of `W10-T05`, paid per pull request instead of as an audit at the end: axe runs
+    // against every rendered story in the browser project and a violation **fails the build**, the
+    // same as any other assertion. Set globally rather than per story, so a new component is
+    // covered by existing it rather than by someone remembering.
+    a11y: { test: 'error' },
   },
 
   globalTypes: {

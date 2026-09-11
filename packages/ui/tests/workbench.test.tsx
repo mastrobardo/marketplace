@@ -70,6 +70,22 @@ describe('AC4/AC5 — the toolbars reach the story', () => {
   });
 });
 
+describe('W12-T04 — an axe violation fails the build, and stays that way', () => {
+  it('runs axe against every story at error severity', () => {
+    const parameters = preview.parameters as { a11y?: { test?: string } };
+
+    // `'error'` is the whole ticket. The addon also accepts `'todo'` (report, do not fail) and
+    // `'off'`, and the pressure to reach for one of them arrives on the first pull request that is
+    // blocked by a contrast ratio at 17:00. Pinning it here means that decision has to be taken in
+    // the open, by editing an assertion, rather than by quietly changing a string.
+    expect(parameters.a11y?.test).toBe('error');
+  });
+
+  it('loads the addon that provides it', () => {
+    expect(read('../.storybook/main.ts')).toContain('@storybook/addon-a11y');
+  });
+});
+
 describe('AC6/AC7 — the workbench is quiet, and it builds', () => {
   it('does not phone home', () => {
     expect(read('../.storybook/main.ts')).toContain('disableTelemetry: true');
