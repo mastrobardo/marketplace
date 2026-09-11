@@ -74,32 +74,45 @@ before. The tightest margin is `default/light` at **5.09:1** on a 4.5:1 floor.
 
 | combination | pairs | min | max |
 |---|---|---|---|
-| default/light | 21 | 5.09 | 16.02 |
-| default/dark | 21 | 7.60 | 15.14 |
-| contrast/light | 21 | 8.37 | 21.00 |
-| contrast/dark | 21 | 9.19 | 19.80 |
+| default/light | 21 | 4.65 | 15.98 |
+| default/dark | 21 | 7.51 | 15.15 |
+| contrast/light | 21 | 8.85 | 21.00 |
+| contrast/dark | 21 | 9.85 | 19.80 |
 
 ## What the tests and the review caught
 
-### 1. Orange cannot be this product's accent, and only measurement says so
+### 1. The palette was cut twice, and the second cut is the one that shipped
 
-The obvious reading of "warm neutral + clay" is Radix `orange`, and it fails. `--mp-color-accent`
-does two jobs: a solid fill under `--mp-color-accent-contrast`, and accent *text* on a neutral
-surface. `orange-11` measures **4.43:1** on `sand-1` — seven hundredths short — and white on it is
-the same 4.43:1, so it fails at *both* jobs in light. Radix's step 11 is built to ~4.5:1 against
-steps 1–2 **of its own tinted scale**, not against a near-white neutral, which is exactly the
-assumption that does not survive being mixed with a different hue's background.
+The first pass guessed a warm neutral — Radix `sand` with a `brown` clay accent — under §10 Q1's
+option A, having decided not to ask. The operator then answered Q1 directly: **no brand is coming,
+and the direction is grey, blue, and orange / dark orange accents, light-first.** The palette was
+re-cut on `slate` + `blue` + `orange`.
 
-`tomato-11` clears text (4.90) but lands at 4.38 on `surface-muted`, and in dark it sits at `#ff977d`
-against a danger of `#ff9592` — two roles that would be indistinguishable on screen.
+That is the cost ADR-012 §4 was designed to cap, and it held: the re-cut touched
+`themes/default.css`, `themes/contrast.css`, `components.css` and the gate's semantic pair list.
+**No component markup, no component stylesheet, and no page changed.** Guessing wrong about the
+whole visual direction cost one file plus a mapping — which is the entire return on `W12-T05`, and
+the first time it has been collected. The lesson is not "the guess was cheap" but that it was worth
+*asking* before guessing; option A being safe under either answer is not the same as A's
+*contents* being safe.
 
-`brown-11` (`#815e46`) clears both jobs with one token in both schemes, is unmistakably not the
-danger colour, and is literally the clay the old hand-drawn `--mp-palette-clay-*` was reaching for.
-So the semantic name set is **unchanged at twelve colours** — no `--mp-color-accent-text` had to be
-invented, which kept AC3 trivial and the diff small.
+### 2. No orange is AA-legible as small text on a light grey
 
-### 2. The resolver called a repeated token a cycle
+This is a fact about the hue, not a preference, and it shaped the whole mapping. Measured against
+the three slate surfaces this palette uses, `orange-11` is **4.40 / 4.29 / 3.96** — it fails the
+floor on all three once the hover surface is included. Only `orange-12` clears 4.5:1, at a darkness
+where it reads as brown rather than orange.
 
+So the accent is **a fill and an edge, never text**: `orange-10` as a solid fill carrying near-black
+text at 4.92:1, `orange-11` as a dark-orange border at 4.29:1 against the page — comfortably past
+the 3:1 WCAG 1.4.11 asks of a UI boundary. Blue takes every role that has to carry meaning as text,
+which is what `--mp-color-primary` is for: `blue-11` is the only blue that does both jobs, at 4.65:1
+under white as a fill and 4.53:1 as text on the page. Steps 9 and 10 fail the first at 3.18 and 3.54
+— a primary button whose label cannot be read.
+
+Put to the operator with the numbers before implementing; they chose fills-and-borders.
+
+### 2b. The resolver called a repeated token a cycle
 `--mp-elevation-overlay` is two shadow layers and both read `--mp-palette-shadow-65`. `resolve()`
 threw `--mp-palette-shadow-65 refers to itself`. The cycle check was reading the **visited** list —
 which accumulates siblings — rather than the chain of tokens the current one is nested inside. A
@@ -131,6 +144,33 @@ consumers instead — one line in `Card.module.css`, one in `app.css`.
 which is the ticket's thesis in miniature. Now `--mp-font-line-height-lg`. Four other headings had
 no leading at all and inherited body.
 
+### 6. The theme story was painting a fill colour as text
+
+Axe failed `Theme.stories.tsx` at **3.16:1** on the new accent, and it was right: the story rendered
+every semantic role as coloured text, including roles that are never text. That was invisible while
+the accent happened to be text-capable. The story now renders each role **the way the product uses
+it** — fills as filled chips with their own contrast token, edges as borders, and only the
+text-capable roles as text — so axe judges each one against the composition it actually appears in.
+
+### 7. A story had been reading a token that no longer existed, and nothing could see it
+
+`Theme.stories.tsx` carried `lineHeight: 'var(--mp-font-line-height)'` in an inline style after this
+branch replaced that token. It resolved to nothing and silently fell back to the browser default.
+AC4 — *"every reference names a token that exists"* — walked `.css` only, so an inline style in a
+`.tsx` was outside every gate in the package.
+
+AC4 now walks `.tsx` too, and the widening was verified by breaking a reference on purpose and
+watching four assertions fail naming the file and the token. Same failure class as AC6 itself, one
+file type up: **a walker that skips a consumer is a hand-written list wearing a loop's clothes.**
+
+## The semantic colour set grew from 12 names to 16
+
+`primary`, `primary-contrast`, `accent-strong` and `danger-contrast` are new. The first two exist
+because blue needed a real role rather than only the focus ring; `accent-strong` because the accent
+needs a text-illegible dark orange for edges; `danger-contrast` because a danger fill flips with the
+scheme while an orange fill does not, so they cannot share one contrast token. Both themes declare
+all sixteen — AC3 compares the sets in both directions.
+
 ## Deviations from spec
 
 - **§4.4 says the page stylesheets are not touched.** `apps/web/src/styles/app.css` changed: three
@@ -144,9 +184,8 @@ no leading at all and inherited body.
 
 ## Known gaps, carried deliberately
 
-- **§10 Q1 (is a brand coming from outside?) was not put to the operator.** The escalation answers
-  itself — *"Blocked: Nothing. A is safe to start under either answer"* — and ADR-012 §4 makes a
-  brand a ramp swap in one file. Proceeded under A. Flagged on the PR rather than silently.
+- **§10 Q1 was answered by the operator after the first implementation**, not before it — see
+  finding 1. No brand is coming; the direction is grey / blue / orange, and the palette was re-cut.
 - **§10 Q5 stands: the React Aria starter kit's licence is still not established.** The pages that
   describe it state none, and React Aria's Apache-2.0 covers the library, not necessarily the
   downloadable kit. So **nothing was taken from it** — not a line, not a measurement. Radix Colors
@@ -163,19 +202,22 @@ no leading at all and inherited body.
 | Asked | Answered |
 |---|---|
 | What to start after the auth ADR? | `W12-T18` visual foundations |
-
-§10 Q1 was not asked — see Known gaps.
+| §10 Q1 — is a brand arriving from outside? | No; a designer after phase one. Grey, blue, accents orange / dark orange, light style |
+| Orange is not AA-legible as small text — how should it appear? | Fills and borders only; blue carries links and labels |
+| Which grey? | `slate`, the cool one Radix pairs with blue |
 
 ## Self-assessment
 
-The part worth reviewing is the palette, and specifically the accent. Everything else here is
-mechanical: the type scale is arithmetic with sourced values, the elevation set is two shadows, and
-the tests either pass or they do not. The accent is a *taste* decision wearing a measurement's
-clothes — `brown-11` was chosen because it is the warm hue that clears 4.5:1 at both jobs, which is
-a real constraint, but "clears the constraint" and "is the right colour for a Spanish home-services
-marketplace" are different claims and only the first one was verified. A muted clay-brown CTA is
-defensible and it is also quieter than what a marketplace usually wants. If the operator looks at
-the preview and disagrees, the fix is one line in one file, which is the entire return on `W12-T05`.
+The part worth reviewing is the **mapping**, not the hues — the hues are now the operator's. Which
+role each component token reads is mine: primary buttons and the card eyebrow went blue, hover
+borders and the result-row badge went orange, and the card's hover lost its background tint because
+a one-step tint under a blue label measures 4.19:1. Each of those is defensible and none is forced;
+a reviewer who thinks the eyebrow should be orange is not wrong about taste, only about what passes.
+
+The bigger process finding is finding 1: I chose not to ask §10 Q1 because the escalation said A was
+safe under either answer, and then guessed A's *contents* wrong. The spec's escalation was about
+whether to proceed, and I read it as licence to decide what the palette looked like. Cheap here
+because ADR-012 §4 made it cheap. Worth not repeating where the blast radius is not one file.
 
 Second: AC6 over-measures on purpose, and the variant-matching rule that keeps it from
 over-measuring into *false* failures is the least obvious code in the diff. `--mp-field-label-color`

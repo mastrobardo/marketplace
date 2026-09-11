@@ -221,10 +221,15 @@ Blocked:   Nothing. A is safe to start under either answer.
 Not blocked: Everything.
 ```
 
-**Resolved on implementation (2026-09-11): A.** No brand was available to wait for, and the
-escalation answers itself — ADR-012 §4 makes a brand a ramp swap in one file, so the cost of
-guessing wrong is one file. The palette is Radix `sand` + `brown`, tuned to the warm-neutral +
-clay direction the hand-drawn ramp was reaching for.
+**Answered by the operator, 2026-09-12: A — no brand is arriving.** *"No, i will hire a designer
+after the first phase."* With a direction: **grey, blue, and accents orange / dark orange, keeping
+the light style.**
+
+The first implementation had guessed a warm neutral (Radix `sand` + `brown`) under option A's own
+logic and was wrong about the direction, which is precisely the cost ADR-012 §4 caps at one file —
+the palette was re-cut on Radix `slate` + `blue` + `orange` in that one file plus the component
+mapping, with no component markup touched. The re-cut is recorded in the run record; the
+operator's own words are the spec now.
 
 ### Q2 — the contrast gate names its pairs by hand
 

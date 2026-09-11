@@ -42,6 +42,16 @@ const LAYERS = [
 
 const THEME_FILES = LAYERS.filter((file) => file.includes(`themes${'/'}`));
 
+/** Every file with `extension` under `src/` — the `.tsx` half of the token graph's consumers. */
+function sources(extension: string, dir = src, found: string[] = []): string[] {
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const child = join(dir, entry.name);
+    if (entry.isDirectory()) sources(extension, child, found);
+    else if (extname(entry.name) === extension) found.push(child);
+  }
+  return found;
+}
+
 function stylesheets(dir = src, found: string[] = []): string[] {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     const child = join(dir, entry.name);
@@ -181,14 +191,33 @@ describe('AC4 — every reference names a token that exists', () => {
   //
   // Non-`--mp-` properties are excluded too. `--trigger-width` in `Combobox.module.css` is set on
   // the element by React Aria at runtime; it is not ours to declare and not ours to check.
+  //
+  // `.tsx` is scanned too, since `W12-T18`. It was `.css` only, and a story had been reading
+  // `var(--mp-font-line-height)` through an inline style after that token was replaced — an
+  // unresolved reference that silently fell back to the browser default and that no gate could
+  // see. Inline styles in stories are a real consumer of the token graph; a walker that skips
+  // them is the hand-written-list failure again, one file type up.
+  const consumers = [
+    ...stylesheets().filter((file) => !THEME_FILES.includes(file)),
+    ...sources('.tsx'),
+  ];
   const referenced = new Map<string, string>();
-  for (const sheet of stylesheets().filter((file) => !THEME_FILES.includes(file))) {
-    for (const token of references(readFileSync(sheet, 'utf8'))) {
+  for (const file of consumers) {
+    for (const token of references(readFileSync(file, 'utf8'))) {
       if (token.startsWith('--mp-') && !referenced.has(token)) {
-        referenced.set(token, relative(src, sheet));
+        referenced.set(token, relative(src, file));
       }
     }
   }
+
+  it('scans the story files too, so an inline style cannot name a token that is gone', () => {
+    expect(sources('.tsx').length, 'no .tsx sources were walked').toBeGreaterThan(0);
+    const fromStories = [...referenced].filter(([, file]) => file.endsWith('.tsx'));
+    expect(
+      fromStories.length,
+      'no .tsx file reads a token — the walker found nothing',
+    ).toBeGreaterThan(0);
+  });
 
   for (const combination of COMBINATIONS) {
     it(`resolves every var(--mp-…) in the package in ${label(combination)}`, () => {
@@ -241,8 +270,19 @@ describe('AC6 — every theme is readable, and the pair list is derived, not rem
     ['--mp-color-text', '--mp-color-surface', 4.5],
     ['--mp-color-text-muted', '--mp-color-bg', 4.5],
     ['--mp-color-text-muted', '--mp-color-surface', 4.5],
+    ['--mp-color-text-muted', '--mp-color-surface-muted', 4.5],
+    // The base carries text — links and labels — so it is held to 4.5:1, not 3:1. This is the
+    // pair that rules out every blue brighter than step 11.
+    ['--mp-color-primary', '--mp-color-bg', 4.5],
+    ['--mp-color-primary', '--mp-color-surface', 4.5],
+    ['--mp-color-primary-contrast', '--mp-color-primary', 4.5],
     ['--mp-color-accent-contrast', '--mp-color-accent', 4.5],
+    ['--mp-color-danger-contrast', '--mp-color-danger', 4.5],
+    // Non-text: a solid fill and an edge against the page are graphical objects and UI component
+    // boundaries, which WCAG 1.4.11 puts at 3:1. Neither ever carries text *on the page* — the
+    // accent's text sits on the accent, and that pair is above at 4.5:1.
     ['--mp-color-accent', '--mp-color-bg', 3],
+    ['--mp-color-accent-strong', '--mp-color-bg', 3],
     ['--mp-color-focus', '--mp-color-bg', 3],
   ];
 

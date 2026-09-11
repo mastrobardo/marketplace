@@ -19,10 +19,10 @@
   --mp-button-bg: var(--mp-color-surface);
   --mp-button-fg: var(--mp-color-text);
   --mp-button-border: var(--mp-color-border);
-  --mp-button-bg-primary: var(--mp-color-accent);
-  --mp-button-fg-primary: var(--mp-color-accent-contrast);
+  --mp-button-bg-primary: var(--mp-color-primary);
+  --mp-button-fg-primary: var(--mp-color-primary-contrast);
   --mp-button-bg-danger: var(--mp-color-danger);
-  --mp-button-fg-danger: var(--mp-color-accent-contrast);
+  --mp-button-fg-danger: var(--mp-color-danger-contrast);
 
   --mp-field-gap: var(--mp-space-1);
   --mp-field-label-color: var(--mp-color-text);
@@ -41,8 +41,8 @@
   --mp-listbox-border: var(--mp-color-border);
   --mp-listbox-radius: var(--mp-radius-md);
   --mp-listbox-option-selected-bg: var(--mp-color-surface-muted);
-  --mp-listbox-option-focus-bg: var(--mp-color-accent);
-  --mp-listbox-option-focus-fg: var(--mp-color-accent-contrast);
+  --mp-listbox-option-focus-bg: var(--mp-color-primary);
+  --mp-listbox-option-focus-fg: var(--mp-color-primary-contrast);
   --mp-listbox-empty-color: var(--mp-color-text-muted);
 
   --mp-overlay-scrim: var(--mp-color-overlay);
@@ -58,12 +58,15 @@
   --mp-card-padding: var(--mp-space-4);
   --mp-card-radius: var(--mp-radius-md);
   --mp-card-bg: var(--mp-color-surface);
-  --mp-card-bg-hover: var(--mp-color-surface-muted);
+  /* The hover is a warm edge and a lift, not a tint. A one-step tint under a blue eyebrow puts
+     that label at 4.19:1 — the derived AC6 measures exactly that pair — and the elevation this
+     ticket adds is a better hover signal than a shade nobody notices. */
+  --mp-card-bg-hover: var(--mp-color-surface);
   --mp-card-fg: var(--mp-color-text);
   --mp-card-border: var(--mp-color-border);
-  --mp-card-border-hover: var(--mp-color-accent);
+  --mp-card-border-hover: var(--mp-color-accent-strong);
   --mp-card-description-fg: var(--mp-color-text-muted);
-  --mp-card-eyebrow-fg: var(--mp-color-accent);
+  --mp-card-eyebrow-fg: var(--mp-color-primary);
   --mp-card-shadow: var(--mp-elevation-resting);
   --mp-card-shadow-hover: var(--mp-elevation-raised);
 
@@ -74,10 +77,11 @@
   --mp-row-bg-hover: var(--mp-color-surface-muted);
   --mp-row-fg: var(--mp-color-text);
   --mp-row-border: var(--mp-color-border);
-  --mp-row-border-hover: var(--mp-color-accent);
+  --mp-row-border-hover: var(--mp-color-accent-strong);
   --mp-row-meta-fg: var(--mp-color-text-muted);
-  --mp-row-badge-bg: var(--mp-color-surface-muted);
-  --mp-row-badge-fg: var(--mp-color-text);
+  /* The accent's one solid appearance: a filled orange chip carrying near-black text at 4.92:1. */
+  --mp-row-badge-bg: var(--mp-color-accent);
+  --mp-row-badge-fg: var(--mp-color-accent-contrast);
   --mp-row-shadow: var(--mp-elevation-resting);
   --mp-row-shadow-hover: var(--mp-elevation-raised);
 
