@@ -2,7 +2,7 @@ import { type ReactElement, useId } from 'react';
 import { Link, isRouteErrorResponse, useLoaderData, useRevalidator, useRouteError } from 'react-router';
 import type { LoaderFunctionArgs } from 'react-router';
 import { useTranslation } from 'react-i18next';
-import { AuthWall, Card, EmptyState } from '@marketplace/ui';
+import { AuthWall, EmptyState } from '@marketplace/ui';
 import { ProviderIdSchema, type ProviderProfile } from '@marketplace/contracts';
 import { isLocale, LOCALES } from '../i18n/index.js';
 import { ApiError } from '../shared/api.js';
