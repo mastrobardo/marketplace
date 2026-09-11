@@ -483,3 +483,18 @@ Keep it to facts that changed how you would work. Task-specific detail stays in 
 - **apply**: Storefront pages get their own loader. Share the *key*, never the loader data.
 - **evidence**: `apps/web/src/routes/home.tsx` loader; `docs/specs/S10/W12-T10-home-page.md` §4.2
 - **status**: active
+
+### The local gate is whatever `.github/workflows/` says it is, not the four tasks you remember
+- **id**: MEM-2026-09-11-28
+- **scope**: repo
+- **fact**: `W12-T10`'s first push failed CI `lint` after passing `pnpm lint` locally. The job runs
+  `pnpm lint` **and** `pnpm format:check`; five files disagreed with Prettier. `turbo lint typecheck
+  test build` is four tasks and the `lint` *job* is two commands — they are not the same set, and the
+  difference is invisible until a runner says so.
+- **why**: A green local run reported as a green gate is worse than no run: it spends a CI cycle and
+  it puts a false claim in the conversation. The cost here was trivial and the habit is not.
+- **apply**: Before saying the gate is green, read the workflow that gates the branch and run what it
+  runs — `pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm build` for this repo
+  today. Verify the list against `.github/workflows/` rather than against what the last task ran.
+- **evidence**: PR #231 run 34637469143; `docs/specs/S10/W12-T10-home-page.run.md` §8
+- **status**: active

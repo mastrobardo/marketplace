@@ -153,6 +153,17 @@ the search bar disagreed about encoding — the test would have become a second 
 string, which is the thing `W12-T07` exists to prevent. The first category with an accent is where a
 hand-written `?what=${slug}` breaks.
 
+### 8. The local gate I ran was not the gate CI runs
+
+`lint` failed on the first push, having passed locally. The job is `pnpm lint` **and**
+`pnpm format:check`; I ran the first, saw "ESLint: No issues found", and called the gate green. Five
+files disagreed with Prettier — the two catalogues, `home.test.tsx`, `Card.tsx` and `card.test.tsx`.
+
+No behaviour was wrong and nothing was hard to fix, which is exactly why it is worth writing down:
+the failure was in how I checked, not in what I wrote. `AGENTS.md` step 6 says "full gate locally",
+and I read that as the four turbo tasks because those are the four I know. The authority on what the
+gate is, is `.github/workflows/`, not memory.
+
 ## Deviations from spec
 
 - **ADR-011 amended again.** Spec §10 Q1 escalated the prerendering arrow; the operator deferred it
@@ -210,6 +221,8 @@ The operator approved the plan and all three attached decisions in one pass ("go
   should have stayed as `W12-T09` shipped it and been changed by its own ticket. I think one guard is
   correct and I think the alternative is the drift the last three tickets were about — but it is the
   one change in this diff that touches a page this ticket does not own.
+- **The process mistake**: I reported a green gate before running the gate (finding 8). The four
+  turbo tasks are not the `lint` job. Read the workflow, then claim.
 - **What is not proven**: that any of this looks right. There is no screenshot in this run, no axe
   pass over the composition, and no Lighthouse number. The dev server was checked to boot and answer
   200 on `/`, `/es`, `/en` and `/es/become-a-pro`, which proves the routes exist and nothing throws
