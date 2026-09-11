@@ -15,3 +15,7 @@ pnpm-lock.yaml
 # line a reviewer cares about. Both landed on `main` unformatted behind `[skip ci]` (#199), so the
 # `lint` job has been failing for every branch since — this is that gate, unblocked.
 docs/diagrams/
+
+# Vendored by `msw init` (`W12-T08`) and rewritten on every msw upgrade. Formatting it produces a
+# diff against upstream that hides whether the worker itself actually changed.
+apps/web/public/mockServiceWorker.js
