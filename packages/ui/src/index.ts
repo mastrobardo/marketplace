@@ -16,6 +16,7 @@ export { Combobox, type ComboboxProps } from './primitives/Combobox.js';
 export { Dialog, type DialogProps } from './primitives/Dialog.js';
 export { Popover, type PopoverProps } from './primitives/Popover.js';
 
+export { Card, type CardProps } from './patterns/card/Card.js';
 export { SearchBar, type SearchBarProps } from './patterns/search/SearchBar.js';
 export {
   fieldsFor,

@@ -19,6 +19,46 @@ export const es = {
   'home.intro':
     'Reformas, mantenimiento del hogar y urgencias, con profesionales verificados cerca de ti.',
 
+  'home.categories.title': 'Todos los servicios',
+  'home.categories.intro': 'Cada servicio es una búsqueda ya empezada: elige uno y dinos dónde.',
+
+  'home.how.title': 'Cómo funciona',
+  'home.how.search.title': 'Dinos qué necesitas',
+  'home.how.search.body': 'Elige el servicio, tu zona y para cuándo lo necesitas.',
+  'home.how.compare.title': 'Compara profesionales',
+  'home.how.compare.body': 'Mira perfiles, valoraciones y presupuestos antes de decidir.',
+  'home.how.hire.title': 'Contrata con tranquilidad',
+  'home.how.hire.body': 'Reserva directamente o acepta un presupuesto, y paga por la plataforma.',
+
+  'home.trust.title': 'Por qué contratar aquí',
+  'home.trust.verified.title': 'Profesionales verificados',
+  'home.trust.verified.body':
+    'Comprobamos la identidad y, cuando el oficio lo exige, la licencia en vigor.',
+  'home.trust.reviews.title': 'Opiniones de trabajos reales',
+  'home.trust.reviews.body':
+    'Solo valora quien ha contratado, y cada opinión se publica junto al trabajo que la motivó.',
+  'home.trust.payment.title': 'Pago protegido',
+  'home.trust.payment.body':
+    'El importe se libera al profesional cuando el trabajo está hecho, no antes.',
+
+  'home.pro.title': '¿Eres profesional?',
+  'home.pro.body':
+    'Recibe solicitudes de clientes de tu zona, decide qué trabajos aceptas y cobra por la plataforma.',
+  'home.pro.cta': 'Trabaja con nosotros',
+
+  'pro.title': 'Trabaja con nosotros',
+  'pro.intro':
+    'Da de alta tu perfil, recibe solicitudes de tu zona y decide qué trabajos aceptas. Sin cuota de alta.',
+  'pro.benefits.title': 'Cómo trabajamos con los profesionales',
+  'pro.benefits.leads.title': 'Solicitudes de tu zona',
+  'pro.benefits.leads.body': 'Solo te llegan trabajos del radio que tú marques.',
+  'pro.benefits.control.title': 'Tú decides',
+  'pro.benefits.control.body': 'Aceptas lo que te encaja y rechazas lo demás, sin penalización.',
+  'pro.benefits.payment.title': 'Cobro garantizado',
+  'pro.benefits.payment.body':
+    'El cliente paga por la plataforma antes de que empieces el trabajo.',
+  'pro.pending': 'El registro de profesionales todavía no está abierto.',
+
   'notFound.title': 'Página no encontrada',
   'notFound.body': 'La dirección que has abierto no existe o ha cambiado.',
   'notFound.back': 'Volver al inicio',
@@ -34,6 +74,7 @@ export const es = {
   'search.submit': 'Buscar',
   'search.expand': 'Abrir el buscador',
   'search.label': 'Buscar profesionales',
+  'search.hero.label': 'Buscar profesionales cerca de ti',
   'search.what.label': 'Servicio',
   'search.what.placeholder': '¿Qué necesitas?',
   'search.what.empty': 'No hay servicios que coincidan',

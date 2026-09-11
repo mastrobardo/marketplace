@@ -16,6 +16,46 @@ export const en = {
   'home.intro':
     'Renovations, home maintenance and emergency call-outs, with verified professionals near you.',
 
+  'home.categories.title': 'All services',
+  'home.categories.intro':
+    'Every service is a search already started — pick one and tell us where.',
+
+  'home.how.title': 'How it works',
+  'home.how.search.title': 'Tell us what you need',
+  'home.how.search.body': 'Pick the service, your area, and when you need it.',
+  'home.how.compare.title': 'Compare professionals',
+  'home.how.compare.body': 'Look at profiles, ratings and quotes before you decide.',
+  'home.how.hire.title': 'Hire with confidence',
+  'home.how.hire.body': 'Book directly or accept a quote, and pay through the platform.',
+
+  'home.trust.title': 'Why hire here',
+  'home.trust.verified.title': 'Verified professionals',
+  'home.trust.verified.body':
+    'We check identity and, where the trade requires it, a licence that is still valid.',
+  'home.trust.reviews.title': 'Reviews from real jobs',
+  'home.trust.reviews.body':
+    'Only people who hired can review, and every review is published next to the job behind it.',
+  'home.trust.payment.title': 'Protected payment',
+  'home.trust.payment.body':
+    'The money is released to the professional once the work is done, not before.',
+
+  'home.pro.title': 'Are you a professional?',
+  'home.pro.body':
+    'Get requests from clients in your area, choose the jobs you take, and get paid through the platform.',
+  'home.pro.cta': 'Work with us',
+
+  'pro.title': 'Work with us',
+  'pro.intro':
+    'Set up your profile, get requests from your area, and choose the jobs you take. No sign-up fee.',
+  'pro.benefits.title': 'How we work with professionals',
+  'pro.benefits.leads.title': 'Requests from your area',
+  'pro.benefits.leads.body': 'You only hear about jobs inside the radius you set.',
+  'pro.benefits.control.title': 'You decide',
+  'pro.benefits.control.body': 'Take what fits and turn down the rest, with no penalty.',
+  'pro.benefits.payment.title': 'Payment guaranteed',
+  'pro.benefits.payment.body': 'The client pays through the platform before you start the work.',
+  'pro.pending': 'Registration for professionals is not open yet.',
+
   'notFound.title': 'Page not found',
   'notFound.body': 'The address you opened does not exist, or it has moved.',
   'notFound.back': 'Back to home',
@@ -31,6 +71,7 @@ export const en = {
   'search.submit': 'Search',
   'search.expand': 'Open the search box',
   'search.label': 'Search for professionals',
+  'search.hero.label': 'Search for professionals near you',
   'search.what.label': 'Service',
   'search.what.placeholder': 'What do you need?',
   'search.what.empty': 'No matching services',
