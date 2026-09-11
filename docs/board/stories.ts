@@ -1789,4 +1789,17 @@ export const stories: Record<string, Story> = {
     ],
     note: 'Human decision. Includes whether the repository may reach a third-party inference provider at all.',
   },
+  'W11-T19': {
+    title: 'Learn from what the agents already did',
+    role: 'platform owner',
+    want: 'every correction I make to an agent to end up as a change to a prompt, a spec or a gate',
+    so: 'I stop paying twice for the same mistake',
+    ac: [
+      'a correction made mid-task is logged, not only a closed pull request',
+      'a run record without its verbatim prompts fails the build',
+      'the corrections already buried in past sessions are recovered and classified',
+      'cost and attempts are reported per finished ticket',
+    ],
+    note: 'Design: docs/adr/ADR-010. Needs none of the W11 infrastructure — it runs against the human-driven pipeline and is what gives W11-T09 and W11-T14 a baseline. The session transcripts it backfills from are outside git and are pruned by the harness, so that part has a deadline.',
+  },
 };

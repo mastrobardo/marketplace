@@ -49,3 +49,18 @@ Session file: memory/sessions/<file>.md
 Verbatim means verbatim. A paraphrased prompt cannot be re-run, which defeats the purpose. If a
 prompt contained something sensitive, redact the value and keep the structure — but nothing
 sensitive should have been in a prompt in the first place.
+
+## `## Prompts` is mandatory, and prose does not satisfy it
+
+Every `S0` run record carried this section. No `S1` record did — they became careful essays about
+the code and contained not one re-runnable prompt. That is how the dataset died: not by anyone
+deciding to drop it, but by each record being individually better written than the last.
+
+A run record is two documents in one. The narrative — what landed, what the tests found, what a
+reviewer should look at hardest — is for a human reviewing *this* change. `## Prompts` is for
+whoever has to work out why the agent produced it, and it is the only part that cannot be
+reconstructed afterwards. Write both. If you are short of time, the narrative is the part to cut.
+
+`spec-present` now fails a PR whose `*.run.md` has no `## Prompts` heading, an empty one, or no
+corrections subsection. "No corrections were needed" is a valid corrections body and a useful
+datapoint — write it rather than deleting the heading. See `docs/adr/ADR-010-agent-telemetry.md`.

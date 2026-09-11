@@ -5,6 +5,7 @@ agent: agent-devops
 verdict: REJECTED | REWORKED | OVERRIDDEN | MANUAL_FIX | SCOPE_CHANGE
 intervened_by: mastrobardo
 at: 2026-01-01T00:00Z
+# backfilled: true   # only when reconstructed from a transcript after the fact
 ---
 
 ## What the agent proposed
