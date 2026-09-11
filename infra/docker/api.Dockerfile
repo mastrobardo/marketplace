@@ -19,6 +19,7 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
 # from the install. `tests/cd-workflows.test.ts` fails when a new one is not added.
 COPY packages/config/package.json packages/config/
 COPY packages/contracts/package.json packages/contracts/
+COPY packages/testing/package.json packages/testing/
 COPY apps/api/package.json apps/api/
 COPY apps/web/package.json apps/web/
 RUN pnpm install --frozen-lockfile --ignore-scripts
