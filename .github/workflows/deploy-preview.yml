@@ -289,17 +289,82 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
+      # ── The component workbench (W12-T06) ──────────────────────────────────────────────────
+      #
+      # Same job as the app, not a job of its own: it needs the same `preview` environment and the
+      # same credentials, and a reviewer should get one comment with both links rather than two
+      # comments to correlate. It is deployed on every pull request rather than only on one that
+      # touches `packages/ui`, because a change to a token or a route rule shows up in the
+      # workbench too, and a reviewer who has to work out whether they got a link is a reviewer who
+      # stops looking.
+      - name: Build the component workbench
+        run: pnpm --filter @marketplace/ui build:storybook
+
+      - name: Deploy the workbench to Cloudflare Pages
+        id: workbench
+        run: |
+          set -euo pipefail
+
+          # Create-if-missing. `pages deploy` against an unknown project *prompts*, and CI has no
+          # TTY to answer — the job would hang or fail on a blank error. Tolerating "already
+          # exists" is what makes this idempotent from the second run onward. If the API token is
+          # scoped to a single project it fails here with Cloudflare's own message, which is the
+          # one case that needs a human (OPS-09).
+          if ! npx --yes wrangler@3.90.0 pages project create marketplace-ui \
+            --production-branch main > project-create.log 2>&1; then
+            # `case`, not `grep` — for the reason the web deploy above gives: grep exits 1 on no
+            # match, which under `set -e` means either an aborted job or a `|| true` that AC31
+            # rightly forbids.
+            case "$(cat project-create.log)" in
+              *"already exists"*) : ;;
+              *) cat project-create.log >&2; exit 1 ;;
+            esac
+          fi
+
+          npx --yes wrangler@3.90.0 pages deploy packages/ui/storybook-static \
+            --project-name marketplace-ui \
+            --branch "$PAGES_BRANCH" 2>&1 | tee workbench-deploy.log
+
+          # Read the URL back; never construct it. `*.pages.dev` subdomains are globally unique, so
+          # `marketplace-ui` may be served from `marketplace-ui-x7q.pages.dev` — the same trap that
+          # gave every reviewer a dead link before AC34.
+          urls="$(sed -nE 's|.*(https://[a-zA-Z0-9.-]+\.pages\.dev).*|\1|p' workbench-deploy.log)"
+
+          alias_url=""
+          for candidate in $urls; do
+            case "$candidate" in
+              "https://$PAGES_BRANCH."*)
+                alias_url="$candidate"
+                break
+                ;;
+            esac
+          done
+          deployment_url="$(printf '%s\n' "$urls" | head -1)"
+          url="${alias_url:-$deployment_url}"
+
+          if [ -z "$url" ]; then
+            echo "wrangler printed no *.pages.dev URL — refusing to comment a guessed one." >&2
+            exit 1
+          fi
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+        env:
+          PAGES_BRANCH: ${{ needs.preflight.outputs.pages-branch }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
       - name: Comment the URLs
         uses: actions/github-script@v7.0.1
         with:
           script: |
             const app = process.env.APP;
             const web = process.env.WEB_URL;
+            const workbench = process.env.WORKBENCH_URL;
             const body = [
               '### Preview environment',
               '',
               `- Web: ${web}`,
               `- API: https://${app}.fly.dev/health`,
+              `- Components: ${workbench}`,
               '',
               'Destroyed automatically when this pull request closes.',
             ].join('\n');
@@ -312,3 +377,4 @@ jobs:
         env:
           APP: ${{ needs.preflight.outputs.app }}
           WEB_URL: ${{ steps.pages.outputs.url }}
+          WORKBENCH_URL: ${{ steps.workbench.outputs.url }}
