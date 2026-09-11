@@ -1,0 +1,12 @@
+{
+  // Declarations only. The base preset sets `noEmit` — right for every package that is typechecked
+  // and bundled by something else — so the build needs a second config rather than a flag, because
+  // `emitDeclarationOnly` and `noEmit` cannot both be set. Vite emits the JavaScript.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "emitDeclarationOnly": true,
+    "outDir": "dist"
+  },
+  "include": ["src/**/*.ts", "src/**/*.tsx"]
+}

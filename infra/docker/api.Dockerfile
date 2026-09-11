@@ -20,6 +20,10 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
 COPY packages/config/package.json packages/config/
 COPY packages/contracts/package.json packages/contracts/
 COPY packages/testing/package.json packages/testing/
+# The design system is a web package and the API image needs none of its code — but
+# `pnpm install --frozen-lockfile` reads every workspace manifest, so a missing one fails the
+# install layer rather than the runtime.
+COPY packages/ui/package.json packages/ui/
 COPY apps/api/package.json apps/api/
 COPY apps/web/package.json apps/web/
 RUN pnpm install --frozen-lockfile --ignore-scripts

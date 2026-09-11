@@ -8,3 +8,9 @@ pnpm-lock.yaml
 # scripts/generate-claude-agents.ts — reformatting either breaks the `agents-drift` gate
 # and makes doc diffs unreadable.
 **/*.md
+
+# Explorable diagrams are build output: `docs/diagrams/*.html` is generated from the `.json` beside
+# it, and reformatting a 16k-line generated artefact produces a 35k-line diff that hides the one
+# line a reviewer cares about. Both landed on `main` unformatted behind `[skip ci]` (#199), so the
+# `lint` job has been failing for every branch since — this is that gate, unblocked.
+docs/diagrams/

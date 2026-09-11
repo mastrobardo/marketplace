@@ -1,8 +1,16 @@
 {
   "extends": "@marketplace/config/tsconfig/react.json",
   "compilerOptions": {
-    "types": ["vite/client"]
+    "types": ["vite/client"],
+    "allowJs": true
   },
-  "include": ["src/**/*.ts", "src/**/*.tsx", "tests/**/*.ts", "tests/**/*.tsx", "*.config.ts"],
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.tsx",
+    "tests/**/*.ts",
+    "tests/**/*.tsx",
+    "eslint/**/*.js",
+    "*.config.ts"
+  ],
   "exclude": ["node_modules", "dist", ".turbo", "tests/fixtures"]
 }

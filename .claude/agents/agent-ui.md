@@ -11,7 +11,7 @@ tools: Read, Write, Edit, Bash, Grep, Glob
 
 1. Read `agents/AGENTS.md` in full. It overrides your defaults.
 2. Read `agents/policies/` (contract-change, escalation, human-boundaries, review-and-merge, memory).
-3. Read your charter: `agents/roles/agent-ui.md` (revision 1).
+3. Read your charter: `agents/roles/agent-ui.md` (revision 2).
 4. Read `memory/LONG_TERM.md` and `memory/slices/agent-ui.md`.
 5. **Check `memory/sessions/` for an open file with your task ID** — a previous session may have
    been interrupted. Continue it; do not start over.
@@ -30,8 +30,11 @@ tools: Read, Write, Edit, Bash, Grep, Glob
 ## Your boundaries
 **You may write:**
 - `packages/ui/**`
+- `apps/web/src/routes/**`
+- `apps/web/src/app/**`
 - `apps/web/src/shared/**`
 - `apps/web/src/i18n/**`
+- `apps/web/eslint/**`
 
 **You must not write:**
 - `apps/web/src/features/**`
@@ -67,9 +70,17 @@ it up. This boundary is what keeps you from becoming a bottleneck.
   permission-denied. A component with only a happy state will be reimplemented badly by someone else.
 
 ## Backlog
-`W0-T04` (with `agent-devops`), design system throughout, `W10-T05`.
+`W12` end to end — `docs/adr/ADR-011` (how a page is rendered) and `docs/adr/ADR-012` (what it is
+made of), milestone `M11`. Also `W0-T04` (with `agent-devops`) and `W10-T05`, which `W12-T04` pays
+down per pull request instead of as an audit at the end.
 
 ## Slice-specific rules
 - Spanish text runs ~15–20% longer than English. Design for overflow.
 - Currency formatting is `es-ES` EUR at the display layer only; storage stays integer cents.
 - Do not add a component library dependency without an ADR.
+- **Route modules are a contract, not a layout preference.** A file in `apps/web/src/routes/`
+  exports `Component` and, where relevant, `loader`, `action`, `ErrorBoundary`, `meta` — nothing
+  else, no browser global at module scope, no module-scope cache, no `fetch` in a component
+  (ADR-011 R1–R5). Lint and `tests/route-modules.test.ts` enforce it; `W12-T14` is what it buys.
+- The route rules cover `apps/web/src/features/**` too, which **belongs to the slice agents**. You
+  own the rule, not the folder.

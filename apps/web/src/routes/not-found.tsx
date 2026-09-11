@@ -3,7 +3,7 @@ import { Link } from 'react-router';
 import { useTranslation } from 'react-i18next';
 
 /** Rendered inside the shell, deliberately: an unknown URL is not a broken application. */
-export function NotFoundPage(): ReactElement {
+export function Component(): ReactElement {
   const { t } = useTranslation();
 
   return (

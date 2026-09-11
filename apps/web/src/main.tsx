@@ -2,7 +2,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './app/App.js';
 import { setupI18n } from './i18n/index.js';
-import './styles/tokens.css';
+import '@marketplace/ui/tokens.css';
 import './styles/app.css';
 
 const container = document.getElementById('root');

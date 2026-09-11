@@ -15,7 +15,7 @@ page map and the search path in one pannable view (source: the `.json` beside it
 
 1. **One React application**, rendered on the client today, **written so that server rendering is a
    switch and not a rewrite**. The switch is React Router's framework mode on Cloudflare Workers,
-   and it gets flipped by `W12-T12`, when the first page whose commercial value depends on being
+   and it gets flipped by `W12-T14`, when the first page whose commercial value depends on being
    indexed ships.
 2. **A route is a loader plus a component.** No fetching in `useEffect`, no browser global at module
    scope, no module-scope cache holding per-user data. This is the whole cost of decision 1, paid in
@@ -79,7 +79,7 @@ in six months with three hundred components that read `window` at import time.
 
 ### 1. Rendering: a client-rendered SPA now, framework mode later, with the seam paid for today
 
-| | Today (`W12-T01`…`T11`) | After the switch (`W12-T12`) |
+| | Today (`W12-T01`…`T13`) | After the switch (`W12-T14`) |
 |---|---|---|
 | Build | Vite, `apps/web` | Vite, same app, framework plugin |
 | Router | `react-router` 8, `createBrowserRouter` | same route modules, server-rendered |
@@ -92,7 +92,7 @@ router with a server entry in front of it. The migration is a build configuratio
 files — *provided* the route modules are shaped for it. That proviso is the decision.
 
 **Trigger.** The switch is not scheduled by date. It is flipped by the ticket that ships the first
-indexable, data-generated page (`W12-T11` landing pages, executed in `W12-T12`). Before that, the
+indexable, data-generated page (`W12-T13` landing pages, executed in `W12-T14`). Before that, the
 public pages are few and fixed, and prerendering them at build time is enough.
 
 ```mermaid
@@ -105,8 +105,8 @@ stateDiagram-v2
     SSR: Framework mode on Workers
     SSR: loaders run server-first
 
-    SPA --> Prerendered: W12-T08 — home page ships
-    Prerendered --> SSR: W12-T11/T12 — first data-generated indexable page
+    SPA --> Prerendered: W12-T10 — home page ships
+    Prerendered --> SSR: W12-T13/T14 — first data-generated indexable page
     SSR --> [*]
 
     note right of SSR
@@ -138,7 +138,7 @@ and the exact decay [ADR-010](ADR-010-agent-telemetry.md) documented for run rec
 
 **Known migration debt, recorded now rather than discovered later.** `apps/web/src/i18n/index.ts`
 initialises a module-level `i18next` singleton, and `main.tsx` awaits it before the first render.
-That is correct for an SPA and violates R6. It stays as-is; `W12-T12` converts it to a per-request
+That is correct for an SPA and violates R6. It stays as-is; `W12-T14` converts it to a per-request
 instance, and the route-shape test is what will prove the conversion is complete.
 
 ### 2. Page inventory — the public surface
@@ -147,15 +147,15 @@ instance, and the route-shape test is what will prove the conversion is complete
 
 | Route (`es`) | Page | Indexable | Data | Ticket |
 |---|---|---|---|---|
-| `/` → `/es` | Home: hero search, categories, how it works, trust strip, supply CTA | ✅ | categories, counts | `W12-T08` |
-| `/es/buscar?...` | Results: list + map, filters | **`noindex, follow`** | search | `W12-T09` |
-| `/es/servicios/:categoria` | Category landing | ✅ | category, top providers | `W12-T11` |
-| `/es/servicios/:categoria/:ciudad` | Category × city landing — *the SEO surface* | ✅ | category, city, providers | `W12-T11` |
-| `/es/pro/:slug` | Provider profile, public view | ✅ | provider, portfolio, reviews | `W12-T10` |
-| `/es/anuncio/:id` | Listing detail | ✅ | listing, provider | `W12-T10` |
-| `/es/publica-tu-servicio` | Supply-side landing | ✅ | static | `W12-T08` |
-| `/es/legal/*` | Terms, privacy, cookies | ✅ | static (`W10-T07`) | `W12-T14` |
-| `*` | 404 / 500 | — | — | `W12-T14` |
+| `/` → `/es` | Home: hero search, categories, how it works, trust strip, supply CTA | ✅ | categories, counts | `W12-T10` |
+| `/es/buscar?...` | Results: list + map, filters | **`noindex, follow`** | search | `W12-T11` |
+| `/es/servicios/:categoria` | Category landing | ✅ | category, top providers | `W12-T13` |
+| `/es/servicios/:categoria/:ciudad` | Category × city landing — *the SEO surface* | ✅ | category, city, providers | `W12-T13` |
+| `/es/pro/:slug` | Provider profile, public view | ✅ | provider, portfolio, reviews | `W12-T12` |
+| `/es/anuncio/:id` | Listing detail | ✅ | listing, provider | `W12-T12` |
+| `/es/publica-tu-servicio` | Supply-side landing | ✅ | static | `W12-T10` |
+| `/es/legal/*` | Terms, privacy, cookies | ✅ | static (`W10-T07`) | `W12-T09` |
+| `*` | 404 / 500 | — | — | `W12-T09` |
 
 **Search results are `noindex, follow`** on purpose. An unbounded filter space generates unbounded
 near-duplicate pages, which is the classic way a marketplace earns a thin-content penalty and buries
@@ -223,7 +223,7 @@ Three consequences worth stating:
 
 1. **The schema produces the query.** `SearchSchema → SearchQuery` is a pure function, and
    `SearchQuery` is a zod schema in `packages/contracts`. The search bar therefore *defines the
-   search API's input* — which makes `W12-T07` a contract request to `agent-contracts`, filed before
+   search API's input* — which makes `W12-T08` a contract request to `agent-contracts`, filed before
    `W3` implements the endpoint, rather than a UI that guesses at a response shape.
 2. **The query string is the state.** `?what=fontaneria&where=28013&when=semana&mode=quote` — so a
    search is shareable, back/forward work, and a server can render the page from the request alone
@@ -261,12 +261,12 @@ The storefront imports **one** module for data: the generated client from `packa
 `fetch` in a component, no hand-written URL, no Prisma anywhere near React (`TODO.md` §2, rule 3).
 
 `agent-ui` **may not edit `packages/contracts`** — the contract-freeze law in `agents/AGENTS.md`
-makes that a change request that `agent-contracts` applies. `W12-T07` is that request:
+makes that a change request that `agent-contracts` applies. `W12-T08` is that request:
 
 | Endpoint | Feeds | Owner | Status |
 |---|---|---|---|
 | `GET /categories` | hero field, category cards, landing pages | `agent-providers` (`W3-T01`) | exists in backlog |
-| `GET /search` | results, map, facets | `agent-discovery` (`W3-T04`) | **input shape defined by `W12-T06`** |
+| `GET /search` | results, map, facets | `agent-discovery` (`W3-T04`) | **input shape defined by `W12-T07`** |
 | `GET /providers/:slug` | public profile | `agent-providers` (`W3-T02`) | exists in backlog |
 | `GET /listings/:id` | listing detail | `agent-discovery` (`W3-T03`) | exists in backlog |
 | `GET /places/suggest` | the `where` field's autocomplete | `agent-discovery` (`W3-T06`) | Maps cost applies — see below |
@@ -289,7 +289,7 @@ segments per language — `/es/servicios/...` and `/en/services/...` — because
 English segments is worth less in Spanish search results. Route ids stay language-neutral so links
 are written once.
 
-**Performance budget**, enforced on the preview URL by Lighthouse CI in `W12-T13` and failing the PR:
+**Performance budget**, enforced on the preview URL by Lighthouse CI in `W12-T15` and failing the PR:
 
 | Metric | Budget (mobile, p75) |
 |---|---|
@@ -339,7 +339,7 @@ workbench).
 - **The i18n singleton is known debt** with a named owner ticket. It is the only R6 violation in the
   tree today, and it is in the file the migration will touch first.
 - **The search schema is a new shared shape** between `agent-ui` and `agent-discovery`. It is the most
-  likely collision point in `W12` (`R8`), which is why `W12-T06` produces a schema and `W12-T07`
+  likely collision point in `W12` (`R8`), which is why `W12-T07` produces a schema and `W12-T08`
   produces a contract request, in that order, rather than one ticket doing both.
 - **No new services.** Everything above runs on Cloudflare, which M0 already pays for. The four-service
   rule holds.

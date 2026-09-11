@@ -1,10 +1,15 @@
 /*
  * Design tokens — the only place a colour, a spacing step, a radius or a font value is written.
  *
- * `agent-ui` owns this file from here: packages/ui is built on these names, and a component that
- * needs a value it cannot find here needs a new token, not a literal. The test in
- * tests/tokens.test.ts fails the build if a stylesheet hardcodes a colour, and fails it again if a
- * colour is defined for light but not for dark.
+ * `agent-ui` owns this file, and since `W12-T01` it lives in the design system rather than next to
+ * the app that used to be its only consumer. Reach it as `@marketplace/ui/tokens.css`: it is served
+ * from source and needs no build, because a consumer that must compile the package before it can
+ * read a colour is a consumer that will hardcode the colour.
+ *
+ * packages/ui is built on these names, and a component that needs a value it cannot find here needs
+ * a new token, not a literal. `tests/tokens.test.ts` fails the build if a stylesheet hardcodes a
+ * colour, and fails it again if a colour is defined for light but not for dark. `W12-T05` layers
+ * these into primitive → semantic → component and adds `[data-theme]` switching.
  *
  * Namespace `--mp-` so tokens never collide with a third-party stylesheet (a map widget, a Stripe
  * element) that shares the document.
