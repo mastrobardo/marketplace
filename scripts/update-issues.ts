@@ -41,6 +41,7 @@ const SLICE: Record<string, [string, string]> = {
   W9: ['S12', 'agent-admin'],
   W10: ['S11', 'agent-qa'],
   W11: ['S13', 'agent-devops'],
+  W12: ['S10', 'agent-ui'],
 };
 
 const EPICS: [string, string, string][] = [
@@ -113,6 +114,11 @@ const EPICS: [string, string, string][] = [
     'W11',
     'Agent autonomy',
     'Letting a ticket run itself from spec to merged pull request. Three phases in order: Claude Code on the real repository, then a cheaper second model, then redaction at the boundary. Design lives in docs/adr/ADR-008 and ADR-009.',
+  ],
+  [
+    'W12',
+    'The storefront and the design system',
+    'What a visitor actually sees, and the shared components every slice builds from. The public site first — search, results, provider pages, the pages that answer "fontanero en Madrid" — ending at the point where signing in becomes necessary. Design lives in docs/adr/ADR-011 and ADR-012.',
   ],
 ];
 

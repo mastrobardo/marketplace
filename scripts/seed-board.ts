@@ -46,6 +46,7 @@ const SLICE_OF: Record<string, [string, string]> = {
   W9: ['S12', 'agent-admin'],
   W10: ['S11', 'agent-qa'],
   W11: ['S13', 'agent-devops'],
+  W12: ['S10', 'agent-ui'],
 };
 const MILESTONE_OF: Record<string, string> = {
   W0: 'M0 Walking skeleton',
@@ -60,6 +61,7 @@ const MILESTONE_OF: Record<string, string> = {
   W9: 'M9 Beta-ready',
   W10: 'M9 Beta-ready',
   W11: 'M10 Agent autonomy',
+  W12: 'M11 Public storefront',
 };
 
 /**
