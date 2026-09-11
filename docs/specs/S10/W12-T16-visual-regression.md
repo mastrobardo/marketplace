@@ -98,6 +98,15 @@ the URL: `&globals=theme:contrast;scheme:dark;locale:en-GB`. The globals are `th
 (`default|contrast`), `scheme` (`light|dark`) and `locale` (`es-ES|en-GB`), declared in
 `.storybook/preview.tsx`.
 
+**Amended on implementation.** The coverage gate in §4.2 has to fail on the pull request that adds
+an unpinned story, and reading `index.json` would put a 30-second Storybook build inside the `unit`
+project on every PR in the repo. So the gate derives its subjects from the story *modules*, using
+Storybook's own `toId` and `storyNameFromExport` rather than a local copy of its naming rules, and
+the property this section actually wanted is kept by comparing both against the pinned list: per PR
+*pinned == derived*, nightly *pinned == index*, therefore *derived == index*. Playwright forced the
+issue anyway — `import.meta.glob` is a Vite feature and Playwright does not run through Vite. Run
+record, Finding 4.
+
 **Not the deployed workbench.** `W12-T06` puts a Storybook on `marketplace-ui.pages.dev`, and
 shooting that URL would be less code. It is the wrong source twice over: the nightly would fail
 whenever the *deploy* failed, and it would screenshot whatever is deployed rather than the tree the
@@ -336,6 +345,12 @@ Blocked:   AC11's 500 row, and nothing else.
 Not blocked: The entire visual-regression half, and six of the seven routes.
 ```
 
+**Answered by the operator, 2026-09-12: proceed on the recommendation — option A.** Implemented as
+`apps/web/src/shared/fault.ts`, stripped at resolve time by `vite.config.ts` unless
+`VITE_ENABLE_FAULT_ROUTES=true`, and asserted in both directions in `mocks.test.ts`. The absence
+assertion was probed red by leaking the flag into it. All seven routes now pass axe, the 500 page
+included.
+
 ### ESCALATION — Q2: a missing baseline should fail, but that makes the first run red by construction
 
 ```
@@ -355,6 +370,11 @@ Recommend: A, and land the initial baselines through visual-baselines.yml as the
 Blocked:   Nothing — this is a choice inside the implementation.
 Not blocked: Everything.
 ```
+
+**Resolved on implementation: A.** `updateSnapshots: 'none'`, evidenced in the run record — the
+missing baseline fails and no file is written. The accepted consequence is that the **first nightly
+after this merges is red** until the baselines land through `visual-baselines.yml`, which is the
+accept path being exercised once by the person who built it.
 
 ### Q3 — `agent-ui` keeps touching `agent-devops`' files, and nobody has decided whether that is allowed
 
@@ -379,6 +399,12 @@ Mitigations, all of which are implementation choices rather than open questions:
 (identical rasteriser every run), `prefers-reduced-motion` forced on, `animations: 'disabled'` in the
 screenshot call, a small non-zero pixel tolerance, and exclusions for stories whose `play` function
 opens an overlay — `MEM-2026-09-11-13` says those are already the awkward ones for the axe gate too.
+
+**One of these turned out to be the ticket's main finding, in the opposite direction.** The
+tolerance was `maxDiffPixelRatio: 0.001`, which is 1,024 pixels on a 1280×800 shot — twice what the
+AC19 probe actually moves. The gate could not fail on a single-component regression while every
+assertion about its configuration passed. It is an absolute `maxDiffPixels: 60` now, and a test
+asserts the ratio form is absent. See the run record, Finding 1.
 
 Stated here because it is the risk most likely to decide whether this ticket was worth doing, and it
 will not be visible until the gate has run for a fortnight. **The run record should state the

@@ -630,3 +630,91 @@ Keep it to facts that changed how you would work. Task-specific detail stays in 
   missing is a scoping decision for the operator, not a detail to discover mid-implementation.
 - **evidence**: `docs/specs/S10/W12-T12-provider-profile.md` §1; ADR-011 Amendment 3
 - **status**: active
+
+### A pixel tolerance expressed as a ratio is a number nobody chose
+- **id**: MEM-2026-09-12-01
+- **scope**: slice:S10
+- **fact**: `W12-T16`'s screenshot gate shipped its first afternoon with
+  `maxDiffPixelRatio: 0.001`. That reads as "a thousandth of the image" and is a budget of **1,024
+  pixels** on a 1280×800 shot. The AC19 probe — one pixel of extra padding on `Card` — moves
+  **511**. The gate could not fail on a single-component regression. It is `maxDiffPixels: 60` now,
+  absolute, and `visual-runner.test.ts` asserts the *ratio* form is absent so it cannot return.
+- **why**: Every assertion about the gate's configuration passed the whole time — pinned container,
+  animations disabled, zero retries, a ceiling on the threshold. A gate can be configured to look
+  careful and still be incapable of failing. Only running it against a deliberate regression found
+  it. Also: anti-aliasing noise does not scale with the viewport, so a ratio quietly buys *more*
+  tolerance for bigger screenshots, which is backwards.
+- **apply**: Any threshold expressed as a fraction — of an image, a bundle, a duration — gets
+  multiplied out against the real magnitude before it is committed, and written down. When adding a
+  gate, the probe is the acceptance criterion, not the config.
+- **evidence**: `packages/ui/visual/config.ts`;
+  `docs/specs/S10/W12-T16-visual-regression.run.md` §Finding 1
+- **status**: active
+
+### Verify a probe changes what you think before concluding anything from it
+- **id**: MEM-2026-09-12-02
+- **scope**: slice:S10
+- **fact**: `W12-T16`'s first red probe inserted `padding-top: 1px` at the top of `.card` — eight
+  lines above the rule's own `padding: var(--mp-card-padding)` shorthand, which overrides it. The
+  screenshot was byte-identical and the gate passed, correctly. Confirming the second probe with
+  `getComputedStyle(el).paddingTop === '17px'` in a real browser is what separated "the probe is a
+  no-op" from "the gate is broken" — and the second one turned out to be true as well.
+- **why**: A probe that does nothing produces a green run that reads exactly like a working gate
+  passing. `MEM-2026-09-11-10` says to ask which of the two is wrong when a new gate *fails*; the
+  same question is owed when it passes, and it is easier to skip because a pass feels like progress.
+- **apply**: Before a red probe is evidence of anything, prove it changed the observable — computed
+  style, emitted bytes, rendered text. CSS shorthands override longhands regardless of where they
+  sit in the rule.
+- **evidence**: `docs/specs/S10/W12-T16-visual-regression.run.md` §Finding 1
+- **status**: active
+
+### A tool reporting "no problems" and a tool that never ran look identical
+- **id**: MEM-2026-09-12-03
+- **scope**: slice:S10
+- **fact**: `visual/routes.spec.ts` asserts `results.passes.length > 0` alongside
+  `violations === []`. An `AxeBuilder` that failed to inject reports zero violations, and seven
+  green routes would have meant nothing. Same shape as the `PINNED.length > 0` guard beside the
+  screenshot loop.
+- **why**: This is `MEM-2026-09-11-29`'s rule — *a check that can only pass is not a check* — in its
+  most common disguise: the assertion is correct, the subject is absent. Every "expect no findings"
+  assertion has this failure mode by construction.
+- **apply**: Whenever asserting the *absence* of findings from a tool, also assert the tool produced
+  output. Whenever iterating a list to generate tests, assert the list is non-empty.
+- **evidence**: `packages/ui/visual/routes.spec.ts`; `packages/ui/visual/stories.spec.ts`
+- **status**: active
+
+### ESLint does not read `.gitignore`, and `storybook-static` is 21,000 errors
+- **id**: MEM-2026-09-12-04
+- **scope**: slice:S10
+- **fact**: `pnpm turbo run lint` reported 21,128 problems the first time anyone ran
+  `build:storybook` before `lint` in the same tree — all of it bundled vendor code in
+  `packages/ui/storybook-static/`, which is gitignored. Latent since `W12-T03`.
+  `packages/ui/eslint.config.js` now ignores it, `visual-results/` and `visual-report/`, and gives
+  `visual/**` Node globals (the package is `browser` because everything else in it renders).
+- **why**: The two commands are usually run in different jobs, so nothing had ever put a build
+  output and a lint in the same working directory. CI would have hit it the moment a workflow did
+  both.
+- **apply**: Any new build output under a linted package needs an `ignores` entry at the same time,
+  not when someone trips over it. And `globals` must be a devDependency of the package whose flat
+  config imports it — pnpm does not hoist.
+- **evidence**: `packages/ui/eslint.config.js`;
+  `docs/specs/S10/W12-T16-visual-regression.run.md` §Finding 3
+- **status**: active
+
+### A spec should state the property; the mechanism may not survive contact
+- **id**: MEM-2026-09-12-05
+- **scope**: slice:S10
+- **fact**: `W12-T16` §4.1 named `storybook-static/index.json` as the single enumeration source so
+  the shooter and the coverage gate could not disagree. Playwright cannot use `import.meta.glob` (a
+  Vite feature) and the per-PR gate cannot afford a Storybook build. The property was kept by
+  splitting the equality: per PR *pinned == derived-from-modules*, nightly *pinned == index*,
+  therefore *derived == index*.
+- **why**: The spec stated a mechanism where it meant a guarantee, so honouring it literally would
+  have meant either a 30-second build on every pull request or dropping the check. Two cheap
+  comparisons composed into the same claim.
+- **apply**: When an implementation cannot follow a spec's mechanism, write down the *property* the
+  mechanism was for and look for another way to get it before deviating or dropping it. Record the
+  deviation against the property, not against the sentence.
+- **evidence**: `packages/ui/visual/index-check.ts`;
+  `docs/specs/S10/W12-T16-visual-regression.run.md` §Finding 4
+- **status**: active

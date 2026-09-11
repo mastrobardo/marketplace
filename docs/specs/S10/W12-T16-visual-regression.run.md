@@ -5,71 +5,251 @@ Spec: [`W12-T16-visual-regression.md`](W12-T16-visual-regression.md)
 
 ---
 
-## Status: spec only
+## What landed
 
-This branch carries **the spec and nothing else**. No test, no workflow, no baseline. The
-implementation is a second pull request against `main`, opened after the spec is reviewed — the same
-shape `W12-T18` ran as (#234 spec, #240 implementation), and for the same reason: §10 carries two
-escalations whose answers change what gets built, and building first would make the answer expensive.
+Two halves of one engine, as the spec argued: the nightly screenshot comparison over the pinned
+story list, and the axe pass over the storefront's real routes. Plus the accept path, because a
+visual gate without one gets deleted the first time somebody ships a deliberate redesign.
 
-The pipeline (`AGENTS.md` §1) is at step 1 of 8. **L1 has not been satisfied yet** — there is no red
-phase in this record because there is no test yet, and a PR claiming implementation without one is
-invalid regardless of the code. This PR does not claim it.
-
-## What the spec had to establish first
-
-| Checked | Found |
+| | |
 |---|---|
-| Is `W12-T18` actually merged? | Yes — PR #240, `main` at `bff80ed`. The backlog's *"runs after `W12-T18`"* precondition is met |
-| Is there an open session for this task? | No. `memory/sessions/` ends at `2026-09-11-agent-ui-W12-T12.md` |
-| How many stories exist today? | 74, across 14 story files — the same 74 `W12-T04` runs axe against |
-| What resolves `playwright`? | `1.63.0` (`pnpm-lock.yaml:2788`) — which pins the container image |
-| Where does Storybook build to? | `packages/ui/storybook-static`, built by `pnpm --filter @marketplace/ui build:storybook` (`deploy-preview.yml:313`) |
-| What are the toolbar globals called? | `theme`, `scheme`, `locale` (`.storybook/preview.tsx`) — needed for the shooting URL |
-| Who owns `.github/**`? | `agent-devops`. Declared in spec §5 and raised as §10 Q3 |
+| Subjects derived | 74 stories, 14 files — pinned, 0 excluded |
+| New tests | 44 in `packages/ui` + 10 in `tests/cd-workflows.test.ts` + 2 in `apps/web` |
+| Routes under axe | 7, all passing |
+| Workflows | `nightly-visual.yml`, `visual-baselines.yml` — `ci.yml` untouched |
+| Baselines committed | **none yet** — deliberately, see §Q2 below |
 
-## Decisions taken in the spec, and why
+## Red phase (L1)
 
-- **Enumeration from `storybook-static/index.json`, not a source glob** (§4.1). One artefact feeds
-  both the shooting list and the completeness gate, so the two cannot disagree about what a story is.
-- **The pinned list gets a completeness test that runs per-PR** (§4.2). This is the ticket's main
-  idea. ADR-012 and the backlog both say *pinned list*, and a hand-written list of subjects is the
-  failure this repo has had three times — the `database` job, `tokens.test.ts` AC6, `tokens.test.ts`
-  AC4. Pinning stays; forgetting becomes a red test on the pull request that forgot.
-- **The reference environment is a fingerprint file, not a convention** (§4.3). ADR-012 §6 says
-  baselines are generated only in the CI image; a comment saying so is not a check. Mismatch fails in
-  CI and skips loudly locally — both directions asserted, per `MEM-2026-09-11-22`.
-- **Two workflow files, not one** (§4.5). The baseline-regeneration path needs `contents: write` and
-  `pull-requests: write`; `ci.yml` is deliberately `contents: read`. AC16 asserts that block is
-  unchanged by this branch.
-- **One theme × scheme combination by default** (§10 Q5). Recorded as a decision rather than left as
-  a silent default, because raising it later should be one line in the pinned list.
-- **`W12-T18`'s lesson applied**: its §10 Q1 was *"safe under either answer"* and the implementation
-  still guessed the answer's *contents* wrong. So Q1 and Q2 here are escalations rather than
-  recommendations acted on — see below.
+### The coverage gate, before there was anything to cover
 
-## Open, and blocking implementation
+```
+$ pnpm exec vitest run --project unit tests/visual-coverage.test.ts
 
-**Q1 — how does the nightly reach the 500 page?** `W12-T09` correctly made it unreachable
-(`MEM-2026-09-11-21`: the categories request now degrades instead of throwing), so the one surface
-with no a11y coverage of any kind also has no URL. Recommendation is option A, a build-time-stripped
-`?__boom=1` trigger using `W12-T08`'s existing resolve-time stripping — **not** an
-`import.meta.env` runtime guard, which `MEM-2026-09-11-14` records shipping 511 KB of mocks to a CDN.
-Blocks one row of AC11 and nothing else.
+Error: Failed to resolve import "../visual/pinned.js" from "tests/visual-coverage.test.ts".
+Does the file exist?
+  Plugin: vite:import-analysis
+  File: packages/ui/tests/visual-coverage.test.ts:5:35
 
-**Q2 — does a missing baseline fail or self-adopt?** Recommendation is fail, with the initial
-baselines landing through the regeneration workflow as this ticket's own second PR, so the accept
-path is exercised once by the person who built it.
+ Test Files  1 failed (1)
+      Tests  no tests
+```
 
-**Q3 — `agent-ui` has now touched `agent-devops`' files in four tasks.** `W12-T06`'s run record asked
-for this to be settled once instead of re-declared per ticket; it was not. Filed as its own task
-rather than fixed here (L10).
+Then, with the modules written and `PINNED` deliberately left empty — the gate enumerating its own
+work, which is the shape the whole ticket is about:
 
-## Not yet done
+```
+ FAIL  tests/visual-coverage.test.ts > the real package is fully covered
+AssertionError: expected [ …74 items ] to deeply equal []
 
-- [ ] TDD red phase, pasted here (L1)
-- [ ] `visual-coverage.test.ts`, `visual-runner.test.ts`, `visual-report.test.ts`
-- [ ] `nightly-visual.yml`, `visual-baselines.yml`, `cd-workflows.test.ts` additions
-- [ ] AC19's deliberate one-pixel red probe — the criterion this task is to be judged on
-- [ ] Initial baselines, via the regeneration workflow
-- [ ] Session memory closed with a handoff; durable learnings promoted to `memory/slices/agent-ui.md`
++   "primitives-textinput--with-error (Primitives/TextInput → WithError) is in neither the
+     pinned list nor the exclusions. Add it to PINNED, or exclude it with a reason.",
++   "foundations-themes--matrix (Foundations/Themes → Matrix) is in neither the pinned list
+     nor the exclusions. Add it to PINNED, or exclude it with a reason.",
+     …
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 15 passed (16)
+```
+
+### The runner and the reporter
+
+```
+$ pnpm exec vitest run --project unit tests/visual-runner.test.ts tests/visual-report.test.ts
+
+Error: Failed to resolve import "../visual/report.js" from "tests/visual-report.test.ts".
+Error: Failed to resolve import "../visual/config.js" from "tests/visual-runner.test.ts".
+
+ Test Files  2 failed (2)
+      Tests  no tests
+```
+
+### AC8 — a missing baseline, proven to fail and to write nothing
+
+```
+$ pnpm exec playwright test visual/stories.spec.ts -g "patterns-card--default"
+
+  Error: A snapshot doesn't exist at packages/ui/visual/baselines/patterns-card--default.png.
+
+  1 failed
+
+$ ls visual/baselines
+ls: visual/baselines: No such file or directory
+```
+
+That is `updateSnapshots: 'none'` doing the one thing Playwright would not have done by default —
+its default writes the missing baseline and fails, which means the first run after a regression
+adopts the regression as the new truth.
+
+## Finding 1 — the tolerance was hiding exactly what the gate is for
+
+**AC19's probe failed to fail, twice, and the second time it was the gate's fault.**
+
+Probe one: `padding-top: 1px` inserted at the top of `.card`. The run passed. Correct — the rule
+already had `padding: var(--mp-card-padding)` eight lines below, and the shorthand overrides the
+longhand regardless of order-of-appearance intuition. **The probe was wrong, not the gate**, which
+is `MEM-2026-09-11-10`'s rule applied to a green rather than a red: ask which of the two is wrong
+before fixing either.
+
+Probe two: `padding-top: calc(var(--mp-card-padding) + 1px)`, placed *after* the shorthand. Verified
+in the browser before trusting anything — `getComputedStyle(...).paddingTop === '17px'`, up from
+16px. The run still passed.
+
+That one was the gate. Measured by dropping the threshold to zero:
+
+```
+Error: expect(locator).toHaveScreenshot(expected) failed
+  511 pixels (ratio 0.01 of all image pixels) are different.
+```
+
+`maxDiffPixelRatio: 0.001` reads as *"a thousandth of the image"*. On a 1280×800 screenshot it is a
+budget of **1,024 pixels**. A real one-pixel layout shift on one component moves **511**. So the
+threshold was twice the size of the regression it exists to catch, and the gate would have run
+green every night while looking strict.
+
+Now `maxDiffPixels: 60` — absolute, and a test asserts the ratio form is *absent* so it cannot come
+back. Absolute is the right shape for the underlying reason too: anti-aliasing noise does not scale
+with the viewport, so a ratio quietly buys more tolerance for bigger screenshots, which is backwards.
+
+With the fix, the probe fails and produces all three images — which is AC9, evidenced rather than
+configured:
+
+```
+  Error: expect(locator).toHaveScreenshot(expected) failed
+  1 failed
+
+$ ls visual-results/*/
+patterns-card--default-actual.png
+patterns-card--default-diff.png
+patterns-card--default-expected.png
+```
+
+Probe reverted; `git diff packages/ui/src/` is empty.
+
+**The lesson is not "pick a smaller number".** It is that a threshold expressed as a ratio of a
+thing whose size you did not think about is a number nobody has actually chosen. This gate spent
+most of its first afternoon in a state where it could not fail.
+
+## Finding 2 — a passing axe run and a broken axe run look identical
+
+All seven routes pass. That is good news and it is also exactly what an `AxeBuilder` that failed to
+inject would report. `results.violations` is `[]` either way.
+
+So the suite now asserts `results.passes.length > 0` — the rules that ran and were satisfied —
+which is evidence the page was examined at all. Same failure class as `MEM-2026-09-11-29` and as
+`W12-T04`, which proved its own axe gate with a deliberate violation before anyone believed it.
+
+## Finding 3 — ESLint was walking the built workbench
+
+`pnpm turbo run lint` reported **21,128 problems**, essentially all of them from bundled vendor code
+in `packages/ui/storybook-static/`. The directory is gitignored; ESLint does not read `.gitignore`.
+
+It has been latent since `W12-T03`: nobody had run `build:storybook` before `lint` in the same
+working tree. `packages/ui/eslint.config.js` now ignores the build output, and gives the `visual/`
+runner Node globals — the package is configured `browser` because everything else in it renders.
+
+## Finding 4 — `import.meta.glob` is a Vite feature, and Playwright is not Vite
+
+The spec's §4.1 wanted one enumeration source so the shooter and the coverage gate could not
+disagree. The first implementation had the Playwright spec deriving subjects from the story modules;
+Playwright does not run through Vite, so `import.meta.glob` is not a function there.
+
+The fix keeps the guarantee and splits the comparison in two, each where it is cheap:
+
+- per PR, in Vitest: **pinned list == derived from the story modules**
+- nightly, in Playwright: **pinned list == `storybook-static/index.json`**
+
+Transitively, derivation == index, which is what §4.1 actually wanted. Neither half needs the other
+to be running.
+
+## Deviations from the spec
+
+- **§4.1 / AC1 — enumeration.** The spec names `storybook-static/index.json` as the single source.
+  The coverage gate derives from the story modules instead, using Storybook's own `toId` and
+  `storyNameFromExport` rather than a local copy of its naming rules. Reason: AC2 must fail on the
+  pull request that adds an unpinned story, and requiring a 30-second Storybook build inside the
+  `unit` project would put that cost on every PR in the repo forever. The "cannot disagree" property
+  is preserved by Finding 4's two-sided comparison.
+- **AC10 / §10 Q4 — the tolerance is a count, not a ratio.** See Finding 1. The spec said "a small
+  non-zero pixel tolerance"; it did not say which units, and the units were the bug.
+- **§10 Q5 — the matrix.** No entry carries a `matrix` override. `Foundations/Themes → Matrix`
+  builds its four panels from its own `COMBINATIONS` array rather than from the toolbar globals, so
+  one screenshot of it already covers all four theme × scheme combinations — which is what §10 Q5
+  said it wanted ("covered in one image rather than 74"). The override mechanism exists and is
+  tested for the first subject that genuinely needs it.
+- **`EXCLUSIONS` is empty.** The spec anticipated excluding the animated stories. They do not need
+  it: the package's only `@keyframes` is `Button.module.css`'s spinner and it is already
+  `animation: none` under `prefers-reduced-motion`, which the runner forces. A spinner that is not
+  spinning is a deterministic subject. The overlay stories are portalled to `document.body`, which a
+  full-page screenshot captures, and they are the states most worth watching.
+- **§4.6 said no source file changes.** `apps/web/src/shared/fault.ts` (new),
+  `apps/web/src/routes/root.tsx` (one call), `apps/web/vite.config.ts` (the stripping plugin) —
+  all of it §10 Q1 option A, which §4.6 already flagged as the anticipated exception.
+  `packages/ui/eslint.config.js` changed for Finding 3.
+
+## The escalations, as resolved
+
+### Q1 — the 500 page had no URL. **Option A.**
+
+`shared/fault.ts` throws a 500 `Response` on `?__boom=1`, and `vite.config.ts` replaces the module
+with a no-op at *resolve* time unless `VITE_ENABLE_FAULT_ROUTES=true`. Not an `import.meta.env`
+guard: `MEM-2026-09-11-14` records what that is worth — Rollup resolves the import while building
+the module graph, before the dead branch is minified away, which is how 511 KB of MSW reached a CDN
+behind a guard that read as sufficient.
+
+Asserted in both directions, and the absence assertion was probed red by leaking the flag into it:
+
+```
+$ VITE_ENABLE_FAULT_ROUTES=true pnpm exec vitest run -t "a normal build has no fault trigger"
+AssertionError: a chunk carries the deliberate-fault trigger
+  1 failed
+```
+
+A query parameter that 500s the storefront on demand is a denial-of-service primitive if it survives
+into a real build, so the one-sided version of this test was never sufficient.
+
+### Q2 — a missing baseline **fails**, and writes nothing.
+
+Evidenced above. The consequence is accepted and is visible on day one: **the first nightly after
+this merges will be red**, because no baselines are committed yet. They land through
+`visual-baselines.yml` as this ticket's second pull request, which exercises the accept path once,
+deliberately, rather than leaving it to be discovered at 2am.
+
+Baselines were generated locally during the probes and **deleted rather than committed** — macOS
+font rasterisation is not the reference environment, and committing them would poison the gate on
+its first run. That is the fingerprint's whole purpose and it would have been an ironic way to break
+it.
+
+## Known gaps, carried deliberately
+
+- **No baselines yet**, so the screenshot half is unproven against real content. It is proven
+  against a probe, which is the strongest evidence available before the images exist.
+- **The flake rate is unknown and will stay unknown for about a fortnight** (§10 Q4). If it is not
+  near zero, the correct response is to shrink the pinned list, not to raise `maxDiffPixels` until
+  it goes green. The ceiling assertion exists to make that harder to get wrong under deadline.
+- **§10 Q3 — `agent-ui` has now touched `agent-devops`' files in four W12 tasks.** Declared in §5
+  again, as `W12-T06` did, and `W12-T06`'s run record already asked for it to be settled once. Filed
+  rather than fixed (L10).
+- **`/es/search` and `/es/pro/:id` are not in the axe route list** (§4.4), and that is a stated
+  omission rather than an oversight: both need query state or a fixture id to be worth visiting.
+- **The nightly's reporting path is untested against a real GitHub API.** The *decision* is pure and
+  covered in both directions; the `gh` calls around it are not, and will not be until the first red
+  night.
+
+## Self-assessment
+
+The part worth reviewing hardest is **Finding 1**, and not only for the number. The gate was
+configured to look careful — pinned container, disabled animations, zero retries, a ceiling asserted
+in a test — and every one of those was real while the threshold made the whole thing incapable of
+failing on a single-component change. Every assertion about the *configuration* passed throughout.
+Only running the thing against a deliberate regression found it, which is the argument AC19 was
+written to make and the reason it was written as a probe rather than an assertion.
+
+Second: I nearly recorded probe one as evidence the gate worked in reverse — "the gate passes on an
+unchanged tree" — and it was a no-op change. Verifying `getComputedStyle` in the browser before
+trusting the next probe is what turned a wrong conclusion into Finding 1.
+
+Third, a process note: the spec said "one enumeration source" and the implementation could not have
+it. The honest fix was not to abandon the property but to work out which two cheap comparisons
+compose into it. A spec that states a *property* rather than a mechanism survives that; §4.1 stated
+the mechanism and had to be deviated from to keep the property.
