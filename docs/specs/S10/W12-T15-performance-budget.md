@@ -1,4 +1,4 @@
-# W12-T15 — A performance gate that measures what a user feels, not what a bundler reports
+# W12-T15 — A performance harness that measures what a user feels, not what a bundler reports
 
 Task: `W12-T15` · Slice: S10 · Owner: `agent-ui` · Issue: #215
 Branch: `W12-T15-performance-budget` · Run record: `W12-T15-performance-budget.run.md`
@@ -49,14 +49,14 @@ deliberate reversal of `TODO.md` §6 and of `W12-T18`'s aside that *"nothing new
 `W12-T15` is already over budget on"*. There is no budget to be over. A future ticket that wants one
 must re-argue it from a measurement, not cite the backlog line this spec removed.
 
-### 1.3 What the gate is actually for
+### 1.3 What the harness is actually for
 
 Not to make the site fast — on the target profile it is already at 100. To notice when it **stops**
 being fast, on a profile that reflects the users it is for, before a reviewer has to guess from a
 diffstat whether a change is expensive.
 
-This is worth stating plainly because it sets the expected value low and honest: **the gate begins
-its life with almost no sensitivity.** Every metric scores 99–100 today, so a floor at 85 fires only
+This is worth stating plainly because it sets the expected value low and honest: **it begins its
+life with almost no sensitivity.** Every metric scores 99–100 today, so a floor at 85 fires only
 on something large — a render-blocking third party, an unsplit map library, a font that arrives
 before first paint. It will not notice a 40 ms drift. It is a smoke alarm, not a thermostat, and
 that is the operator's stated tolerance rather than an oversight. §10 Q1 asks whether it should be
@@ -123,19 +123,43 @@ floor absorbs runner variance that a millisecond ceiling would turn into flake. 
 once there is CI data — `W12-T16`'s Finding 1 is the standing reminder that a tolerance chosen for
 comfort can hide the regression it was bought to catch.
 
-### 3.3 Where it runs, and the URL it is given
+### 3.3 A harness now, a gate later
 
-On the **preview deployment**, per the AC (*"measured on the deployed preview, not on a developer
-machine"*), reading the URL from `deploy-preview.yml`'s `pages` step output. Never constructing it:
-that step's own comment records that a guessed `*.pages.dev` hostname gave every reviewer a dead
-link for a while, and a perf gate pointed at a 404 measures a 404 very quickly and passes.
+**This ticket ships a harness that reports. It does not block a merge, and it is not wired into CI.**
 
-A **warm-up navigation is performed and discarded** before the measured runs. The first request to a
-freshly deployed Pages project is a cold edge cache, and a cold first byte would be attributed to
-the change under review.
+Operator decision, 2026-09-12, taken while this was being built:
 
-**Three runs, median reported** (`numberOfRuns: 3`). One Lighthouse run on a GitHub-hosted runner is
-not a measurement, it is a sample.
+> *"Don't worry too much about preview/release. If the harness is in place, we'll get to it later.
+> Early optimisation is the root of all evils. While we keep performance in mind while developing,
+> it should not be a blocker in this MVP phase."*
+
+That reverses the AC's *"a pull request that makes the home or results page meaningfully slower
+fails"* and the *"measured on the deployed preview"* half with it, and it is the right call for a
+product with no users: a gate that fails a pull request over drift nobody is experiencing is the
+early optimisation it claims to prevent. It also disposes of Q4 below, and — usefully — of §4's
+ownership problem, because nothing in `.github/` is touched at all.
+
+So:
+
+```
+pnpm --filter @marketplace/web perf                      # serve ./dist, measure it
+pnpm --filter @marketplace/web perf https://preview.url  # measure a deployment instead
+```
+
+The runner takes an optional URL, so pointing it at a preview later is an argument, not a rewrite.
+And the decision logic already knows what a shortfall is — `evaluate.mjs` returns `shortfalls`
+rather than throwing — so **becoming a gate is an exit code and a workflow file**, which is exactly
+the shape "we'll get to it later" needs. A test asserts the shortfall branch does *not* exit
+non-zero today, so the reporting posture is a stated property rather than an accident of where the
+code stopped.
+
+Two things are kept from the gate design because they cost nothing and make the numbers worth
+reading:
+
+- **A warm-up navigation, discarded.** The first request to a cold server pays for something the
+  change under review did not cause.
+- **Three runs, median reported.** One Lighthouse run is a sample, not a measurement. The median is
+  taken per audit, so one bad run cannot decide.
 
 ### 3.4 Which pages
 
@@ -150,14 +174,15 @@ Spanish only. Running both languages doubles the runtime to re-measure the same 
 different locale chunk, and `/es/` is the primary market. Never a translated segment — `/es/search`,
 per the standing rule.
 
-### 3.5 What the preview URL actually serves, and the bias it introduces
+### 3.5 What a preview URL would serve, and the bias it would introduce
 
 `deploy-preview.yml` builds the web app with `VITE_ENABLE_MOCKS: 'true'`, and `main.tsx` does
 `await startMocks()` **before** `createRoot().render()`. So the measured page blocks its first paint
 on a 160.7 kB gzip MSW chunk and a service-worker registration that production never executes.
 
-This was measured rather than reasoned about, because the code shape suggests a much bigger number
-than it produces:
+Nothing measures the preview today (§3.3), so this is recorded for whoever wires it up. It was
+measured rather than reasoned about, because the code shape suggests a much bigger number than it
+produces:
 
 | build | FCP | LCP | perf |
 |---|---|---|---|
@@ -187,24 +212,28 @@ workflow's own comment already anticipates.
 | File | Owner | This ticket |
 |---|---|---|
 | `apps/web/perf/**` | `agent-ui` | creates |
-| `.github/workflows/deploy-preview.yml` | `agent-devops` | **edits** — adds job outputs and a gate job |
-| `apps/web/vite.config.ts` | `agent-ui` | untouched |
+| `apps/web/package.json` | `agent-ui` | adds the `perf` script and two devDependencies |
+| `apps/web/eslint.config.js` | `agent-ui` | adds a node-globals override scoped to `perf/**` |
+| `apps/web/tests/perf-budget.test.ts` | `agent-ui` | creates |
+| `.github/workflows/**` | `agent-devops` | **untouched** |
 | `TODO.md` §6 | shared | edits the `W12-T15` line to remove the byte budget |
 
-The `deploy-preview.yml` edit is `agent-ui` touching `agent-devops`' file for the **fifth** W12
-ticket in a row. `W12-T16` §10 Q3 filed this, `W12-T06`'s run record asked for it to be settled, and
-it is still not settled. Declared here again rather than quietly done; see §10 Q3.
+`W12-T16` §10 Q3 recorded that `agent-ui` had edited `agent-devops`' workflows in four consecutive
+W12 tickets, and this spec's first draft would have made it five. §3.3 removed the need, so the
+boundary is respected here by accident rather than by resolution — the question in Q3 is still open
+and will return with whoever wires this into CI.
 
 ## 5. Error cases
 
 | Case | Behaviour | Why |
 |---|---|---|
-| preview not configured (`preflight.outputs.configured != 'true'`) | gate job skipped | forks and unconfigured secrets must not fail a PR on a deploy that never happened |
-| `pages` step produced no URL | job fails | already `exit 1` upstream; a perf gate must not silently measure nothing |
-| preview URL returns non-200 | job fails, prints the status | a fast 404 is a perfect score |
-| a single Lighthouse run crashes | retry once, then fail | a crashed run is not a zero score |
-| median run below a floor | **job fails**, naming the audit, its score and the floor | the whole point |
-| a floor is missing from the config for a gated audit | test fails | a gate cannot silently stop covering a metric — `marketplace-ci-gates-fail-open` |
+| `dist/` has not been built | the run fails, saying so | measuring a directory that is not there is measuring nothing |
+| a client route has no file on disk | the server falls back to `index.html` | `/es/search` exists only as a client route; serving 404 would measure the 404, which is fast and would pass |
+| a single Lighthouse run crashes | the process exits non-zero with the stack | a crashed run is not a zero score, and a broken harness must not read as a passing one |
+| Lighthouse reports no such audit | throws, naming the audit | "did not report" must never read as "fine" — the shape of a gate that fails open |
+| an audit has a non-numeric score | throws, naming it | same |
+| median below a floor | **reported**, naming the audit, its score and the floor; exit code stays 0 | §3.3 — it reports, it does not block |
+| a floor names an audit the harness does not gate, or vice versa | test fails | coverage is derived from the floors; there is no second list to drift |
 
 ## 6. Acceptance criteria
 
@@ -220,16 +249,17 @@ it is still not settled. Declared here again rather than quietly done; see §10 
 - **AC7** `INP` is absent from the floors, and a comment says why.
 
 **The run**
-- **AC8** The gate reads the preview URL from the `pages` step output; the string `pages.dev` appears in no URL the gate constructs.
+- **AC8** The runner takes an optional URL and measures `./dist` when given none; no URL is hard-coded.
 - **AC9** A warm-up navigation runs and is discarded before the measured runs.
-- **AC10** Three runs; the median is what is asserted.
-- **AC11** Both routes in §3.4 are measured; `/es/search` carries its query string.
-- **AC12** The job is skipped, not failed, when the preview is not configured.
+- **AC10** Three runs; the median is taken per audit, so one bad run cannot decide.
+- **AC11** Both routes in §3.4 are measured; `/es/search` carries its query string, and no URL segment is translated.
+- **AC12** A shortfall is **reported, not fatal** — the shortfall branch does not exit non-zero, and a test asserts it. A crash still exits non-zero.
 
 **Believing it**
-- **AC13** A deliberate regression — a render-blocking `<script>` with an artificial delay in `index.html` — drives at least one gated audit below its floor and **fails the job**. Recorded in the run record with the real output, as `W12-T16` AC19 required.
-- **AC14** With that regression reverted, the gate passes on the same commit.
-- **AC15** The failure output names the audit, the measured score and the floor — not just a red X.
+- **AC13** A deliberate regression — a render-blocking busy-wait injected into the built `index.html` — drives at least one gated audit below its floor and is reported. Recorded in the run record with the real output, as `W12-T16` AC19 required.
+- **AC14** With that regression reverted, every audit is back at or above its floor on the same build.
+- **AC15** The output names the audit, the measured score and the floor — not just a red X.
+- **AC18** Reverting `profile.json` to Lighthouse's default mobile numbers **fails the test suite**, with the failure naming the expected value. Probed, not assumed.
 
 **Not smuggling anything back**
 - **AC16** No assertion anywhere in this ticket is expressed in bytes.
@@ -237,16 +267,18 @@ it is still not settled. Declared here again rather than quietly done; see §10 
 
 ## 7. Out of scope
 
-Each of these is real work with a real reason to exist; none is a gate, and bundling them here is
-how a gate ticket becomes a quarter.
+Each of these is real work with a real reason to exist; none is needed to have the harness, and
+bundling them here is how a harness ticket becomes a quarter.
 
+- **CI wiring, and blocking a merge.** §3.3 — the operator's call, and the runner already takes a
+  URL and already computes shortfalls, so this is an argument and an exit code when it is wanted.
 - **R2 image pipeline, `srcset`/AVIF.** Belongs with the ticket that introduces real images; there
   are no content images on the two measured routes today, which is also why CLS is 0.
-- **Font loading strategy.** Blocked on `W12-T19` (`[B]`, operator). §3.6.
+- **Font loading strategy.** Blocked on `W12-T19` (`[B]`, operator) choosing a face. §3.6.
 - **Bundle reduction.** `axios` is ~165 kB of source in the initial chunk doing what `fetch` does
   natively, and the React Aria surface is larger than what the storefront renders. Both are now
-  optimisations rather than requirements, and neither has a measured user-visible cost on the target
-  profile. A ticket for them needs its own justification.
+  optimisations rather than requirements, and neither has a measured user-visible cost on the
+  target profile. A ticket for them needs its own justification — not this line.
 - **Field data / RUM.** Lab numbers only. INP in particular is honestly measurable only in the field.
 - **A production-shaped preview build.** §3.5.
 
@@ -270,18 +302,29 @@ throughout while they had a bad time — and the default profile, the one this s
 would have been right after all. Not resolvable before production; flagged so the assumption is
 visible rather than buried in a JSON file.
 
-### Q3 — `agent-ui` has now edited `agent-devops`' workflows in five consecutive W12 tickets
+### Q3 — the ownership boundary was avoided here, not settled
 
-`W12-T06`, `W12-T11`, `W12-T12`, `W12-T16`, and now this one. Each declared it; none resolved it.
-Either the ownership boundary in `agents/AGENTS.md` is wrong, or five tickets have quietly breached
-it. Filed, not fixed (L10) — but it is the third spec to say so, and a constraint that is declared
-and breached every time is not a constraint.
+`W12-T16` §10 Q3 recorded `agent-ui` editing `agent-devops`' workflows in four consecutive W12
+tickets, each declaring it, none resolving it. This ticket's first draft would have been the fifth.
+§3.3 removed the need before it was written, so the boundary holds here by luck rather than by
+decision — and whoever wires this harness into CI inherits the same question with nothing new to
+answer it. Still open; `W12-T06`'s run record asked for it first.
 
-### Q4 — does a perf gate on every PR pay for its runtime?
+### Q4 — ~~does a perf gate on every PR pay for its runtime?~~ *(resolved before it was built)*
 
-Three runs × two routes × one Lighthouse startup each, plus the warm-up, on every pull request that
-deploys a preview. Call it three to five minutes. The alternative shape is nightly, like
-`W12-T16` — cheaper, but it reports after the merge, and the AC explicitly asks for *"a pull request
-that makes the home or results page meaningfully slower fails"*. Built as a PR gate per the AC;
-recorded here because if it proves slow or flaky, moving it to the nightly is the first thing to
-try, ahead of loosening the floors.
+Asked because three runs × two routes × a Lighthouse startup each is three to five minutes on every
+pull request. Resolved by §3.3: there is no PR gate in the MVP phase, so nothing is spent per pull
+request. It returns as a real question for whoever wires this into CI, and the nightly — where
+`W12-T16` already runs a browser — is the cheaper shape to try first.
+
+### Q5 — TBT is blind to anything that blocks before first paint
+
+Found while probing AC13. A three-second synchronous busy-wait in `<head>` drove FCP and LCP to
+**0**, and `total-blocking-time` stayed at **100**: TBT only counts long tasks *after* FCP, so work
+that delays first paint is invisible to it.
+
+That matters because §3.2 gates TBT as the lab proxy for INP. It is a fine proxy for
+post-paint responsiveness and no proxy at all for a blocking third-party script in the head — the
+FCP and LCP floors are what actually caught that, and a harness gating TBT alone would have called
+the regression clean. Recorded rather than acted on: the floors as specified do catch it, between
+them. It is an argument against ever narrowing this to "just gate TBT".

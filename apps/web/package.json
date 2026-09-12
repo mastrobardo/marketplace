@@ -3,14 +3,15 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Vite + React SPA — router, layout shell, ES/EN i18n and theme tokens.",
+  "description": "Vite + React SPA \u2014 router, layout shell, ES/EN i18n and theme tokens.",
   "scripts": {
     "dev": "vite",
     "preview": "vite preview",
     "build": "vite build",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
-    "test": "vitest run"
+    "test": "vitest run",
+    "perf": "node perf/run.mjs"
   },
   "devDependencies": {
     "@marketplace/config": "workspace:*",
@@ -22,8 +23,10 @@
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.7",
     "@vitejs/plugin-react": "^6.1.1",
+    "chrome-launcher": "^1.2.1",
     "eslint": "^10.10.0",
     "jsdom": "^30.0.1",
+    "lighthouse": "^12.8.2",
     "msw": "^2.12.4",
     "typescript": "~5.9.3",
     "vite": "^8.2.2",
