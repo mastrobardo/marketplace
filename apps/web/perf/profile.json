@@ -1,0 +1,6 @@
+{
+  "_comment": "The throttling profile IS this gate's decision — see docs/specs/S10/W12-T15-performance-budget.md §3.1. Changing these three numbers changes what the gate measures, so perf-budget.test.ts asserts them by value.",
+  "throughputKbps": 10000,
+  "rttMs": 40,
+  "cpuSlowdownMultiplier": 4
+}

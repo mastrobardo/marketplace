@@ -6,8 +6,9 @@
  * stops a bad branch. The YAML wiring is asserted separately, at the bottom.
  */
 import { describe, expect, it } from 'vitest';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parse as parseYaml } from 'yaml';
@@ -298,6 +299,75 @@ describe('AC7 — a gate that cannot see its inputs refuses, rather than passing
     expect(status).toBe(2);
     expect(output).toContain('GATE_NO_BASE');
     expect(output).toContain('fetch-depth: 0');
+  });
+
+  // A regression test with a real repository, because the bug lived entirely in the range and the
+  // pure function above could never have seen it. `W12-T15` was green at 09:26 and red at 09:30 on
+  // the identical commit; what changed in between was that `#242` was merged into `main`.
+  it('walks only the branch\u2019s own commits, not what landed on the base meanwhile', () => {
+    const scratch = mkdtempSync(join(tmpdir(), 'gate-range-'));
+    const run = (...args: string[]) =>
+      spawnSync('git', args, { cwd: scratch, encoding: 'utf8', env: { ...process.env } });
+
+    try {
+      run('init', '-q', '-b', 'main');
+      run('config', 'user.email', 'mastrobardo@gmail.com');
+      run('config', 'user.name', 'mastrobardo');
+      writeFileSync(join(scratch, 'a.txt'), 'one\n');
+      run('add', '-A');
+      run('commit', '-qm', 'base');
+
+      run('checkout', '-qb', 'feature');
+      writeFileSync(join(scratch, 'b.txt'), 'two\n');
+      run('add', '-A');
+      run('commit', '-qm', 'the branch\u2019s own work');
+
+      // Meanwhile, on main: exactly what a GitHub squash-merge leaves behind — a normal commit
+      // whose committer is GitHub, not a person.
+      run('checkout', '-q', 'main');
+      writeFileSync(join(scratch, 'c.txt'), 'three\n');
+      run('add', '-A');
+      run(
+        '-c',
+        'user.email=noreply@github.com',
+        '-c',
+        'user.name=GitHub',
+        'commit',
+        '-qm',
+        'merged pull request (#242)',
+      );
+
+      // `origin/main` is what the gate resolves, so give the scratch repo one pointing at itself.
+      run('update-ref', 'refs/remotes/origin/main', 'main');
+      run('checkout', '-q', 'feature');
+
+      const threeDot = spawnSync(
+        'git',
+        ['log', '--no-merges', '--format=%ce', 'origin/main...HEAD'],
+        { cwd: scratch, encoding: 'utf8' },
+      )
+        .stdout.trim()
+        .split('\n');
+      const twoDot = spawnSync('git', ['log', '--no-merges', '--format=%ce', 'origin/main..HEAD'], {
+        cwd: scratch,
+        encoding: 'utf8',
+      })
+        .stdout.trim()
+        .split('\n');
+
+      // The bug, demonstrated: three dots drags GitHub's committer into the branch's history.
+      expect(threeDot).toContain('noreply@github.com');
+      // The fix: two dots sees only what the branch actually committed.
+      expect(twoDot).not.toContain('noreply@github.com');
+      expect(twoDot).toEqual(['mastrobardo@gmail.com']);
+
+      // And the gate is wired to the second one.
+      const source = readFileSync(join(root, 'scripts', 'gates', 'run.ts'), 'utf8');
+      expect(source).toMatch(/range\('log'\)/);
+      expect(source).toMatch(/kind === 'diff' \? '\.\.\.' : '\.\.'/);
+    } finally {
+      rmSync(scratch, { recursive: true, force: true });
+    }
   });
 
   it('rejects an unknown gate name rather than passing silently', () => {

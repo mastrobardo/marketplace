@@ -18,6 +18,12 @@ export default [
   // generated file to tell it off for silencing lint is a warning nobody can action.
   { ignores: ['public/mockServiceWorker.js'] },
   ...createEslintConfig({ environment: 'browser' }),
+  // The performance harness (`W12-T15`) runs in node, not in the browser this package is linted
+  // as. Scoped to `perf/`, deliberately: the app itself must keep failing on a `process` reference.
+  {
+    files: ['perf/**/*.mjs'],
+    languageOptions: { globals: { process: 'readonly', Buffer: 'readonly' } },
+  },
   {
     files: ['src/routes/**/*.{ts,tsx}', 'src/features/**/*.{ts,tsx}'],
     plugins: { mp: routeRulesPlugin },

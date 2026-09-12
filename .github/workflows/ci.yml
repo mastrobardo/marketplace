@@ -88,6 +88,74 @@ jobs:
 
       - run: pnpm test
 
+  # W12-T15. Lighthouse over the storefront, reported into the run recap — never a merge gate.
+  #
+  # Performance is not a blocker in the MVP phase (operator, 2026-09-12): the harness exists so a
+  # regression is *visible* on the pull request that caused it, not so a pull request fails over
+  # drift nobody is experiencing. `perf/run.mjs` exits 0 on a shortfall by construction, and
+  # `perf-budget.test.ts` asserts that it does.
+  #
+  # **Do not add this job to branch protection.** Every other job in this file is a gate and the
+  # names are a contract (`W0-T13`); this one is not, and making it required in repository settings
+  # would reverse a product decision through a settings change rather than a reviewed one.
+  perf:
+    name: perf
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+
+      # The same Playwright Chromium the story tests use, pinned by `pnpm-lock.yaml`, rather than
+      # whatever Chrome the runner image happens to ship this week. A browser update that moves
+      # every number at once is otherwise indistinguishable from a regression — `W12-T16` learned
+      # that as `fingerprint.json`, and the recap prints the version for the same reason.
+      - name: Install the browser Lighthouse drives
+        run: pnpm --filter @marketplace/ui exec playwright install --with-deps chromium
+
+      - name: Resolve the browser path
+        id: browser
+        run: |
+          set -euo pipefail
+          path="$(pnpm --filter @marketplace/ui exec node -e \
+            'process.stdout.write(require("playwright").chromium.executablePath())')"
+          test -x "$path"
+          echo "path=$path" >> "$GITHUB_OUTPUT"
+
+      - name: Build the storefront
+        run: pnpm turbo run build --filter=@marketplace/web
+
+      # `$GITHUB_STEP_SUMMARY` is what puts the table in the run recap. The script appends rather
+      # than truncates, so it cannot delete another step's contribution to the same file.
+      - name: Measure
+        run: >
+          pnpm --filter @marketplace/web perf --
+          --markdown "$GITHUB_STEP_SUMMARY"
+          --screenshots perf-screenshots
+        env:
+          CHROME_PATH: ${{ steps.browser.outputs.path }}
+
+      # Only written when something fell below a floor, so an upload here means there is something
+      # to look at. A recap that says a page got slower does not say what the user saw; the
+      # filmstrip does, frame by frame, named by the millisecond it painted.
+      #
+      # `if-no-files-found: ignore` because the healthy case produces nothing — a warning on every
+      # green run is a warning nobody reads on the red one.
+      - name: Attach the images from any shortfall
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: perf-screenshots
+          path: apps/web/perf-screenshots/
+          if-no-files-found: ignore
+          retention-days: 14
+
   build:
     name: build
     runs-on: ubuntu-24.04

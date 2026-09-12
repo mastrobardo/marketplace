@@ -61,15 +61,32 @@ function env(name: string): string {
  * caller is expected not to run these gates there — but if it does, an empty range is reported
  * honestly rather than silently passing a full-history walk.
  */
-function range(): string | null {
+/**
+ * Two ranges, because `git diff` and `git log` read `...` to mean different things.
+ *
+ * `git diff A...B` is "what changed on B since the merge base" — the reviewer's view, and the right
+ * one for `changedFiles`.
+ *
+ * `git log A...B` is the **symmetric difference**: commits reachable from either side but not both.
+ * So it also walks commits that are on the *base* and not on the branch — and after anything is
+ * merged into `main` while a pull request is open, that means the gate judges commits the branch
+ * never made. GitHub's own squash-merge commits carry committer `noreply@github.com`, so a single
+ * merge into `main` turned every open pull request red. `--no-merges` does not save it: a squash
+ * merge produces an ordinary commit, not a merge commit.
+ *
+ * Found when `W12-T15` went red seven seconds after `#242` was merged, having been green on the
+ * same commit four minutes earlier. The pure half of this gate was thoroughly tested; the range it
+ * was fed was not.
+ */
+function range(kind: 'diff' | 'log'): string | null {
   const base = env('GITHUB_BASE_REF');
   if (base === '') return null;
   assertBaseFetched(base);
-  return `origin/${base}...HEAD`;
+  return `origin/${base}${kind === 'diff' ? '...' : '..'}HEAD`;
 }
 
 function changedFiles(): readonly string[] {
-  const spec = range();
+  const spec = range('diff');
   if (spec === null) return [];
   return git('diff', '--name-only', spec)
     .split('\n')
@@ -77,7 +94,7 @@ function changedFiles(): readonly string[] {
 }
 
 function commits(): readonly Commit[] {
-  const spec = range();
+  const spec = range('log');
   if (spec === null) return [];
   // A unit separator keeps the parse safe against any character git may put in a field.
   const raw = git('log', '--no-merges', '--format=%H%x1f%ae%x1f%ce', spec);

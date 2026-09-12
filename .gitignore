@@ -43,3 +43,4 @@ minio-data/
 
 # local tool artifacts
 .vitest/
+apps/web/perf-screenshots/

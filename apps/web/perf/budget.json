@@ -1,0 +1,22 @@
+{
+  "_comment": "Per-audit Lighthouse SCORE floors (0-100), not millisecond ceilings and not bytes. This object is the single source of what the gate covers: evaluate.mjs gates exactly Object.keys(floors), so a metric cannot be silently dropped by editing a second list somewhere else.",
+  "_whyNoInp": "INP is deliberately absent. It is a field metric that needs real interaction; Lighthouse's lab proxy for it is total-blocking-time, which IS gated above. Gating an audit named 'inp' from a lab run would claim a measurement nobody took. The backlog's 'INP <=200ms' is answered by the TBT floor. Spec \u00a73.2.",
+  "_whyNoBytes": "There is no byte budget here, deliberately \u2014 not as a blocker and not as a warning. The backlog's '<=170 KB initial JS' was deleted by operator decision on 2026-09-12, because the same build scores 68 and 100 on two throttling profiles without a byte changing. Spec \u00a71.2. A future byte budget must be re-argued from a measurement.",
+  "floors": {
+    "first-contentful-paint": 85,
+    "largest-contentful-paint": 85,
+    "total-blocking-time": 85,
+    "cumulative-layout-shift": 85
+  },
+  "numberOfRuns": 3,
+  "routes": [
+    {
+      "path": "/es/",
+      "label": "home"
+    },
+    {
+      "path": "/es/search?q=fontanero&where=Madrid",
+      "label": "results"
+    }
+  ]
+}
