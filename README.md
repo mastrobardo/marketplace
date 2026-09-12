@@ -255,6 +255,21 @@ None of them carries an `if:`. A conditional job reports "skipped", and GitHub c
 required check as satisfied, so a gate that can vanish is not a gate. On a push to `main` they run
 and report "not a pull request" instead of disappearing.
 
+### One job that is not a gate
+
+| Job | Runs | |
+|---|---|---|
+| `perf` | Lighthouse over the home and results pages | **never a required check** |
+
+`W12-T15`. It writes a route × metric table into the run recap, and uploads a filmstrip as the
+`perf-screenshots` artifact when a route falls below a floor. It **reports**: performance is not a
+merge gate in the MVP phase, and the script exits 0 on a shortfall by construction rather than by
+`continue-on-error`, so the job passes honestly rather than by masking a failure.
+
+**It must never be added to branch protection.** Doing so would turn a reported number into a merge
+gate through a repository setting rather than a reviewed change — and no code in this repo can
+prevent that, which is why it is written here as well as in the workflow.
+
 **These ten names are the contract.** `W0-T13` requires them in branch protection, GitHub matches
 required checks *by name*, and a check that simply never arrives is reported as nothing at all —
 so renaming a job silently unblocks merges. Rename one, update branch protection in the same change.

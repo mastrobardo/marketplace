@@ -72,6 +72,17 @@ const GATES = [
   'agents-drift',
 ] as const;
 
+/**
+ * Jobs that run on every pull request and **report**, without gating the merge.
+ *
+ * Deliberately a separate list from `GATES`, not an addition to it: `GATES` is the contract
+ * `W0-T13` puts in branch protection, and a reporter in that list would become a required check by
+ * documentation. `perf` (`W12-T15` §3.6) measures the storefront and writes its Lighthouse scores
+ * into the run recap; performance is not a merge gate in the MVP phase, and the script exits 0 on
+ * a shortfall by construction rather than by `continue-on-error`.
+ */
+const REPORTERS = ['perf'] as const;
+
 const raw = (): string => readFileSync(CI, 'utf8');
 
 /* ------------------------------------------------------------------------------------------- *
@@ -123,9 +134,30 @@ describe('AC3 — a run on main is never cancelled', () => {
  * The gates — AC4..AC9
  * ------------------------------------------------------------------------------------------- */
 
-describe('AC4 — exactly the ten named gates exist', () => {
+describe('AC4 — exactly the named jobs exist', () => {
   it('declares one job per check name and no aggregate job', () => {
-    expect(Object.keys(jobs()).sort()).toEqual([...GATES].sort());
+    expect(Object.keys(jobs()).sort()).toEqual([...GATES, ...REPORTERS].sort());
+  });
+
+  // A job is a gate or a reporter, never both. The two lists mean different things — one is the
+  // branch-protection contract, the other explicitly is not — so an overlap would make the
+  // distinction unreadable and quietly promote a reporter to a required check.
+  it('keeps gates and reporters disjoint', () => {
+    const overlap = GATES.filter((gate) => (REPORTERS as readonly string[]).includes(gate));
+    expect(overlap, 'a job is listed as both a gate and a reporter').toEqual([]);
+  });
+
+  // The reporters must not carry `continue-on-error`: that would mask a genuine crash as success.
+  // They pass because the command they run exits 0, which is a different and honest thing.
+  it('lets reporters pass on their own exit code, not by masking failure', () => {
+    for (const name of REPORTERS) {
+      const job = jobs()[name] as Record<string, unknown> | undefined;
+      expect(job, `no job named "${name}"`).toBeDefined();
+      expect(
+        job?.['continue-on-error'],
+        `${name} masks failure instead of exiting 0`,
+      ).toBeUndefined();
+    }
   });
 });
 

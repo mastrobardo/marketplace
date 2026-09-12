@@ -177,16 +177,65 @@ was looking for. Both were fixed as tests, not as code.
 files needed Prettier. Caught locally rather than by CI, but only because it was run before pushing
 the second time — the first commit would have gone red.
 
+**Running only the filtered package's tests was not enough — twice.** `pnpm --filter
+@marketplace/web test` was green while two root-level suites pinned the CI job list
+(`ci-workflow.test.ts` AC4 and `cd-workflows.test.ts` AC26) and both went red on the new `perf`
+job. CI found them, not me. Root suites must run before pushing a change to `.github/`.
+
+**And the stale-report trap caught me a second time, in the same session.** Probing the range fix,
+`.vitest/json/output.json` reported an identical "8 passed, 25 failed" for two different probes,
+with failures like `expected 'not implemented'` that made no sense. Reading vitest's stdout showed
+the truth: exactly one test failed, the new one. Do not read that file; read the output.
+
 **One near-miss worth recording.** `pnpm test` piped to `/dev/null` and then read from
 `.vitest/json/output.json` reported "22 passed, 7 files" — exactly the new file's count. That was a
 stale report, not a suite run. The real number is **140 passed across 12 files**. Reading a JSON
 report that a previous filtered run had written would have made a partial run look like a full one.
 
+## Finding 6 — the identity gate was judging commits the branch never made
+
+Not this ticket's bug, found by this ticket. `author-identity` passed on commit `0c8c11e` at 09:26
+and **failed on the same commit at 09:30**. What changed in between was `#242` being merged into
+`main` at 09:29:53.
+
+`scripts/gates/run.ts` built one range and handed it to two different commands:
+
+```ts
+return `origin/${base}...HEAD`;   // three dots, for both git diff AND git log
+```
+
+`git diff A...B` is "what changed on B since the merge base" — correct for the changed-files half.
+`git log A...B` is the **symmetric difference**: commits reachable from either side but not both. So
+it also walks commits that are on the *base*. Reproduced locally:
+
+```
+three-dot (what the gate used):        two-dot (the branch's own commits):
+  c67bbe5 noreply@github.com             0c8c11e mastrobardo@gmail.com
+  0c8c11e mastrobardo@gmail.com          680fd09 mastrobardo@gmail.com
+  680fd09 mastrobardo@gmail.com          e43ab64 mastrobardo@gmail.com
+  e43ab64 mastrobardo@gmail.com
+```
+
+`c67bbe5` is GitHub's own squash-merge of `#242`, whose committer is `noreply@github.com`.
+`--no-merges` does not filter it, because a squash merge produces an ordinary commit.
+
+**The blast radius is every open pull request**, not this one: any merge into `main` would have
+turned them all red, with a message instructing the author to rebase and force-push over a commit
+they did not write. Fixed here because it blocks this pull request, with the range split by purpose
+and a regression test that builds a real repository and demonstrates both behaviours. It is
+genuinely separate work and can be split out if preferred.
+
+The gate's *pure* half — `checkAuthorIdentity` — has thorough tests in both directions. The bug was
+in the range it was fed, which nothing tested. That is the same shape as this ticket's own §10 Q5:
+the decision was right and its input was wrong.
+
 ## Verification
 
 | Check | Result |
 |---|---|
+| `pnpm test` (whole workspace) | 246 passed, 6 skipped, 10 root files + every package |
 | `pnpm --filter @marketplace/web test` | 155 passed, 12 files |
+| CI on `0c8c11e` | `perf` **success**; `unit` and `author-identity` red, both fixed here |
 | `pnpm --filter @marketplace/web typecheck` | clean |
 | `pnpm --filter @marketplace/web lint` | clean |
 | `pnpm --filter @marketplace/web perf` | 8/8 audits at 100, floor 85 |
@@ -199,7 +248,9 @@ report that a previous filtered run had written would have made a partial run lo
 
 ## Known gaps, carried deliberately
 
-- **The CI job has never actually run.** Everything about it was verified locally — actionlint, the
+- **`perf` has now run in CI and passed.** The remaining unknown is its behaviour on a *red* run:
+  the artifact upload path has been exercised locally but never on a runner.
+- **~~The CI job has never actually run.~~** Everything about it was verified locally — actionlint, the
   browser path resolution, the recap, the images — but the first real execution is this pull
   request's own. The browser-path step is the one most likely to surprise: it resolves through
   `pnpm --filter @marketplace/ui exec node -e`, and `playwright-core` was the first guess and was

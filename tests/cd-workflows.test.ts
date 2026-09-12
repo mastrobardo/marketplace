@@ -371,8 +371,29 @@ describe('AC26 — a deploy is never a required check', () => {
         'intervention-logged',
         'author-identity',
         'agents-drift',
+        // W12-T15 added one more, and it is neither a deploy nor a gate: `perf` measures the
+        // storefront and writes its scores into the run recap. It must never be a required check
+        // — see `ci-workflow.test.ts`, which keeps gates and reporters in separate lists.
+        'perf',
       ].sort(),
     );
+  });
+
+  // The criterion this describes, asserted directly rather than only through the list above: a
+  // list has to be edited whenever a legitimate job is added, and each edit is a chance to wave
+  // through the very thing it was guarding against.
+  it('has no deploy-shaped job in ci.yml at all', () => {
+    const ci = parseYaml(readFileSync(join(WORKFLOWS, 'ci.yml'), 'utf8')) as Workflow;
+    for (const [name, job] of Object.entries(ci.jobs ?? {})) {
+      expect(name, `"${name}" is named like a deploy`).not.toMatch(/deploy|release|publish/i);
+      const runs = (job.steps ?? [])
+        .map((step) => `${step.uses ?? ''} ${step.run ?? ''}`)
+        .join('\n');
+      expect(runs, `"${name}" runs something that deploys`).not.toMatch(
+        /wrangler|flyctl|fly deploy|neonctl/i,
+      );
+      expect(job.environment, `"${name}" targets a deployment environment`).toBeUndefined();
+    }
   });
 });
 
