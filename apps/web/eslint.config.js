@@ -22,7 +22,7 @@ export default [
   // as. Scoped to `perf/`, deliberately: the app itself must keep failing on a `process` reference.
   {
     files: ['perf/**/*.mjs'],
-    languageOptions: { globals: { process: 'readonly' } },
+    languageOptions: { globals: { process: 'readonly', Buffer: 'readonly' } },
   },
   {
     files: ['src/routes/**/*.{ts,tsx}', 'src/features/**/*.{ts,tsx}'],

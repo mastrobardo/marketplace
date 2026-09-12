@@ -118,6 +118,39 @@ this finding is what a byte-based gate would have shouted about — 160.7 kB gzi
 while the user-visible cost was one point. The same argument as Finding 1, arrived at from the
 other end.
 
+## Finding 5 — the filmstrip shows the regression; the score only reports it
+
+Added after the operator asked that a shortfall carry a screenshot rather than only a table. The
+images turn out to be free — Lighthouse captures them during the run already being measured — and
+the filmstrip is the one that earns its place. Frame sizes from the AC13 regression, `home`:
+
+```
+home-filmstrip-00-00515ms.jpg   3698 bytes
+home-filmstrip-01-01030ms.jpg   3698 bytes
+...                             3698 bytes   (identical — nothing has painted)
+home-filmstrip-06-03605ms.jpg   3698 bytes
+home-filmstrip-07-04120ms.jpg  16377 bytes   ← first paint
+```
+
+Seven identical blank frames and then the page. The three-second block is visible in a directory
+listing, without opening anything. That is the argument for the filmstrip over the final frame: the
+final frame shows a correct-looking page and says nothing about when it arrived.
+
+## The CI job, and the one thing the repo cannot enforce
+
+Wired into `ci.yml` on the operator's second redirect — run it on every pull request and put the
+scores in the run recap, *"as we do with test"*. Verified with `actionlint:1.7.7`, the same version
+the `workflows` job runs.
+
+`CHROME_PATH` was checked rather than assumed: without it the harness drove the system Chrome
+(`152.0.0.0`); with it, Playwright's pinned Chromium (`153.0.0.0`). The recap prints whichever it
+used, so a browser bump that moves every number at once is distinguishable from a regression.
+
+**What the repository cannot enforce:** the `perf` job must never become a required check. The
+workflow says so in a comment, a test asserts the comment is present, and neither of those stops
+someone ticking a box in repository settings. That would turn a reported number into a merge gate
+without a review — the decision reversed by configuration rather than by argument.
+
 ## Two corrections made during the work
 
 **The scope changed mid-build.** The spec was committed describing a blocking PR gate wired into
@@ -133,6 +166,17 @@ correctly, and the fix was to narrow the slice and then assert the crash path se
 that had been written to pass would have asserted "no `process.exit` anywhere" and quietly forbidden
 the right behaviour.
 
+**Two test assertions were wrong, and both failed usefully.** `points at the artifact only when
+images were written` asserted the pointer appears whenever a screenshot count is passed — but images
+only ever exist alongside a shortfall, so the pointer belongs inside that branch and the test was
+describing behaviour nobody wanted. And `is not a gate` sliced `ci.yml` from the `perf:` key, which
+starts *below* the comment block it was asserting on, so it could never have found the warning it
+was looking for. Both were fixed as tests, not as code.
+
+**`format:check` is part of the `lint` gate and I had not run it before the first commit.** Three
+files needed Prettier. Caught locally rather than by CI, but only because it was run before pushing
+the second time — the first commit would have gone red.
+
 **One near-miss worth recording.** `pnpm test` piped to `/dev/null` and then read from
 `.vitest/json/output.json` reported "22 passed, 7 files" — exactly the new file's count. That was a
 stale report, not a suite run. The real number is **140 passed across 12 files**. Reading a JSON
@@ -142,17 +186,26 @@ report that a previous filtered run had written would have made a partial run lo
 
 | Check | Result |
 |---|---|
-| `pnpm --filter @marketplace/web test` | 140 passed, 12 files |
+| `pnpm --filter @marketplace/web test` | 155 passed, 12 files |
 | `pnpm --filter @marketplace/web typecheck` | clean |
 | `pnpm --filter @marketplace/web lint` | clean |
 | `pnpm --filter @marketplace/web perf` | 8/8 audits at 100, floor 85 |
 | AC13 red probe | 4 audits driven to 0 and reported |
 | AC18 profile-revert probe | 2 tests fail, named |
+| `pnpm format:check` | clean |
+| `actionlint 1.7.7` on `ci.yml` | clean |
+| AC24 screenshot probe | 18 images for 2 failing routes; 0 on a green run |
+| `CHROME_PATH` pin | 152.0.0.0 without, 153.0.0.0 with |
 
 ## Known gaps, carried deliberately
 
-- **Nothing runs this automatically.** By decision (§3.3), and the cost is that it will rot unless
-  someone runs it. The first sign will be a `perf` script that no longer starts.
+- **The CI job has never actually run.** Everything about it was verified locally — actionlint, the
+  browser path resolution, the recap, the images — but the first real execution is this pull
+  request's own. The browser-path step is the one most likely to surprise: it resolves through
+  `pnpm --filter @marketplace/ui exec node -e`, and `playwright-core` was the first guess and was
+  wrong (the package is `playwright`).
+- **Nothing enforces that the job stays non-blocking** beyond a comment and a test asserting the
+  comment. Branch protection lives in repository settings.
 - **The floors have no sensitivity.** Everything scores 99–100, so a floor at 85 catches
   catastrophes and nothing smaller. §10 Q1 — revisit with real CI variance, and the direction to
   move is *up*.

@@ -86,3 +86,139 @@ export function evaluate(routeResults, budget) {
 export function formatShortfall({ route, audit, score, floor }) {
   return `${route}: ${audit} scored ${score}, floor is ${floor} (short by ${floor - score})`;
 }
+
+/**
+ * Shorten an audit id for a table heading: `largest-contentful-paint` → `LCP`.
+ *
+ * Derived from the id rather than looked up in a map, deliberately. A map would be a second
+ * hand-written list keyed by audit — the exact shape that has silently lost coverage three times in
+ * this repo — and adding a floor for a metric nobody had abbreviated would render a blank column
+ * header rather than fail.
+ */
+export function abbreviate(auditId) {
+  return auditId
+    .split('-')
+    .map((word) => word[0]?.toUpperCase() ?? '')
+    .join('');
+}
+
+/**
+ * The run recap — `W12-T15` §3.6.
+ *
+ * A pivot of routes against audits, because that is the shape a reader scans: one row per page,
+ * one column per metric. Columns come from `gatedAudits`, so the table cannot describe fewer
+ * metrics than the harness measured.
+ */
+export function browserVersion(lhr) {
+  const agent = lhr?.environment?.hostUserAgent ?? '';
+  return /Chrome\/([\d.]+)/.exec(agent)?.[1] ?? 'unknown';
+}
+
+export function formatMarkdown({
+  rows,
+  audits,
+  profile,
+  numberOfRuns,
+  floors,
+  browser,
+  screenshotCount = 0,
+}) {
+  const routes = [];
+  for (const row of rows) if (!routes.includes(row.route)) routes.push(row.route);
+
+  const cell = (route, audit) => {
+    const row = rows.find((r) => r.route === route && r.audit === audit);
+    if (row === undefined) return '—';
+    return row.ok ? `${row.score}` : `**${row.score}** ⚠`;
+  };
+
+  const floorValues = [...new Set(audits.map((id) => floors[id]))];
+  const floorNote =
+    floorValues.length === 1
+      ? `Floor is ${floorValues[0]} for every metric.`
+      : audits.map((id) => `${abbreviate(id)} ≥ ${floors[id]}`).join(' · ');
+
+  const shortfalls = rows.filter((row) => !row.ok);
+
+  return [
+    '## Performance',
+    '',
+    `\`${profile.throughputKbps} Kbps\` down · \`${profile.rttMs} ms\` RTT · ` +
+      `\`${profile.cpuSlowdownMultiplier}×\` CPU — median of ${numberOfRuns} runs, scores out of 100.`,
+    '',
+    // The browser is part of the measurement, and a Chrome update moving every number at once is
+    // otherwise indistinguishable from a regression. `W12-T16` learned this as `fingerprint.json`.
+    `Chrome \`${browser}\`.`,
+    '',
+    `| route | ${audits.map(abbreviate).join(' | ')} |`,
+    `|---|${audits.map(() => '---').join('|')}|`,
+    ...routes.map((route) => `| ${route} | ${audits.map((id) => cell(route, id)).join(' | ')} |`),
+    '',
+    floorNote,
+    '',
+    shortfalls.length === 0
+      ? 'Everything at or above its floor.'
+      : [
+          `${shortfalls.length} below floor — **reported, not blocking**: performance is not a merge gate in the MVP phase.`,
+          '',
+          ...shortfalls.map((row) => `- ${formatShortfall(row)}`),
+          ...(screenshotCount > 0
+            ? [
+                '',
+                `📷 ${screenshotCount} images attached as the **perf-screenshots** artifact on this run — ` +
+                  'a filmstrip per failing route, frames named by the millisecond they painted, plus the final frame.',
+              ]
+            : []),
+        ].join('\n'),
+    '',
+    `<sub>${audits.map((id) => `${abbreviate(id)} — ${id}`).join(' · ')}</sub>`,
+    '',
+  ].join('\n');
+}
+
+/**
+ * The images a shortfall should carry — `W12-T15` §3.7.
+ *
+ * A number that says a page got slower does not say *what* the user saw, and "open the log" is the
+ * instruction nobody follows. Lighthouse already captures these during the run being measured, so
+ * this costs no extra browser work: it is decoding what is already in the result.
+ *
+ * Both kinds, deliberately:
+ *   - the **filmstrip**, which is the diagnostic one for a performance regression — eight frames
+ *     with their timings, so "blank until 3.4s" is visible rather than inferred;
+ *   - the **final screenshot**, which answers the other question a red run raises: whether the page
+ *     rendered at all, or whether the harness measured an error state very quickly.
+ *
+ * Pure: takes a Lighthouse result, returns buffers. No filesystem, so it is tested without one.
+ */
+export function screenshotsFrom(lhr, label) {
+  const shots = [];
+
+  const decode = (dataUri) => {
+    const match = /^data:image\/(png|jpeg|webp);base64,(.+)$/s.exec(dataUri ?? '');
+    if (match === null) return null;
+    return {
+      extension: match[1] === 'jpeg' ? 'jpg' : match[1],
+      buffer: Buffer.from(match[2], 'base64'),
+    };
+  };
+
+  const final = decode(lhr?.audits?.['final-screenshot']?.details?.data);
+  if (final !== null)
+    shots.push({ name: `${label}-final.${final.extension}`, buffer: final.buffer });
+
+  const frames = lhr?.audits?.['screenshot-thumbnails']?.details?.items ?? [];
+  frames.forEach((frame, index) => {
+    const decoded = decode(frame?.data);
+    if (decoded === null) return;
+    // The timing is in the filename because the order of eight files is not the story — *when each
+    // one painted* is. Padded so a directory listing sorts the way the page actually loaded.
+    const ms = String(Math.round(frame.timing ?? 0)).padStart(5, '0');
+    shots.push({
+      name: `${label}-filmstrip-${String(index).padStart(2, '0')}-${ms}ms.${decoded.extension}`,
+      buffer: decoded.buffer,
+    });
+  });
+
+  return shots;
+}

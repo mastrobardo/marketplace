@@ -134,16 +134,23 @@ Operator decision, 2026-09-12, taken while this was being built:
 > it should not be a blocker in this MVP phase."*
 
 That reverses the AC's *"a pull request that makes the home or results page meaningfully slower
-fails"* and the *"measured on the deployed preview"* half with it, and it is the right call for a
-product with no users: a gate that fails a pull request over drift nobody is experiencing is the
-early optimisation it claims to prevent. It also disposes of Q4 below, and — usefully — of §4's
-ownership problem, because nothing in `.github/` is touched at all.
+fails"* — but **not** the *"measured in CI"* half. A second operator decision, taken while this was
+being built, put the harness on every pull request for its *visibility*:
+
+> *"What about running the perf on GA and add the lighthouse scores to the run recap, as we do with
+> test?"*
+
+So it runs in CI and reports; it never fails. Those are separable, and keeping them separate is the
+whole design: a reviewer sees the numbers on the pull request that moved them, and nobody is blocked
+by drift on a product with no users.
 
 So:
 
 ```
-pnpm --filter @marketplace/web perf                      # serve ./dist, measure it
-pnpm --filter @marketplace/web perf https://preview.url  # measure a deployment instead
+pnpm --filter @marketplace/web perf                        # serve ./dist, measure it
+pnpm --filter @marketplace/web perf https://preview.url    # measure a deployment instead
+pnpm --filter @marketplace/web perf -- --markdown FILE     # append the recap table to FILE
+pnpm --filter @marketplace/web perf -- --screenshots DIR   # images, for routes below a floor
 ```
 
 The runner takes an optional URL, so pointing it at a preview later is an argument, not a rewrite.
@@ -195,7 +202,53 @@ alternative — a second preview build without mocks, purely to measure — cost
 one-point bias. Revisit when the mock handlers are deleted as `W3` lands, which the deploy
 workflow's own comment already anticipates.
 
-### 3.6 What this ticket does not touch
+### 3.6 The run recap
+
+A `perf` job in `.github/workflows/ci.yml` builds the storefront and appends a table to
+`$GITHUB_STEP_SUMMARY`, which is what puts it in the run recap:
+
+| route | CLS | FCP | LCP | TBT |
+|---|---|---|---|---|
+| home | 100 | 99 | 100 | 99 |
+| results | 100 | 99 | 100 | 98 |
+
+Four properties, each with a reason:
+
+1. **Columns are derived from the audit ids** — `largest-contentful-paint` → `LCP`, computed, not
+   looked up. A lookup table would be a second hand-written list keyed by audit, and a metric
+   nobody had abbreviated would render a blank heading rather than fail.
+2. **The browser version is printed.** A Chrome update that moves every number at once is otherwise
+   indistinguishable from a regression. This is `W12-T16`'s `fingerprint.json` lesson, applied at a
+   cost of one line.
+3. **The browser is pinned** to the Playwright Chromium the story tests already install, via
+   `CHROME_PATH` — not whatever Chrome the runner image ships this week.
+4. **The job is not a gate**, and says so in a comment: *"Do not add this job to branch
+   protection."* Every other job in that file is a gate and the names are a contract (`W0-T13`);
+   making this one required in repository settings would reverse a product decision through a
+   settings change rather than a reviewed one. A test asserts that warning is present.
+
+### 3.7 A shortfall carries images, not just a number
+
+> *"Failing tests should also carry a screenshot, not just the .md file with test run and what's
+> going wrong."* — operator, 2026-09-12
+
+A score that says a page got slower does not say what the user saw, and "open the log" is the
+instruction nobody follows. So a route below a floor writes:
+
+- **the filmstrip** — Lighthouse's eight frames, each named by the millisecond it painted
+  (`home-filmstrip-05-03090ms.jpg`), zero-padded so a directory listing sorts in load order. This is
+  the diagnostic one: *blank until 3.6 s* is visible rather than inferred.
+- **the final frame** — which answers the other question a red run raises: whether the page rendered
+  at all, or whether the harness measured an error state very quickly.
+
+They cost **no extra browser work**: Lighthouse captures both during the run being reported, so this
+is decoding what is already in the result. They are uploaded as the `perf-screenshots` artifact, and
+the recap names it — but only when images exist, because a pointer to an empty artifact on every
+green run is a pointer nobody reads on the red one.
+
+A green run writes nothing and does not create the directory.
+
+### 3.8 What this ticket does not touch
 
 - **No byte budget**, per §1.2.
 - **No Lighthouse SEO, a11y or best-practices category.** SEO is deferred (ADR-011 Amendment 1) and
@@ -215,13 +268,19 @@ workflow's own comment already anticipates.
 | `apps/web/package.json` | `agent-ui` | adds the `perf` script and two devDependencies |
 | `apps/web/eslint.config.js` | `agent-ui` | adds a node-globals override scoped to `perf/**` |
 | `apps/web/tests/perf-budget.test.ts` | `agent-ui` | creates |
-| `.github/workflows/**` | `agent-devops` | **untouched** |
+| `.github/workflows/ci.yml` | `agent-devops` | **edits** — adds the non-gating `perf` job |
+| `.gitignore` | shared | ignores the screenshot output directory |
 | `TODO.md` §6 | shared | edits the `W12-T15` line to remove the byte budget |
 
-`W12-T16` §10 Q3 recorded that `agent-ui` had edited `agent-devops`' workflows in four consecutive
-W12 tickets, and this spec's first draft would have made it five. §3.3 removed the need, so the
-boundary is respected here by accident rather than by resolution — the question in Q3 is still open
-and will return with whoever wires this into CI.
+The `ci.yml` edit is `agent-ui` touching `agent-devops`' file for the **fifth** W12 ticket running.
+`W12-T16` §10 Q3 filed it, `W12-T06`'s run record asked for it to be settled, and it is still not
+settled. Declared here rather than quietly done — and this time it is deliberate rather than
+avoided, which makes Q3 more pressing, not less.
+
+**One thing this ticket cannot enforce from the repository.** The `perf` job must never be added to
+branch protection. The workflow says so in a comment and a test asserts the comment is there, but
+branch protection is a repository setting: nothing in the codebase can stop someone ticking the box,
+and doing so would convert a reported number into a merge gate without a review.
 
 ## 5. Error cases
 
@@ -265,6 +324,19 @@ and will return with whoever wires this into CI.
 - **AC16** No assertion anywhere in this ticket is expressed in bytes.
 - **AC17** No Lighthouse category other than `performance` is requested.
 
+**The recap** (§3.6)
+- **AC19** A `perf` job in `ci.yml` appends the score table to `$GITHUB_STEP_SUMMARY`.
+- **AC20** The table has a column for every gated audit, with headings derived from the audit ids rather than a lookup table.
+- **AC21** The recap records the browser version and the three profile numbers.
+- **AC22** The job carries no `continue-on-error` — it passes because the script exits 0, not because failure is masked — and carries the "do not add to branch protection" warning. A test asserts both.
+- **AC23** The browser is pinned via `CHROME_PATH` to the Playwright Chromium the lockfile fixes, not the runner's own Chrome.
+
+**The images** (§3.7)
+- **AC24** A route below a floor writes its filmstrip and final frame; a green run writes nothing and creates no directory.
+- **AC25** Filmstrip frames are named by the millisecond they painted, zero-padded so a listing sorts in load order.
+- **AC26** Images are uploaded as the `perf-screenshots` artifact, and the recap names that artifact only when images were written.
+- **AC27** A Lighthouse result with no screenshots, or a non-base64 `data` field, yields no images rather than throwing.
+
 ## 7. Out of scope
 
 Each of these is real work with a real reason to exist; none is needed to have the harness, and
@@ -274,7 +346,7 @@ bundling them here is how a harness ticket becomes a quarter.
   URL and already computes shortfalls, so this is an argument and an exit code when it is wanted.
 - **R2 image pipeline, `srcset`/AVIF.** Belongs with the ticket that introduces real images; there
   are no content images on the two measured routes today, which is also why CLS is 0.
-- **Font loading strategy.** Blocked on `W12-T19` (`[B]`, operator) choosing a face. §3.6.
+- **Font loading strategy.** Blocked on `W12-T19` (`[B]`, operator) choosing a face. §3.8.
 - **Bundle reduction.** `axios` is ~165 kB of source in the initial chunk doing what `fetch` does
   natively, and the React Aria surface is larger than what the storefront renders. Both are now
   optimisations rather than requirements, and neither has a measured user-visible cost on the
