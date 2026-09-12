@@ -35,14 +35,19 @@ rotation, revoke endpoints, and the `W0-T28` cross-origin fix. That is also cons
 `W2-T02` is blocked on `W0-T28` and `W2-T01` is not: a table existing is not a cookie crossing a
 registrable domain.
 
-**b. Email case will silently fork the user table.** `W1-T05` built a *functional* unique index on
-`lower(email)`, and `ADR-005` repeats the rule: every lookup must be written
-`WHERE lower(email) = lower($1)` or it misses the index. better-auth does not know that. Its Prisma
-adapter issues `where: { email: <whatever the form posted> }` — an exact match. Two consequences,
-and the second is worse than the first: the lookup misses the index (slow), and `Maria@gmail.com`
-and `maria@gmail.com` become **two accounts that both satisfy the unique index**, because the index
-is on the lowered value and the *insert* also goes through better-auth. One of them owns the
-provider profile; the other is the one that can log in. §4.2 owns this.
+**b. The `lower(email)` index cannot be used by the queries better-auth issues.** This started as a
+sharper claim — that case would fork the user table — and reading the library disproved half of it.
+`sign-up.mjs:165` computes `const normalizedEmail = email.toLowerCase()` before both the duplicate
+check and the insert, and `sign-in.mjs:315` calls
+`findUserByEmail(email.toLowerCase(), …)`. **better-auth 1.7.4 normalises on both sides, so accounts
+do not fork.**
+
+What survives is the half `W1-T05`'s own migration comment predicted, verbatim: *"`WHERE email = $1`
+is valid SQL that compiles, returns nothing for 'Ana@example.com', and does not use this index."*
+better-auth's adapter issues exactly that equality predicate, and `app_user_email_lower_key` is
+**functional** — an index on `lower(email)` cannot serve a predicate on `email`. There is no other
+index on the column. So every sign-in and every sign-up duplicate check is a sequential scan on
+`app_user`, on the one code path an unauthenticated caller can trigger at will. §4.2 owns this.
 
 **c. The documented Fastify bridge drops cookies.** better-auth's own Fastify guide forwards the
 response headers with `response.headers.forEach((value, key) => reply.header(key, value))`. The
@@ -147,44 +152,71 @@ default), the cookie attributes, revoke endpoints, and the `/api/*` origin fix (
 > `TODO.md` §6 on both ticket lines, and in the run record, rather than left as a surprise for
 > whoever picks up `W2-T02`.
 
-### 4.2 Email is lowercased on the way in, and every lookup lowercases too
+### 4.2 A plain unique index, and a `CHECK` that makes it safe
 
-Two halves, because either alone is a hole.
+`W1-T05` chose a functional unique index on `lower(email)` and accepted a documented cost:
+*"the discipline: `WHERE email = $1` … does not use this index."* That discipline is enforceable in
+code we write and not in code a library writes. better-auth issues the equality predicate, so the
+index is dead weight on the auth hot path (§1.1b).
 
-**On write** — a `databaseHooks.user.create.before` hook lowercases and trims `email` before the row
-is inserted. The stored value is therefore always already normalised, which means
-`lower(email) = email` and the functional index is usable by an equality predicate.
+Migration `0008` therefore replaces it with two objects that say the same thing and are usable:
 
-**On read** — every sign-in, verification and reset lookup must normalise the *input* the same way.
-better-auth's own docs do not document normalisation, so this is treated as absent until proven
-present: the implementation wraps the Prisma adapter so that a `where` clause naming `email`
-lowercases its value before it reaches Prisma.
+```sql
+ALTER TABLE "app_user" ADD CONSTRAINT "app_user_email_lowercase"
+  CHECK ("email" = lower("email"));
+CREATE UNIQUE INDEX "app_user_email_key" ON "app_user" ("email");
+DROP INDEX "app_user_email_lower_key";
+```
 
-**The test is the specification here** (§7 AC7): sign up as `Maria@Example.COM`, then sign in as
-`maria@example.com`, and get the same `app_user.id`. If better-auth turns out to normalise already,
-the wrapper becomes a redundant no-op and the test still passes — an assertion about behaviour
-survives a library upgrade that an assertion about configuration does not.
+The `CHECK` is what makes this safe rather than a downgrade. A plain unique index on a
+case-*sensitive* column would let `Maria@x.com` and `maria@x.com` coexist — the exact failure the
+functional index existed to prevent. The constraint removes the possibility at the database, so the
+plain index is equivalent to the functional one **and** serves equality. It also means the
+normalisation guarantee stops depending on better-auth's implementation: a future version that
+forgets to lowercase gets a constraint violation, not a duplicate account.
 
-**Not solved with `citext`.** It is a non-core extension, `W1-T05` already chose the functional
-index, and changing that choice is a schema decision belonging to `agent-contracts`, not a thing to
-slip into an auth ticket.
+**This edits `agent-contracts`' file.** `TODO.md` §4 makes `prisma/schema.prisma` append-only by
+request. Recorded as such in the run record and in §10 Q6; done here rather than proposed because
+the table is empty in every environment and a migration that reshapes an index is strictly cheaper
+before there are rows than after.
 
-### 4.3 The bridge is ours, not the one in the docs
+**The tests do not change, and that is the point.** AC7 and AC8 assert *behaviour* — sign up with
+`Maria@Example.COM`, sign in with `maria@example.com`, get the same id; a case-differing second
+signup is refused. They were written when the diagnosis was wrong and they pass under the correct
+one, which is the argument for asserting behaviour over configuration, made at our own expense.
 
-One catch-all Fastify route at `/api/auth/*`, `GET` and `POST`, converting Node → Web `Request`,
-calling `auth.handler(req)`, converting `Response` → Fastify reply. Three deviations from
-better-auth's published snippet, each for a reason:
+### 4.3 The library's own Node integration, not its documented Fastify snippet
 
-1. **`response.headers.getSetCookie()`** for `Set-Cookie`, looped and appended individually;
-   `headers.forEach` for everything else, with `set-cookie` skipped. §1.1c. A test asserts two
-   cookies survive as two headers.
-2. **The raw body, not `JSON.stringify(request.body)`.** The published snippet re-serialises
-   whatever Fastify's content-type parser produced, which changes the bytes better-auth signs and
-   validates. The route opts out of body parsing and forwards the buffer.
-3. **No `fastifyCors`.** The published snippet registers permissive CORS with `credentials: true`.
-   `ADR-005` rule 5 chose a single origin precisely so that is unnecessary, and a credentialed CORS
-   allowance is a thing that gets widened once and never narrowed. Local development gets the same
-   shape as production via §4.7.
+better-auth's published Fastify guide hand-rolls the bridge and forwards headers with
+`response.headers.forEach((value, key) => reply.header(key, value))`. The `Headers` API folds
+repeated headers into one comma-joined value, and `Set-Cookie` is the one header where that is not a
+legal transformation: a response that sets a session cookie *and* clears a stale one arrives as a
+single malformed cookie.
+
+The library ships a correct bridge that the Fastify page does not use. `toNodeHandler` delegates to
+`better-call/node`, whose `setResponse` does:
+
+```js
+res.setHeader(key, key === "set-cookie"
+  ? set_cookie_parser.splitCookiesString(response.headers.get(key))
+  : value);
+```
+
+— splitting the folded value back apart, comma-in-an-`Expires`-date and all. **So the bug is in the
+guide, not in the library**, and the fix is to use `toNodeHandler(auth)` against Fastify's
+`request.raw`/`reply.raw` rather than to write a better `forEach`.
+
+Two things this costs, both handled in the plugin:
+
+1. **Fastify must not consume the body first.** `getRequest` reads the Node stream; if Fastify's
+   content-type parser has already drained it, better-auth receives an empty body. The auth routes
+   live in their own plugin scope with a pass-through parser — content-type parsers are encapsulated
+   per scope in Fastify, so this does not affect any other route.
+2. **Fastify must not also try to reply.** `reply.hijack()` hands the socket over before the handler
+   writes to `reply.raw`.
+
+AC18 asserts two `Set-Cookie` headers survive as two headers, because the point is the behaviour,
+not which function produced it.
 
 ### 4.4 Two dialects, one carve-out — stated, not discovered
 
@@ -307,6 +339,7 @@ admin capability invented in this ticket is a capability with no test describing
 - **AC1** Migration `0007_auth_tables` creates `session`, `account` and `verification`; `pnpm db:migrate:status` is clean afterwards.
 - **AC2** Migration `0008_app_user_auth_fields` drops `password_hash` and adds `name`, `email_verified`, `image`.
 - **AC3** `email_verified_at` still exists and is still `timestamptz(3)`.
+- **AC3b** `app_user` has a plain unique index on `email` and a `CHECK` that `email = lower(email)`; inserting a mixed-case address through Prisma directly is refused by the database, not merely by the library. §4.2.
 - **AC4** `prisma/schema.prisma` and the migrations agree — `prisma migrate diff` reports no drift.
 
 **Mapping**
@@ -405,15 +438,21 @@ they were suspended, cannot export their data, and cannot appeal — and the bac
 eventually want to show them exactly that. The kinder design is sign-in permitted into a
 restricted shell.
 
-**Blocking on nothing today** — `W2-T03` is where "may act" becomes enforceable per route, and this
-can be revisited there without a migration. Flagged now because the decision is easier to change
-before there are suspended users than after.
+**Decided by the operator, 2026-09-12: block sign-in.** The restricted-shell design is the kinder
+one and is not rejected — it is deferred to `W9`, where there is something to let a suspended user
+in *to*. `W2-T03` is where "may act" becomes enforceable per route, so this can be revisited there
+without a migration. Flagged now because the decision is easier to change before there are
+suspended users than after.
 
 ### Q2 — `requireEmailVerification`, and what it costs on the supply side
 
 §4.6 turns it on. It is one line to turn off. The trade is real friction against silently
-unreachable accounts, and `R3` says friction on the supply side is the expensive kind. **Operator
-decision**; the default chosen here is the safe one rather than the converting one.
+unreachable accounts, and `R3` says friction on the supply side is the expensive kind.
+
+**Decided by the operator, 2026-09-12: require it.** The provider-only variant was considered and
+rejected for now on a dependency, not on merit — `ADR-005` Q1 has not settled whether the
+MANITAS/PRO split happens at signup, so "is this a provider" is not reliably knowable at first
+sign-in. Revisit alongside `W2-T05`.
 
 ### Q3 — SMTP failure rolls back the sign-up. Is that right?
 
@@ -444,3 +483,21 @@ in `ci.yml`.
 
 Not this ticket's job to build one. Naming it so it is a known gap rather than an assumed absence —
 and `W0` is where it would go.
+
+### Q6 — this ticket edits `agent-contracts`' file, and the rule says it should ask
+
+`TODO.md` §4: *"Shared files (`prisma/schema.prisma`, `packages/contracts`, CI config) are
+**append-only by request**: a slice agent opens a change proposal, `agent-contracts` applies it.
+This is the main collision risk."*
+
+§4.2 does not append — it drops an index `W1-T05` deliberately chose and replaces it with a
+different design. That is exactly the case the rule is written for.
+
+It is done here anyway, for one reason that is about cost and not about authority: the table is
+empty in every environment, and an index reshape is cheaper before there are rows than after. The
+alternative — ship `W2-T01` against an index the auth path cannot use, and file the fix — means the
+first real users arrive on a sequential scan and the migration then has to run against their data.
+
+**Recorded as a deviation, not as a precedent.** It is the fourth W12/W2 ticket to edit another
+slice's files (`W12-T16` §10 Q3 counted the first three), and nobody has decided whether that is
+allowed. That decision is still open and this makes it more urgent, not less.
