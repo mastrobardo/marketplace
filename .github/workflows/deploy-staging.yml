@@ -45,6 +45,7 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           STAGING_DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+          STAGING_BETTER_AUTH_SECRET: ${{ secrets.STAGING_BETTER_AUTH_SECRET }}
 
   deploy:
     name: deploy
@@ -88,10 +89,29 @@ jobs:
 
       # The API exits on boot without DATABASE_URL (`z.url()`, no default), and setting it on the
       # migrate step alone leaves the container without it. `--stage` holds it for the deploy below.
-      - name: Give the API its database
-        run: flyctl secrets set DATABASE_URL="$DATABASE_URL" --app marketplace-api-staging --stage
+
+      # `BETTER_AUTH_URL` is the API's own origin, not the web app's — for now.
+      #
+      # better-auth builds its own endpoint URLs from this, and the verification link it emails is
+      # `<baseURL>/api/auth/verify-email?token=...`, which is served by *this* app. Once `W0-T28`
+      # routes `/api/*` from Cloudflare to Fly, the browser sees one origin and this becomes the web
+      # URL — a one-line change, in the same ticket that makes it true.
+      #
+      # It cannot be the web URL today even if we wanted it: the Pages URL is read back from
+      # wrangler *after* this step, and this workflow refuses to construct a `*.pages.dev` name
+      # rather than guess one (see the comment above the deploy step).
+      - name: Give the API its database and its auth secret
+        run: >
+          flyctl secrets set
+          DATABASE_URL="$DATABASE_URL"
+          BETTER_AUTH_SECRET="$BETTER_AUTH_SECRET"
+          BETTER_AUTH_URL="$BETTER_AUTH_URL"
+          --app marketplace-api-staging --stage
         env:
           DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+          # W2-T01 §4.8: required, no default. Without it the container exits 78 on boot.
+          BETTER_AUTH_SECRET: ${{ secrets.STAGING_BETTER_AUTH_SECRET }}
+          BETTER_AUTH_URL: https://marketplace-api-staging.fly.dev
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
 
       - name: Deploy the API

@@ -295,6 +295,21 @@ const NOT_COVERED: Readonly<Record<string, string>> = {
   SeedRun:
     'agent-devops infrastructure — the ledger of which seeders have run (MEM-2026-09-09-15), ' +
     'not domain data any test should fabricate.',
+
+  // The three better-auth tables (W2-T01 §4.1). Same reasoning for each, stated three times
+  // because this map is read one row at a time by whoever hits the failure.
+  Session:
+    'better-auth owns every write to this table (ADR-005). A test that fabricates a session is ' +
+    'asserting against a shape the library controls and can change in a patch release — and it ' +
+    'skips the guard W2-T01 §4.5 puts on session creation, which is the whole point of the row. ' +
+    'Build a session by signing in, as apps/api/tests/auth.test.ts does.',
+  Account:
+    'better-auth owns every write to this table (ADR-005 rule 2). The password column holds a ' +
+    'hash produced by the library, so a hand-built row is either wrong or a reimplementation of ' +
+    "its hashing — the seeder calls better-auth's own hashPassword for exactly this reason.",
+  Verification:
+    'better-auth owns every write to this table. These rows are single-use tokens with a TTL; a ' +
+    'fabricated one is a token the library did not issue and will not honour.',
 };
 
 describe('AC10 — every model in the schema has a factory', () => {

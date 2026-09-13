@@ -7,6 +7,10 @@ import { loadConfig } from '../src/config.js';
 
 const ENV = {
   DATABASE_URL: 'postgres://marketplace:marketplace_local@127.0.0.1:5432/marketplace',
+  // Required since `W2-T01`, even though nothing in this file authenticates: `loadConfig` reports
+  // every problem at once and refuses the whole environment, which is the behaviour AC19 wants.
+  BETTER_AUTH_SECRET: 'test-secret-at-least-thirty-two-chars',
+  BETTER_AUTH_URL: 'http://127.0.0.1:5173',
   LOG_LEVEL: 'debug',
   APP_VERSION: '1.2.3-test',
 };

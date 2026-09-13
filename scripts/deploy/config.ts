@@ -26,6 +26,10 @@ export const REQUIRED: Record<DeployTarget, readonly string[]> = {
     'CLOUDFLARE_ACCOUNT_ID',
     'NEON_API_KEY',
     'NEON_PROJECT_ID',
+    // W2-T01 §4.8. The API exits 78 without it, so a preview whose secret is unset deploys a
+    // container that never boots — the half-built state this guard exists to prevent, and the
+    // exact shape the PREVIEW_DATABASE_URL note below describes.
+    'PREVIEW_BETTER_AUTH_SECRET',
     // No PREVIEW_DATABASE_URL. It was briefly here, and it was the wrong shape twice over: the
     // guard was never handed it (so every preview and every teardown skipped, permanently), and a
     // single static URL points every open pull request at one shared database — which makes the
@@ -38,8 +42,9 @@ export const REQUIRED: Record<DeployTarget, readonly string[]> = {
     'CLOUDFLARE_API_TOKEN',
     'CLOUDFLARE_ACCOUNT_ID',
     'STAGING_DATABASE_URL',
+    'STAGING_BETTER_AUTH_SECRET',
   ],
-  production: ['FLY_API_TOKEN', 'PRODUCTION_DATABASE_URL'],
+  production: ['FLY_API_TOKEN', 'PRODUCTION_DATABASE_URL', 'PRODUCTION_BETTER_AUTH_SECRET'],
 };
 
 export interface DeployConfigResult {

@@ -63,6 +63,10 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
           NEON_PROJECT_ID: ${{ secrets.NEON_PROJECT_ID }}
+          # W2-T01 §4.8. The guard checks for it, so it has to be handed it — a name in REQUIRED
+          # that never reaches this step reports "configured" and deploys a container that
+          # exits 78 on boot (the failure AC28 exists for).
+          PREVIEW_BETTER_AUTH_SECRET: ${{ secrets.PREVIEW_BETTER_AUTH_SECRET }}
 
   deploy:
     name: deploy
@@ -222,11 +226,30 @@ jobs:
       # After the migration, not before: the step above may have recreated the branch, and staging
       # the pre-migration URL would point the deployed API at a database that no longer exists.
       # `--stage` holds it for the deploy that follows rather than restarting the app twice.
-      - name: Give the preview API its own database
-        run: flyctl secrets set DATABASE_URL="$DATABASE_URL" --app "$APP" --stage
+
+      # `BETTER_AUTH_URL` is the API's own origin, not the web app's — for now.
+      #
+      # better-auth builds its own endpoint URLs from this, and the verification link it emails is
+      # `<baseURL>/api/auth/verify-email?token=...`, which is served by *this* app. Once `W0-T28`
+      # routes `/api/*` from Cloudflare to Fly, the browser sees one origin and this becomes the web
+      # URL — a one-line change, in the same ticket that makes it true.
+      #
+      # It cannot be the web URL today even if we wanted it: the Pages URL is read back from
+      # wrangler *after* this step, and this workflow refuses to construct a `*.pages.dev` name
+      # rather than guess one (see the comment above the deploy step).
+      - name: Give the preview API its own database and auth secret
+        run: >
+          flyctl secrets set
+          DATABASE_URL="$DATABASE_URL"
+          BETTER_AUTH_SECRET="$BETTER_AUTH_SECRET"
+          BETTER_AUTH_URL="https://${APP}.fly.dev"
+          --app "$APP" --stage
         env:
           APP: ${{ needs.preflight.outputs.app }}
           DATABASE_URL: ${{ steps.migrate.outputs.url }}
+          # W2-T01 §4.8. One secret shared by every preview: they are short-lived, torn down with
+          # the branch, and hold no data worth isolating from another preview.
+          BETTER_AUTH_SECRET: ${{ secrets.PREVIEW_BETTER_AUTH_SECRET }}
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
 
       - name: Deploy the API

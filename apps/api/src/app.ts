@@ -7,6 +7,8 @@ import {
   errorEnvelope,
   INTERNAL_ERROR_MESSAGE,
 } from '@marketplace/contracts';
+import { type Auth } from './auth/auth.js';
+import { registerAuth } from './plugins/auth.js';
 import { generateRequestId, REQUEST_ID_HEADER, requestIdHook } from './plugins/request-id.js';
 import { healthRoutes } from './routes/health.js';
 
@@ -14,6 +16,14 @@ export interface BuildAppOptions {
   config: Config;
   /** Tests pass a sink here so logging can be asserted rather than assumed. */
   logDestination?: Writable;
+  /**
+   * better-auth, already built (`W2-T01`).
+   *
+   * Optional so that every existing test — and `/health` itself — can build an app without a
+   * database. Passed in rather than constructed here for the reason this file exists at all:
+   * nothing in the composition root may reach for ambient state.
+   */
+  auth?: Auth;
 }
 
 /**
@@ -35,7 +45,7 @@ const REDACTED_PATHS = [
  * Kept separate from `server.ts` so tests can build an app and `inject()` into it without opening
  * a socket, and so nothing here depends on the process environment.
  */
-export function buildApp({ config, logDestination }: BuildAppOptions): FastifyInstance {
+export function buildApp({ config, logDestination, auth }: BuildAppOptions): FastifyInstance {
   const app = Fastify({
     logger: {
       level: config.LOG_LEVEL,
@@ -52,6 +62,21 @@ export function buildApp({ config, logDestination }: BuildAppOptions): FastifyIn
 
   app.addHook('onRequest', requestIdHook);
   app.register(healthRoutes(config));
+
+  /**
+   * `/api/auth/*` answers in better-auth's error shape, not `W1-T01`'s envelope — a documented
+   * carve-out, argued in `W2-T01` §4.4 rather than discovered later.
+   *
+   * The alternative was translating: better-auth's failures into our codes. The envelope types
+   * `details` *per code*, so a translation layer must either invent a code per library failure —
+   * a registry that drifts on every upgrade, in the slice where an upgrade is most sensitive — or
+   * collapse them all into one and throw away the difference between "wrong password" and
+   * "account locked", which is precisely what `W2-T07`'s lockout work will need.
+   *
+   * `ci-workflow`-style assertions are not enough here, so `auth.test.ts` pins that this prefix is
+   * the *only* carve-out: every other route, including 404 and 500, still answers in the envelope.
+   */
+  if (auth !== undefined) registerAuth(app, auth);
 
   // One shape for "no such route" — never Fastify's default `{"message":"Route ... not found"}`.
   app.setNotFoundHandler((request, reply) => {
