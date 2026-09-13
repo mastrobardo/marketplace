@@ -11,7 +11,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -33,13 +33,28 @@ const TABLES = [
 
 const ENUMS = ['user_role', 'user_status', 'provider_kind', 'locale'] as const;
 
-/** The migrations this task adds, in apply order. §6. */
-const NEW_MIGRATIONS = [
-  '0002_core_enums',
-  '0003_core_identity',
-  '0004_address_geography',
-  '0005_category_tree',
-] as const;
+/**
+ * Every migration after the `0001` state this task started from, in apply order — **derived**.
+ *
+ * This was a hand-written list of four, and `W2-T01` is what it cost. `migrated()` applies *all*
+ * migrations; the rollback below walks this list in reverse. With `0006`–`0008` missing from it,
+ * `session` and `account` were still present when `0003`'s `down.sql` tried to drop `app_user`:
+ *
+ *     ERROR:  cannot drop table app_user because other objects depend on it
+ *
+ * `0006_audit_record` had been missing for just as long and never failed, because `audit_record`
+ * carries no foreign key to `app_user` by design — so the gap was invisible until a migration
+ * added one. That is the fourth time a hand-written subject list in this repo has silently
+ * measured less than it claimed (MEM: "CI gates fail open — and fail silent").
+ *
+ * `0000` and `0001` are excluded by number, not by name: they are the state the rollback stops at,
+ * asserted at the end of AC-2.
+ */
+const NEW_MIGRATIONS: readonly string[] = readdirSync(MIGRATIONS, { withFileTypes: true })
+  .filter((entry) => entry.isDirectory() && /^\d{4}_/.test(entry.name))
+  .map((entry) => entry.name)
+  .sort()
+  .filter((name) => !name.startsWith('0000_') && !name.startsWith('0001_'));
 
 function dc(...args: string[]): string {
   return execFileSync('docker', ['compose', ...args], {
@@ -231,6 +246,15 @@ describe.runIf(live)('live — the core schema against a real PostGIS database',
     }
   }, 180_000);
 
+  it('finds the migrations at all — an empty list would pass AC-2 vacuously', () => {
+    // The failure the derivation replaces was a list that was *too short*, and a too-short list is
+    // indistinguishable from a correct one unless something counts.
+    expect(NEW_MIGRATIONS.length).toBeGreaterThanOrEqual(7);
+    expect(NEW_MIGRATIONS).toContain('0003_core_identity');
+    expect(NEW_MIGRATIONS[0]).toBe('0002_core_enums');
+    expect(NEW_MIGRATIONS.some((name) => name.startsWith('0001_'))).toBe(false);
+  });
+
   it('AC-2 — every down.sql rolls back, in reverse order, to the 0001 state', () => {
     const db = migrated('w1t05_down');
     for (const folder of [...NEW_MIGRATIONS].reverse()) {
@@ -247,11 +271,33 @@ describe.runIf(live)('live — the core schema against a real PostGIS database',
     expect(psql(db, `SELECT to_regclass('public._seed_run') IS NOT NULL`)).toBe('t');
   }, 180_000);
 
+  /**
+   * The property is unchanged — a second `ana@example.com` never lands, in any case — but `W2-T01`
+   * §4.2 changed *which* constraint says no, and the criterion is worth restating rather than
+   * loosening to `not null`.
+   *
+   * `W1-T05` enforced this with a unique index on `lower(email)`, so a mixed-case duplicate was a
+   * unique violation (`23505`). better-auth issues `WHERE email = $1`, which that index cannot
+   * serve, so `0008` replaced it with a plain unique index plus `CHECK (email = lower(email))`.
+   * Mixed case is now rejected *before* uniqueness is considered — a check violation (`23514`) —
+   * which is strictly stronger: the old design let a mixed-case address be stored as long as no
+   * lowercase twin existed, and this one does not let it be stored at all.
+   */
   it('AC-3 — a duplicate email is rejected whatever its case', () => {
     const db = migrated('w1t05_email');
     makeUser(db, 'ana@example.com');
+
+    // An exact duplicate: still the unique index, still 23505.
     expect(sqlstate(db, `INSERT INTO app_user (email) VALUES ('ana@example.com')`)).toBe('23505');
-    expect(sqlstate(db, `INSERT INTO app_user (email) VALUES ('ANA@Example.com')`)).toBe('23505');
+
+    // A mixed-case duplicate: 23514, the CHECK, before uniqueness is reached.
+    expect(sqlstate(db, `INSERT INTO app_user (email) VALUES ('ANA@Example.com')`)).toBe('23514');
+
+    // And mixed case is refused even with no twin to collide with — the part `W1-T05` could not
+    // enforce, and the reason the swap is not a downgrade.
+    expect(sqlstate(db, `INSERT INTO app_user (email) VALUES ('Nobody@Example.com')`)).toBe(
+      '23514',
+    );
   }, 180_000);
 
   it('AC-4 — the roles/profile detector finds an inconsistent user and clears a consistent one', () => {
