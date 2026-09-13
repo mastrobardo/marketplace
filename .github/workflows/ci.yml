@@ -207,6 +207,16 @@ jobs:
       # Running the whole `apps/api` suite with `STACK_LIVE=1` derives the set instead: a live
       # suite added tomorrow runs here on the day it lands. The DOM-free tests run twice — once in
       # `unit`, once here — which costs a few seconds and removes a whole class of omission.
+      # These suites call `vitest` directly rather than through `pnpm test`, so turbo's
+      # `dependsOn: ["^build"]` never runs and `@marketplace/contracts` resolves to a `dist/` that
+      # does not exist. It went unnoticed while the job named three suites that happened not to
+      # import it; running the whole suite surfaced it immediately.
+      #
+      # `@marketplace/api^...` is turbo for "this package's dependencies, not the package itself" —
+      # derived, so a new workspace dependency is built here without anyone remembering to add it.
+      - name: Build the packages the suites import
+        run: pnpm turbo run build --filter='@marketplace/api^...'
+
       - name: Run the live suites
         run: |
           pnpm vitest run tests/local-stack.test.ts
