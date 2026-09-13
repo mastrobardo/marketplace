@@ -222,6 +222,48 @@ Listed explicitly, so a real fifth vendor still fails.
 
 ---
 
+## What CI caught that the full local suite did not
+
+The root suite was green and the `database` job was not — twice. Both failures were the same shape
+as each other and as the ones above, which is the point of recording them.
+
+**A hand-written migration list.** `core-schema.test.ts` named four migrations and walked them in
+reverse to roll back. `migrated()` applies *all* of them, so `session` and `account` were still
+present when `0003`'s `down.sql` reached `app_user`:
+
+```
+ERROR:  cannot drop table app_user because other objects depend on it
+```
+
+`0006_audit_record` had been missing from that list for just as long and never failed — because
+`audit_record` deliberately carries no foreign key to `app_user`. The gap was invisible until a
+migration added one. Now derived from the directory, with a count assertion, because a derivation
+that derives nothing passes AC-2 vacuously.
+
+**A hand-written suite list in `ci.yml`.** The `database` job ran three files by name.
+`auth.test.ts` was not among them, so **20 live tests would have passed locally and never run in
+CI at all** — the tests carrying every guard in Finding 5. The job now runs the whole `apps/api`
+suite with `STACK_LIVE=1`.
+
+**And behind that, a second defect the first was hiding.** Running the whole suite immediately
+failed with `Failed to resolve entry for package "@marketplace/contracts"`: these suites call
+`vitest` directly rather than through `pnpm test`, so turbo's `dependsOn: ["^build"]` never runs
+and the package resolves to a `dist/` that does not exist. None of the three named suites imported
+it, so the job had been one new import away from breaking since it was written. Fixed with
+`pnpm turbo run build --filter='@marketplace/api^...'` — derived, so a new workspace dependency
+needs no one to remember it.
+
+That is **four instances of this failure mode in one ticket**, across three files. The repo's own
+memory note says a hand-written subject list has now failed four times; this ticket makes it seven,
+and every one of them was silent.
+
+**AC-3 restated rather than loosened.** §4.2 changed which constraint refuses a mixed-case
+duplicate — the `CHECK` fires before uniqueness, so `23514` where it was `23505`. The test now
+pins both codes *and* adds the case the functional index could not enforce: mixed case refused with
+no twin to collide with.
+
+---
+
 ## Deviations from spec
 
 **§4.1 — the schema lands in `W2-T01`, not `W2-T02`.** Argued in the spec before any code:
@@ -247,7 +289,9 @@ rows. Spec §10 Q6; the fourth such deviation, and nobody has decided whether it
 | `pnpm lint` | clean |
 | `pnpm format:check` | clean |
 | `pnpm test` (root + every package) | **246 passed, 6 skipped** |
-| `apps/api` live suite (`STACK_LIVE=1`) | **20 passed** |
+| `apps/api` **whole** suite live (`STACK_LIVE=1`) | **122 passed** — reproduced from a deleted `dist/`, the way CI runs it |
+| `tests/local-stack.test.ts` live | 15 passed |
+| CI on `#246` | **12 / 12 green** |
 | `actionlint 1.7.7` | clean |
 | `prisma migrate diff` | no drift between schema and migrations |
 | `pnpm db:seed` | ran; both seeded accounts sign in (checked against a real database) |
