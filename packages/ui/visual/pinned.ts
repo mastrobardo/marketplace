@@ -22,6 +22,7 @@ export const PINNED: readonly PinnedEntry[] = [
   { id: 'patterns-authwall--as-subsection' },
   { id: 'patterns-authwall--contact-provider' },
   { id: 'patterns-authwall--provider-registration' },
+  { id: 'patterns-authwall--with-action' },
   { id: 'patterns-card--at-heading-level-two' },
   { id: 'patterns-card--default' },
   { id: 'patterns-card--linked' },

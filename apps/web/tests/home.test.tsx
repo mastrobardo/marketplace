@@ -221,7 +221,18 @@ describe('AC12..AC13 — the supply-side landing, and where it stops', () => {
     const wall = screen.getByRole('region', { name: es['pro.title'] });
     expect(wall.textContent).toContain(es['pro.pending']);
     expect(within(wall).queryByRole('button')).toBeNull();
-    expect(within(wall).queryByRole('link')).toBeNull();
+
+    /**
+     * **Changed by `W2-T09`, deliberately.** This assertion used to be `queryByRole('link')` →
+     * `null`, and it was right: there was no signup page, so any link here would have been a 404
+     * with better manners. `W2-T09` built the form, which is the premise the old assertion rested
+     * on rather than the principle — and the principle is unchanged, so what replaces it is the
+     * same statement about the *rest* of the wall: the link goes to the page that exists, and the
+     * pro upgrade (`W2-T05`), which still does not, is still a sentence rather than a control.
+     */
+    const link = within(wall).getByRole('link', { name: es['auth.signup.title'] });
+    expect(link.getAttribute('href')).toBe('/es/signup');
+    expect(within(wall).getAllByRole('link')).toHaveLength(1);
   });
 
   it('AC13 — renders in English at /en/become-a-pro', async () => {

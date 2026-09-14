@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Vite + React SPA \u2014 router, layout shell, ES/EN i18n and theme tokens.",
+  "description": "Vite + React SPA — router, layout shell, ES/EN i18n and theme tokens.",
   "scripts": {
     "dev": "vite",
     "preview": "vite preview",
@@ -33,6 +33,7 @@
     "vitest": "^5.0.0"
   },
   "dependencies": {
+    "@hookform/resolvers": "^5.9.1",
     "@marketplace/contracts": "workspace:*",
     "@marketplace/ui": "workspace:*",
     "@tanstack/react-query": "^5.90.2",
@@ -40,8 +41,10 @@
     "i18next": "^26.4.2",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
+    "react-hook-form": "^7.88.0",
     "react-i18next": "^17.0.13",
-    "react-router": "^8.3.1"
+    "react-router": "^8.3.1",
+    "zod": "^4.5.4"
   },
   "msw": {
     "workerDirectory": [

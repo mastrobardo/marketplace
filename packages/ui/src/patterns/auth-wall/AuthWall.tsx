@@ -2,6 +2,12 @@ import { type ReactElement, type ReactNode, useId } from 'react';
 import { cx } from '../../internal/cx.js';
 import styles from './AuthWall.module.css';
 
+export interface AuthWallAction {
+  /** The words on the link. The design system holds no copy — a caller supplies these. */
+  label: string;
+  href: string;
+}
+
 export interface AuthWallProps {
   /** What the visitor was trying to do — "Contact X", "Sign up as a pro". Becomes the region's name. */
   title: ReactNode;
@@ -9,6 +15,17 @@ export interface AuthWallProps {
   description?: ReactNode;
   /** The page owns its outline; a wall inside a section is usually an `h2` and sometimes an `h3`. */
   headingLevel?: 2 | 3 | 4;
+  /**
+   * Where the flow continues — `W2-T09`.
+   *
+   * **Optional, and absent by default.** The component's original value was that it rendered
+   * nothing interactive: with no form to link to, a live control is a 404 with better manners and a
+   * disabled one claims the feature exists but is not permitted. What changed is not that argument
+   * but its premise — `W2-T09` built the signup form, so `become-a-pro` now has somewhere to send a
+   * visitor. The provider profile's "contact this pro" wall still has nowhere to go, and it passes
+   * no action, and it renders exactly what it rendered before.
+   */
+  action?: AuthWallAction;
 }
 
 const PENDING_ES = 'Esta parte todavía no está disponible.';
@@ -29,7 +46,12 @@ const PENDING_ES = 'Esta parte todavía no está disponible.';
  * `become-a-pro` and the provider profile are both call sites (`W12-T12` §4.5). The second is why
  * this is a component: one call site would have been a guess about the shape.
  */
-export function AuthWall({ title, description, headingLevel = 2 }: AuthWallProps): ReactElement {
+export function AuthWall({
+  title,
+  description,
+  headingLevel = 2,
+  action,
+}: AuthWallProps): ReactElement {
   const id = useId();
   const Heading = `h${String(headingLevel)}` as 'h2' | 'h3' | 'h4';
 
@@ -39,6 +61,13 @@ export function AuthWall({ title, description, headingLevel = 2 }: AuthWallProps
         {title}
       </Heading>
       <p className={cx(styles['description'])}>{description ?? PENDING_ES}</p>
+      {/* A plain anchor, not a router `Link`: `packages/ui` knows nothing about the application's
+          router, and an `href` works in Storybook, in a test and under any rendering model. */}
+      {action === undefined ? null : (
+        <a className={cx(styles['action'])} href={action.href}>
+          {action.label}
+        </a>
+      )}
     </section>
   );
 }

@@ -1,4 +1,5 @@
 import { type ReactElement } from 'react';
+import { useParams } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { AuthWall, Card } from '@marketplace/ui';
 import { type TranslationKey } from '../i18n/locales/es.js';
@@ -30,6 +31,7 @@ const BENEFITS: { key: string; title: TranslationKey; body: TranslationKey }[] =
 
 export function Component(): ReactElement {
   const { t } = useTranslation();
+  const locale = useParams()['lang'] ?? '';
 
   return (
     <article data-testid="become-a-pro">
@@ -47,7 +49,15 @@ export function Component(): ReactElement {
         </ul>
       </section>
 
-      <AuthWall title={t('pro.title')} description={t('pro.pending')} />
+      {/* `W2-T09`: the wall now has a door, and only half of one — which is the honest shape. An
+          account is a client account (`ADR-005` Q1), and the upgrade to a professional is `W2-T05`
+          and does not exist. So the link is real and the sentence still says where the product
+          stops, rather than the wall implying a pro signup that nothing would answer. */}
+      <AuthWall
+        title={t('pro.title')}
+        description={t('pro.pending')}
+        action={{ label: t('auth.signup.title'), href: `/${locale}/signup` }}
+      />
     </article>
   );
 }

@@ -9,6 +9,7 @@ import {
 import { type SearchQuery } from '@marketplace/ui';
 import { App } from '../src/app/App.js';
 import { ApiError, type ApiClient } from '../src/shared/api.js';
+import { type SessionUser } from '../src/shared/session.js';
 import { buildCatalogue } from '../../../apps/web/mocks/catalogue.js';
 import { searchCatalogue } from '../../../apps/web/mocks/search.js';
 import { profileFromCatalogue, seededProviderIds } from '../../../apps/web/mocks/provider.js';
@@ -60,6 +61,16 @@ export function profileFor(id: string, locale: string): ProviderProfile {
   return profile;
 }
 
+export type { SessionUser };
+
+/**
+ * The auth defaults: a signed-out visitor whose every write succeeds.
+ *
+ * Signed out is the state nearly every page test wants — it is what the storefront looks like to
+ * somebody arriving — and a test that cares about the other one overrides `getSession`. The writes
+ * resolve because their *failures* are the interesting cases, and a failure a test did not ask for
+ * is a failure it will not explain.
+ */
 export function stubApi(overrides: Partial<ApiClient> = {}): ApiClient {
   return {
     getCategories: (locale) => Promise.resolve(categoriesFor(locale)),
@@ -79,6 +90,13 @@ export function stubApi(overrides: Partial<ApiClient> = {}): ApiClient {
         ? Promise.reject(new ApiError(404, 'NOT_FOUND'))
         : Promise.resolve(profile);
     },
+    getSession: () => Promise.resolve(null),
+    signUp: () => Promise.resolve(),
+    signIn: () => Promise.resolve(),
+    signOut: () => Promise.resolve(),
+    resendVerification: () => Promise.resolve(),
+    requestPasswordReset: () => Promise.resolve(),
+    resetPassword: () => Promise.resolve(),
     ...overrides,
   };
 }

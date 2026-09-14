@@ -3,6 +3,7 @@ import {
   Component as Root,
   ErrorBoundary,
   HydrateFallback,
+  action as rootAction,
   loader as rootLoader,
 } from '../routes/root.js';
 import { Component as Home, loader as homeLoader } from '../routes/home.js';
@@ -23,6 +24,17 @@ import {
   loader as legalLoader,
 } from '../routes/legal.js';
 import { Component as NotFound } from '../routes/not-found.js';
+import { Component as SignUp, action as signUpAction } from '../routes/signup.js';
+import { Component as Login, action as loginAction } from '../routes/login.js';
+import { Component as VerifyEmail, action as verifyEmailAction } from '../routes/verify-email.js';
+import {
+  Component as ResetPassword,
+  action as resetPasswordAction,
+} from '../routes/reset-password.js';
+import {
+  Component as ResetPasswordSet,
+  action as resetPasswordSetAction,
+} from '../routes/reset-password-set.js';
 import { LOCALES } from '../i18n/index.js';
 
 /**
@@ -48,6 +60,9 @@ export const routes: RouteObject[] = [
     path: '/:lang',
     Component: Root,
     loader: rootLoader,
+    // A layout route with an action: the sign-out control lives in the header, so it posts to the
+    // route that renders the header rather than to whichever page happens to be underneath.
+    action: rootAction,
     ErrorBoundary,
     HydrateFallback,
     children: [
@@ -70,6 +85,17 @@ export const routes: RouteObject[] = [
         loader: providerLoader,
         ErrorBoundary: ProviderErrorBoundary,
       },
+      // `W2-T09` — the account pages. Untranslated segments, like every other route (Amendment 1):
+      // `/es/signup`, never `/es/registro`.
+      { path: 'signup', Component: SignUp, action: signUpAction },
+      { path: 'login', Component: Login, action: loginAction },
+      // Where better-auth's emailed link redirects back to, with `?error=<CODE>` when the token is
+      // no longer good.
+      { path: 'verify-email', Component: VerifyEmail, action: verifyEmailAction },
+      { path: 'reset-password', Component: ResetPassword, action: resetPasswordAction },
+      // Two segments rather than a `:token` param: better-auth's own callback consumes the token
+      // and hands it back as a query parameter, so there is nothing in the path to name.
+      { path: 'reset-password/set', Component: ResetPasswordSet, action: resetPasswordSetAction },
       {
         path: 'legal/:doc',
         Component: Legal,

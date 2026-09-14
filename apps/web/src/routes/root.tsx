@@ -7,16 +7,20 @@ import {
   useRevalidator,
   useRouteError,
 } from 'react-router';
-import type { LoaderFunctionArgs } from 'react-router';
+import type { ActionFunctionArgs, LoaderFunctionArgs } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
 import { SearchBar } from '@marketplace/ui';
 import { type CategorySummary } from '@marketplace/contracts';
+import { Form } from 'react-router';
+import { Button } from '@marketplace/ui';
 import { LanguageSwitcher } from '../shared/LanguageSwitcher.js';
 import { changeLanguage, isLocale, LOCALES } from '../i18n/index.js';
 import { loadCategories } from '../shared/categories.js';
 import { throwIfFaultRequested } from '../shared/fault.js';
 import { queryKeys } from '../shared/query.js';
+import { invalidateSession, loadSession, type SessionUser } from '../shared/session.js';
+import { apiFrom } from '../features/auth/actions.js';
 import { searchSchema } from '../features/search/schema.js';
 import { useSearchSubmission } from '../features/search/navigation.js';
 import { MissingFields } from '../features/search/MissingFields.js';
@@ -33,6 +37,8 @@ import { MissingFields } from '../features/search/MissingFields.js';
 interface ShellData {
   locale: string;
   categories: CategorySummary[];
+  /** `null` is both "signed out" and "we could not find out" — see `shared/session.ts`. */
+  session: SessionUser | null;
 }
 
 /**
@@ -61,11 +67,41 @@ export async function loader({ params, context, request }: LoaderFunctionArgs): 
   // the degrade that says so now lives in `shared/categories.ts`, because `W12-T10`'s home page is
   // the second loader that needs the same list and the second copy of a rule is the one that gets
   // forgotten. What that rule is, and what it cost to learn, is written there.
-  return { locale, categories: await loadCategories(context, locale) };
+  // Both degrade rather than throw, and both are awaited together: the header needs the session and
+  // the search box needs the categories, and neither is a reason to fail the page.
+  const [categories, session] = await Promise.all([
+    loadCategories(context, locale),
+    loadSession(context),
+  ]);
+
+  return { locale, categories, session };
+}
+
+/**
+ * Sign out — the shell's own write, because the control is in the shell.
+ *
+ * A layout route may have an action, and this is what that is for: the header is rendered on every
+ * page, so a sign-out posted to the page underneath would need an action on all of them. The
+ * session query is invalidated here rather than in a component, and React Router revalidates this
+ * loader immediately afterwards — which is what puts the two links back.
+ */
+export async function action({ request, context }: ActionFunctionArgs): Promise<null> {
+  const form = await request.formData();
+  if (form.get('intent') !== 'signout') return null;
+
+  try {
+    await apiFrom(context).signOut();
+  } finally {
+    // Even if the call failed. The cookie may well be gone already — a session the server has
+    // forgotten is not a session — and leaving a stale name in the header is the worse of the two
+    // wrong answers.
+    await invalidateSession(context);
+  }
+  return null;
 }
 
 export function Component(): ReactElement {
-  const { locale, categories } = useLoaderData<ShellData>();
+  const { locale, categories, session } = useLoaderData<ShellData>();
   const { t } = useTranslation();
 
   // The loader put it in the cache; this reads it. Same key, so there is no second request — and
@@ -119,6 +155,23 @@ export function Component(): ReactElement {
 
           <nav className="mp-nav" aria-label={t('nav.primary')}>
             <Link to={`/${locale}`}>{t('nav.home')}</Link>
+            {/* `W2-T09`: the door. `W2-T01` shipped the API and the header still had no way in, so
+                a visitor could only register with `curl`. Rendered from the loader's session rather
+                than from a fetch on mount, which is why it is right on first paint (R3). */}
+            {session === null ? (
+              <>
+                <Link to={`/${locale}/login`}>{t('nav.login')}</Link>
+                <Link to={`/${locale}/signup`}>{t('nav.signup')}</Link>
+              </>
+            ) : (
+              <>
+                <span className="mp-nav__account">{session.name}</span>
+                <Form method="post" action={`/${locale}`}>
+                  <input type="hidden" name="intent" value="signout" />
+                  <Button type="submit">{t('nav.logout')}</Button>
+                </Form>
+              </>
+            )}
             <LanguageSwitcher locale={locale} />
           </nav>
         </div>

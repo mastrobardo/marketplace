@@ -46,3 +46,41 @@ describe('AC24 — the library holds no English', () => {
     expect(wall.textContent).not.toMatch(/[a-z]+ing\b|not (yet|open)/i);
   });
 });
+
+/**
+ * `W2-T09` — the wall gains a door, and only where there is one.
+ *
+ * `W12-T12` was right that the component rendered nothing interactive: the form did not exist, and
+ * a live link would have been a 404 with better manners. What changed is the condition, not the
+ * principle — `W2-T09` built the form. A wall with no `action` still renders exactly what it
+ * rendered before, which is what the provider profile's "contact this pro" wall still needs.
+ */
+describe('W2-T09 — an optional action, and nothing when it is absent', () => {
+  it('renders a link to where the flow continues', () => {
+    render(
+      <AuthWall
+        title="Date de alta como profesional"
+        description="Crea tu cuenta para empezar."
+        action={{ label: 'Crear cuenta', href: '/es/signup' }}
+      />,
+    );
+
+    const wall = screen.getByRole('region', { name: 'Date de alta como profesional' });
+    const link = within(wall).getByRole('link', { name: 'Crear cuenta' });
+    expect(link.getAttribute('href')).toBe('/es/signup');
+  });
+
+  it('still renders nothing interactive without one', () => {
+    const { container } = render(<AuthWall title="Contactar" description="Todavía no." />);
+
+    expect(container.querySelectorAll('button, a, input, select, textarea')).toHaveLength(0);
+  });
+
+  it('holds no copy of its own for the action', () => {
+    // The design system has no strings. A default label here would be a Spanish literal in a
+    // package that `boundaries.test.ts` keeps domain-free and copy-free.
+    render(<AuthWall title="Contactar" action={{ label: 'Sign up', href: '/en/signup' }} />);
+
+    expect(screen.getByRole('link').textContent).toBe('Sign up');
+  });
+});

@@ -54,7 +54,8 @@ export const en = {
   'pro.benefits.control.body': 'Take what fits and turn down the rest, with no penalty.',
   'pro.benefits.payment.title': 'Payment guaranteed',
   'pro.benefits.payment.body': 'The client pays through the platform before you start the work.',
-  'pro.pending': 'Registration for professionals is not open yet.',
+  'pro.pending':
+    'Start by creating your account. Signing up as a professional comes after that, and is not open yet.',
 
   'notFound.title': 'Page not found',
   'notFound.body': 'The address you opened does not exist, or it has moved.',
@@ -156,6 +157,72 @@ export const en = {
   'error.title': 'Something went wrong',
   'error.body': 'We could not load this page. Please try again in a moment.',
   'error.retry': 'Try again',
+
+  'nav.login': 'Log in',
+  'nav.signup': 'Sign up',
+  'nav.logout': 'Log out',
+  'nav.account': 'Your account',
+
+  'auth.signup.title': 'Create your account',
+  'auth.signup.intro': 'An account lets you request quotes and talk to professionals. It is free.',
+  'auth.signup.submit': 'Create account',
+  'auth.signup.haveAccount': 'Got an account? Log in',
+
+  'auth.login.title': 'Log in to your account',
+  'auth.login.submit': 'Log in',
+  'auth.login.noAccount': 'No account yet? Create one',
+  'auth.login.refused': 'We could not log you in with those details. Check them and try again.',
+  'auth.login.forgot': 'Forgotten your password?',
+
+  'auth.field.name.label': 'Name',
+  'auth.field.email.label': 'Email address',
+  'auth.field.password.label': 'Password',
+  'auth.field.password.hint': 'At least 8 characters.',
+  'auth.field.newPassword.label': 'New password',
+  'auth.field.confirmPassword.label': 'Repeat the password',
+
+  'auth.error.name.required': 'Enter your name.',
+  'auth.error.email.invalid': 'Enter a valid email address.',
+  'auth.error.password.required': 'Enter your password.',
+  'auth.error.password.tooShort': 'The password must be at least 8 characters.',
+  'auth.error.password.tooLong': 'The password cannot be longer than 128 characters.',
+  'auth.error.password.mismatch': 'The two passwords do not match.',
+  'auth.error.failed': 'We could not complete that. Please try again.',
+  'auth.pending': 'Sending…',
+  'auth.error.unreachable': 'We could not reach the service. Please try again in a moment.',
+
+  'auth.inbox.title': 'Check your email',
+  'auth.inbox.body': 'We sent a link to {{email}}. Open it to confirm your address.',
+  'auth.inbox.spam': 'If it has not arrived in a few minutes, look in your spam folder.',
+  'auth.inbox.resend': 'Send another link',
+  'auth.inbox.resent': 'We sent another link.',
+  'auth.inbox.resendFailed':
+    'We could not send the message. Sending email is not switched on in this environment yet.',
+
+  'auth.verify.verified.title': 'Your address is confirmed',
+  'auth.verify.verified.body': 'Your account is ready to use.',
+  'auth.verify.verified.continue': 'Go to the home page',
+  'auth.verify.expired.title': 'This link has expired',
+  'auth.verify.expired.body':
+    'Links last an hour and work once. Enter your address and we will send another.',
+
+  'auth.reset.request.title': 'Reset your password',
+  'auth.reset.request.intro':
+    'Enter your address and we will send you a link to choose a new password.',
+  'auth.reset.request.submit': 'Send the link',
+  'auth.reset.request.sent.title': 'Check your email',
+  'auth.reset.request.sent.body':
+    'If {{email}} has an account, there is a link there to change the password.',
+
+  'auth.reset.set.title': 'Choose a new password',
+  'auth.reset.set.submit': 'Save the password',
+  'auth.reset.set.done.title': 'Password changed',
+  'auth.reset.set.done.body': 'You can log in with the new one.',
+  'auth.reset.set.done.login': 'Log in',
+  'auth.reset.set.invalid.title': 'This link has expired',
+  'auth.reset.set.invalid.body':
+    'Links last an hour and work once. Ask for another to change the password.',
+  'auth.reset.set.invalid.again': 'Ask for another link',
 
   'footer.rights': 'All rights reserved',
 } satisfies Translations;
