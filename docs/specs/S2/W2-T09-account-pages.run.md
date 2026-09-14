@@ -166,8 +166,52 @@ Two gates caught real defects rather than passing politely:
 - `visual-coverage.test.ts` refused the new story until it was pinned. **The baseline for
   `patterns-authwall--with-action` does not exist yet** — the nightly (`W12-T16`) generates it.
 
+## 7b. One API call per write — operator, 2026-09-14
+
+*"The whole login flow should be 1 api call."* It was three, measured in a browser rather than
+guessed:
+
+```
+GET  /api/auth/get-session      the shell's loader, on page load
+POST /api/auth/sign-in/email    the sign-in
+GET  /api/auth/get-session      after the redirect, because the action invalidated
+```
+
+The third is now gone. better-auth's sign-in response **carries the authenticated user**, so the
+action seeds the session cache (`setQueryData`) with the server's own answer instead of invalidating
+and asking for what it was just told. Sign-out does the same with `null`. Both are measured and
+asserted by call count (`AC27`, `AC18`), not by outcome — an assertion on the header alone passes
+either way.
+
+```
+== login ==      GET /api/auth/get-session · POST /api/auth/sign-in/email
+== sign-out ==   POST /api/auth/sign-out
+== navigating while signed in ==   (nothing)
+```
+
+**The asymmetry is deliberate and `AC28` holds it:** a write that *failed* has told us nothing, so
+it falls back to invalidating. Seeding either answer there would be the client inventing one — which
+is the thing `setQueryData` is usually wrong for, and the reason the distinction is written down in
+`shared/session.ts` rather than left as a trick.
+
+The remaining `get-session` is the page load, and every page pays it: it is the header knowing who
+you are before it paints (R3). Navigating while signed in costs nothing — the 60-second cache.
+
+**And the `/email` in those paths is not mail.** `sign-up/email` and `sign-in/email` are
+better-auth's route names for the **email-and-password provider**; `/email` is the credential type.
+No message is ever sent by the browser — `apps/api/src/auth/mail.ts` sends it, server-side, over
+SMTP. The one mail-triggering endpoint the web can reach is `send-verification-email`, which is the
+resend button, and the API still does the sending.
+
 ## 8. Known gaps
 
+- **Auth does not work on a preview deploy, and `W0-T28` is why.** The preview builds the SPA with
+  `VITE_API_URL` pointing at the Fly app, so the browser calls it cross-origin, and the API's
+  `BETTER_AUTH_URL` is its *own* origin — so better-auth trusts only itself and sends no
+  `Access-Control-Allow-Origin` for the Pages host. Observed by the operator on #247's preview:
+  *"blocked by CORS policy"*. Fixing the header alone would not help: `pages.dev` and `fly.dev` are
+  different registrable domains, so the `SameSite=Lax` session cookie is never sent either.
+  `ADR-005` rule 3 chose one origin over credentialed CORS for exactly this reason.
 - **No SMTP in any deployed environment until `OPS-14`.** Sign-up returns `200`, the mail throws,
   and the account is stranded — sign-in refuses, re-registering is the synthetic `200`, resend is a
   `500`. The verify page and the resend control say so; they do not claim a message is on its way.

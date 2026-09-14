@@ -19,7 +19,12 @@ import { changeLanguage, isLocale, LOCALES } from '../i18n/index.js';
 import { loadCategories } from '../shared/categories.js';
 import { throwIfFaultRequested } from '../shared/fault.js';
 import { queryKeys } from '../shared/query.js';
-import { invalidateSession, loadSession, type SessionUser } from '../shared/session.js';
+import {
+  invalidateSession,
+  loadSession,
+  seedSession,
+  type SessionUser,
+} from '../shared/session.js';
 import { apiFrom } from '../features/auth/actions.js';
 import { searchSchema } from '../features/search/schema.js';
 import { useSearchSubmission } from '../features/search/navigation.js';
@@ -91,10 +96,13 @@ export async function action({ request, context }: ActionFunctionArgs): Promise<
 
   try {
     await apiFrom(context).signOut();
-  } finally {
-    // Even if the call failed. The cookie may well be gone already — a session the server has
-    // forgotten is not a session — and leaving a stale name in the header is the worse of the two
-    // wrong answers.
+    // The API has said the session is over, so there is nothing to go and ask: seeding `null` makes
+    // signing out one call too.
+    seedSession(context, null);
+  } catch {
+    // A sign-out that failed has told us nothing — the cookie may be gone already, or not — so the
+    // honest move is to ask rather than to assert either answer. Leaving a stale name in the header
+    // is the worse of the two wrong answers, and re-reading resolves it in one request.
     await invalidateSession(context);
   }
   return null;
