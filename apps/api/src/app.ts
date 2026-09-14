@@ -31,6 +31,11 @@ export interface BuildAppOptions {
  * an auth problem will eventually log `request.headers`, and that must not put a bearer token in
  * the log sink.
  */
+/** Loopback in the forms a config file realistically carries. */
+function isLoopback(host: string): boolean {
+  return host === 'localhost' || host === '::1' || /^127\./.test(host);
+}
+
 const REDACTED_PATHS = [
   'req.headers.authorization',
   'req.headers.cookie',
@@ -77,6 +82,24 @@ export function buildApp({ config, logDestination, auth }: BuildAppOptions): Fas
    * the *only* carve-out: every other route, including 404 and 500, still answers in the envelope.
    */
   if (auth !== undefined) registerAuth(app, auth);
+
+  /**
+   * `W2-T01` §4.9. `MAIL_SMTP_HOST` defaults to `127.0.0.1`, which is Mailpit locally and nothing
+   * at all in a deployed environment — and the failure is invisible: better-auth does not fail a
+   * sign-up when `sendVerificationEmail` throws, so the account is created, cannot verify, cannot
+   * re-register and cannot ask for another link. Demonstrated on the preview deploy, not guessed.
+   *
+   * A warning rather than a refusal, because `OPS-14` is unstarted: refusing to boot would mean no
+   * deployed API at all, and nothing else in this service touches mail. It stops being emitted the
+   * day a real sender is configured.
+   */
+  if (config.NODE_ENV !== 'development' && isLoopback(config.MAIL_SMTP_HOST)) {
+    app.log.warn(
+      { host: config.MAIL_SMTP_HOST, port: config.MAIL_SMTP_PORT, nodeEnv: config.NODE_ENV },
+      'MAIL_SMTP_HOST points at this machine, so no verification or reset email can be delivered; ' +
+        'sign-up will still return 200 and strand the account (OPS-14)',
+    );
+  }
 
   // One shape for "no such route" — never Fastify's default `{"message":"Route ... not found"}`.
   app.setNotFoundHandler((request, reply) => {

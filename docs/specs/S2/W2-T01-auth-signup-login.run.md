@@ -264,6 +264,54 @@ no twin to collide with.
 
 ---
 
+## Finding 6 — the deploy proved a spec claim wrong
+
+The operator set the three environment secrets on 2026-09-14 and the preview deploy ran for the
+first time: `marketplace-api-pr-246.fly.dev`, against its own Neon branch. Sign-up works on real
+infrastructure — a database-generated uuid, `roles: ["CLIENT"]`, `locale: ES` from the column
+defaults.
+
+It also disproved §6. The spec said a sign-up whose verification email cannot be sent **fails and
+rolls the row back**, and called that "the honest behaviour available today". It was a guess stated
+as a fact:
+
+```
+POST /api/auth/sign-up/email           → 200, row created
+  (logs) ERROR [Better Auth]: connect ECONNREFUSED 127.0.0.1:1025
+POST /api/auth/sign-in/email           → 403 EMAIL_NOT_VERIFIED
+POST /api/auth/sign-up/email (again)   → 200, synthetic user, roles: null, no row
+POST /api/auth/send-verification-email → 500
+```
+
+better-auth does not fail the request when `sendVerificationEmail` throws. So the account is
+created and **stranded**: it cannot sign in, cannot be re-registered — the duplicate response is
+deliberately synthetic so as not to leak which addresses exist, and the `null` fields are what give
+it away — and cannot request another link. Precisely the trap the wrong claim said we were
+avoiding.
+
+Three consequences, and only the third was this ticket's to fix:
+
+1. **`OPS-14` is the fix**, and `ADR-005` already said so: *"blocks shipping `W2-T01`, not building
+   it."* No deployed environment has a mail provider, so verification cannot be completed anywhere
+   but locally. Not a defect introduced here — the dependency, now demonstrated instead of asserted.
+2. **The right design is a queue with retries**, not a rollback, and it needs a job runner that
+   does not exist.
+3. **The default was a footgun.** `MAIL_SMTP_HOST` defaults to `127.0.0.1` — Mailpit locally,
+   nothing at all on Fly — and the failure is one log line nobody reads. §4.9 adds a boot warning
+   when a non-development environment points mail at a loopback address, naming `OPS-14` so the
+   warning says when it stops being true. A warning and not a refusal, because refusing would mean
+   no deployed API at all and nothing else in this service touches mail.
+
+§6 and §10 Q3 now record what happens rather than what I assumed, and `auth.test.ts` pins it with a
+test written as an observation. Red probe on the new guard: 6 failures, exactly the positive cases,
+with both negative cases still passing.
+
+**The general lesson is the same one as Finding 1**, and it cost less there only by luck: the
+assertions that survived were about behaviour, and the claims that fell over were the ones I
+reasoned my way to instead of running.
+
+---
+
 ## Deviations from spec
 
 **§4.1 — the schema lands in `W2-T01`, not `W2-T02`.** Argued in the spec before any code:
@@ -292,6 +340,8 @@ rows. Spec §10 Q6; the fourth such deviation, and nobody has decided whether it
 | `apps/api` **whole** suite live (`STACK_LIVE=1`) | **122 passed** — reproduced from a deleted `dist/`, the way CI runs it |
 | `tests/local-stack.test.ts` live | 15 passed |
 | CI on `#246` | **12 / 12 green** |
+| preview deploy | **live** — `marketplace-api-pr-246.fly.dev`, sign-up and the unverified refusal exercised against real infrastructure |
+| `apps/api` live, after Finding 6 | **131 passed** |
 | `actionlint 1.7.7` | clean |
 | `prisma migrate diff` | no drift between schema and migrations |
 | `pnpm db:seed` | ran; both seeded accounts sign in (checked against a real database) |

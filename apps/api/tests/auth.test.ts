@@ -33,6 +33,7 @@ interface Sent {
 
 let app: FastifyInstance;
 let prisma: PrismaClient;
+let authConfig: ReturnType<typeof loadConfig>;
 let sent: Sent[] = [];
 
 const PASSWORD = 'correct horse battery staple';
@@ -115,6 +116,7 @@ beforeAll(async () => {
     BETTER_AUTH_SECRET: 'test-secret-at-least-thirty-two-chars',
     BETTER_AUTH_URL: 'http://127.0.0.1:5173',
   });
+  authConfig = config;
   prisma = getPrismaClient(config, { fresh: true });
   app = buildApp({ config, auth: buildAuth({ config, prisma, mailer: stubMailer() }) });
   await app.ready();
@@ -405,6 +407,62 @@ describeLive('W2-T01 §4.3 — the bridge', () => {
       password: 'whatever',
     });
     expect(signIn.status).toBe(401);
+  });
+});
+
+describeLive('W2-T01 §10 Q3 — a sign-up whose email cannot be sent', () => {
+  /**
+   * **Pins what happens, not what should.**
+   *
+   * The spec's first draft claimed a failed send rolls the sign-up back, and called that the
+   * honest behaviour available today. It was a guess stated as a fact. Measured against the
+   * deployed preview — where the Fly app has no mail server — better-auth returns `200`, writes
+   * the row, and swallows the error.
+   *
+   * The consequence is the trap the wrong claim said we were avoiding: the account cannot sign in
+   * (`403 EMAIL_NOT_VERIFIED`), cannot be re-registered (the duplicate response is deliberately
+   * synthetic, so as not to leak which addresses exist), and cannot ask for another link.
+   *
+   * `OPS-14` is the fix. This test exists so the gap is a recorded fact with a failing assertion
+   * waiting for it, rather than something rediscovered on a support ticket.
+   */
+  it('still creates the account, and strands it', async () => {
+    const email = freshEmail('no-mail');
+    const failing = buildAuth({
+      config: authConfig,
+      prisma,
+      mailer: {
+        sendVerification: () => Promise.reject(new Error('connect ECONNREFUSED 127.0.0.1:1025')),
+        sendPasswordReset: () => Promise.reject(new Error('connect ECONNREFUSED 127.0.0.1:1025')),
+      },
+    });
+    const isolated = buildApp({ config: authConfig, auth: failing });
+    await isolated.ready();
+
+    try {
+      const signUp = await isolated.inject({
+        method: 'POST',
+        url: '/api/auth/sign-up/email',
+        payload: JSON.stringify({ email, password: PASSWORD, name: 'Stranded' }),
+        headers: { 'content-type': 'application/json' },
+      });
+
+      // Not a rollback: the request succeeds and the row is there.
+      expect(signUp.statusCode).toBeLessThan(400);
+      expect(await prisma.user.count({ where: { email } })).toBe(1);
+
+      // And the account is stuck — unverified, so sign-in refuses.
+      const signIn = await isolated.inject({
+        method: 'POST',
+        url: '/api/auth/sign-in/email',
+        payload: JSON.stringify({ email, password: PASSWORD }),
+        headers: { 'content-type': 'application/json' },
+      });
+      expect(signIn.statusCode).toBeGreaterThanOrEqual(400);
+      expect(await prisma.session.count({ where: { user: { email } } })).toBe(0);
+    } finally {
+      await isolated.close();
+    }
   });
 });
 

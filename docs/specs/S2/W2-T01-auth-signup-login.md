@@ -298,6 +298,19 @@ and the existing file says so.
 is a thing that changes in a minor release, and an explicit `false` is a thing a reviewer can see.
 AC14 asserts it.
 
+### 4.9 A deployed API that cannot send mail says so at boot
+
+`MAIL_SMTP_HOST` defaults to `127.0.0.1` — correct locally, where `docker-compose.yml` runs
+Mailpit, and silently wrong in every deployed environment, where nothing listens on 1025. The
+symptom is not an error anyone sees: sign-up returns `200`, the row lands, and the failure is one
+`ECONNREFUSED` line in the application log.
+
+So `buildApp` warns once at startup when `NODE_ENV` is not `development` and the mail host is a
+loopback address. A warning rather than a refusal: `OPS-14` is unstarted, so refusing to boot would
+mean no deployed API at all, and the rest of the API has nothing to do with mail. It is a warning
+that stops being emitted the day a real sender is configured, which is the only honest version of
+"we know this is broken and we know when it is fixed".
+
 ---
 
 ## 5. Permissions matrix
@@ -328,7 +341,7 @@ admin capability invented in this ticket is a capability with no test describing
 | verification token reused | refused | single-use (§8.3) |
 | verification token expired | refused, with an offer to resend | |
 | password below `minPasswordLength` | validation error naming the rule | |
-| SMTP unreachable | sign-up **fails**, the `app_user` row is rolled back | a registered account whose verification email never sent is an account nobody can use and nobody can re-register — §10 Q3 |
+| SMTP unreachable | sign-up **succeeds**, the row is created, the send error is swallowed — *measured, not chosen* (§10 Q3) | better-auth does not fail the request when `sendVerificationEmail` throws. The account is then stranded: sign-in is `403 EMAIL_NOT_VERIFIED`, re-registering returns a synthetic success, and `send-verification-email` is a `500` |
 
 ---
 
@@ -454,14 +467,37 @@ rejected for now on a dependency, not on merit — `ADR-005` Q1 has not settled 
 MANITAS/PRO split happens at signup, so "is this a provider" is not reliably knowable at first
 sign-in. Revisit alongside `W2-T05`.
 
-### Q3 — SMTP failure rolls back the sign-up. Is that right?
+### Q3 — SMTP failure does **not** roll back the sign-up, and I claimed it would
 
-§6 says a sign-up whose verification email cannot be sent fails entirely. The alternative — create
-the account, queue the email, let the user retry — is better for the user and needs a queue,
-retries, and a way to re-send, none of which exist. Rolling back is the honest behaviour available
-today. It means a Mailpit outage in development looks like a broken sign-up, which is at least loud.
+The first draft of §6 said a sign-up whose verification email cannot be sent fails entirely, and
+called that "the honest behaviour available today". **That was a guess stated as a fact, and it is
+wrong.** Measured against the deployed preview on 2026-09-14, where the Fly app has no mail server:
 
-Revisit when there is a job runner. Not before.
+```
+POST /api/auth/sign-up/email        → 200, row created
+  (logs) ERROR [Better Auth]: connect ECONNREFUSED 127.0.0.1:1025
+POST /api/auth/sign-in/email        → 403 EMAIL_NOT_VERIFIED
+POST /api/auth/sign-up/email (same) → 200, synthetic user, no row written
+POST /api/auth/send-verification-email → 500
+```
+
+better-auth does not fail the sign-up when `sendVerificationEmail` throws. So the account is
+created, cannot sign in, cannot be re-registered (the duplicate response is deliberately synthetic,
+to avoid enumeration), and cannot ask for another link. **Exactly the trap the wrong claim said we
+were avoiding.**
+
+Three things follow, and only the third is this ticket's to fix:
+
+1. **`OPS-14` is what makes this go away**, and `ADR-005` already says so: *"blocks shipping
+   `W2-T01`, not building it."* Every deployed environment today has no mail provider, so
+   verification cannot be completed anywhere but locally. That is not a defect introduced here; it
+   is the dependency, now demonstrated rather than asserted.
+2. **The right long-term design is a queue with retries and a resend**, not a rollback — and it
+   needs a job runner that does not exist. Unchanged from the first draft.
+3. **The default is a footgun and is fixed here.** `MAIL_SMTP_HOST` defaults to `127.0.0.1`, which
+   is right locally and silently wrong everywhere else — a deployed API mails into the void and
+   says nothing at boot. §4.9 adds a startup warning, because `BETTER_AUTH_SECRET` has no default
+   for precisely this reason and mail deserved the same scrutiny.
 
 ### Q4 — nothing would notice if the API drifted from the contracts
 
