@@ -463,7 +463,7 @@ for data), so no feature is blocked waiting for an account that is not needed ye
   - Every sign-in failure is **byte-identical** — wrong password, suspended, soft-deleted, unknown address. One message, no branching.
   - **No SMTP in any deployed environment until `OPS-14`.** Operator, 2026-09-14: *"emails are fine as they are for now… having the logic is fine."* So signup returns `200`, no mail arrives, and the account is stranded — sign-in refuses, re-registering is the synthetic `200`, resend is a `500`. The verify page must handle "nothing arrived" without lying, and the resend button will fail in any deployed environment. This works end to end **locally**, against Mailpit.
 
-  **Subscription tiers are coming and this form is not where they go** *(operator, 2026-09-14: tiers exist, all free for now, Stripe will update the flow)*. There is no tier anywhere in the schema today and `W5-T07`/`W5-T08` are both `[B]`. So: **build no tier selection**, and do not shape the account form so that adding a plan step later is a rewrite rather than a new step. A tier belongs to a provider's subscription, not to an account.
+  **Signup is free for everyone, and upgrading is a separate flow that comes later** *(operator, 2026-09-14)*. **Both** providers and clients will have paid tiers (`BD-16`), and on the free tier auctions and presupuestos sit behind a paywall (`BD-03`) — none of which is this ticket's problem. There is no tier anywhere in the schema today and `W5-T07`/`W5-T08` are both `[B]`. So: **build no tier selection and no plan step**, and do not shape the account form so that adding one later is a rewrite rather than an addition. The upgrade is a thing an account *does* afterwards, not a thing the signup form asks.
 
   **`ADR-005` Q1 is now on the critical path**: does signup ask client-vs-provider, or always create a `CLIENT` who upgrades later? `W2-T01` made `roles` `input: false`, so a signup body *cannot* set it — the second path is the only one that works without new API surface. Recommended: always create a client, and let `become-a-pro` be the upgrade (`W2-T05`). Confirm with the operator before building the fork.
 
@@ -483,7 +483,7 @@ for data), so no feature is blocked waiting for an account that is not needed ye
 ### W4 — Jobs & presupuestos (`agent-jobs`)
 - `W4-T01` `[A]` Job posting flow: category, description, photos, location, budget, urgency
 - `W4-T02` `[A]` Job state machine: `DRAFT → OPEN → AWARDED → IN_PROGRESS → COMPLETED / CANCELLED`
-- `W4-T03` `[A]` Quote submission (one active quote per pro per job, validity window)
+- `W4-T03` `[A]` Quote submission (one active quote per pro per job, validity window). **Behind the paywall for free accounts, capped for paying ones** (`BD-03`) — `W6-T02` always said "entitlement check" and this did not; it needs the same, plus the counter `W5-T08` owns
 - `W4-T04` `[A]` Quote comparison UI for the client + accept/reject
 - `W4-T05` `[A]` Award → creates Booking (hand-off to S9)
 - `W4-T06` `[A]` Job-scoped message thread + attachments
@@ -497,8 +497,8 @@ for data), so no feature is blocked waiting for an account that is not needed ye
 - `W5-T04` `[M]` `[B]` Completion → capture → transfer to provider minus platform fee *(human: **decide the take rate**)*
 - `W5-T05` `[M]` `[B]` Cancellation & refund policy engine (time-based tiers) + partial refunds *(human: define the policy)*
 - `W5-T06` `[A]` Dispute/hold flow: freeze payout, admin resolves
-- `W5-T07` `[M]` `[B]` Stripe Billing: FREE/PLUS/PREMIUM tiers, proration, dunning *(human: create products/prices, set pricing)*
-- `W5-T08` `[M]` `[B]` Subscription entitlements service *(human: **define what each tier buys**)*
+- `W5-T07` `[M]` `[B]` Stripe Billing: FREE/PLUS/PREMIUM tiers, proration, dunning *(human: create products/prices, set pricing)*. **Two tier products, not one** (`BD-16`, operator 2026-09-14): providers *and* clients subscribe, and manitas pay less than professionals — so price varies by `ProviderKind`, which the schema already has. Client billing needs no Connect account; `W5-T01` is the payout side and is unrelated
+- `W5-T08` `[M]` `[B]` Subscription entitlements service *(human: **define what each tier buys** — `BD-03`)*. **Entitlements *and usage counters***: `BD-03` puts auctions and presupuestos behind the paywall for free accounts and includes them "with a cap" for paying ones, and a cap is metering — a count per subject per period, with a reset and a race-safe increment — not a boolean anyone can read off a subscription row. Design both, or the cap becomes an afterthought bolted onto a permission check. Covers **clients as well as providers** (`BD-16`)
 - `W5-T09` `[H]` `[B]` Invoices/receipts with Spanish VAT (IVA) + provider payout statements — **needs an accountant**; agent implements only after the rules are written down
 - `W5-T10` `[A]` Ledger table: every money movement double-entered and reconcilable to Stripe
 - `W5-T11` `[A]` Reconciliation job + alert on any mismatch
@@ -749,7 +749,7 @@ rule: build the mechanism, read the value from config, ship nothing with an inve
 |---|---|---|---|
 | `BD-01` | **Escrow — do we hold client funds until job completion?** | `W5-T02`, `W5-T04` | The keystone decision. Yes ⇒ manual capture + delayed transfer, and R1 legal review before M8. No ⇒ pay-on-completion direct to the pro, far simpler, weaker client protection |
 | `BD-02` | Platform take rate — flat %, or reduced for subscribers? | `W5-T04`, `W5-T08` | Drives unit economics and the tier value proposition |
-| `BD-03` | What do PLUS and PREMIUM actually buy? (quote volume, radius, ranking boost, badge, lead priority) | `W5-T07`, `W5-T08`, `W3-T05` | Ranking boost has a fairness cost — decide deliberately |
+| `BD-03` | What do the paid tiers actually buy? | `W5-T07`, `W5-T08`, `W3-T05`, **`W4`**, **`W6`** | **Partly answered (operator, 2026-09-14):** signup is free for everyone and upgrading is a separate flow afterwards; **auctions and presupuestos sit behind the paywall** for free accounts and are included **with a cap** for paying ones; **manitas pay less than professionals**. Still open: the cap's size and period, and whether radius, ranking boost, badge or lead priority are in the bundle at all. Ranking boost has a fairness cost — decide deliberately. **The cap is the load-bearing part**: "included, up to N per period" is *metering*, not a boolean entitlement, and nothing in the backlog counts anything yet |
 | `BD-04` | Cancellation & refund policy tiers | `W5-T05` | Time-based bands, who bears the fee |
 | `BD-05` | Emergency pricing — call-out fee + hourly, or a premium multiplier? | `W7-T01` | Affects the whole urgency flow's UX |
 | `BD-06` | Do **manitas** need verification (ID check), or only licensed pros? | `W8` scope, `W2-T05` | Trust vs. supply-side friction; affects cold start |
@@ -761,6 +761,8 @@ rule: build the mechanism, read the value from config, ship nothing with an inve
 | `BD-12` | Target beta city/region | `W10-T01`, supply recruitment | Also shapes seed data |
 | `BD-13` | VAT/IVA invoicing rules for autónomos + DAC7 reporting | `W5-T09` | Needs an accountant, not a decision alone |
 | `BD-14` | GDPR data retention periods per entity | `W2-T08` | |
+| `BD-16` | **Clients have paid tiers too — what does a paying client get?** | `W5-T07`, `W5-T08`, `W4`, `W6` | **New surface (operator, 2026-09-14):** *"different tiers of subscription for both."* Every tier line in this backlog was written provider-only, and a client subscription is a different product sold to the other side of a two-sided market — the side `R3` says is *not* the scarce one. Note the plumbing differs: Stripe Connect (`W5-T01`) pays providers **out**; a client subscription is plain Stripe Billing **in**, with no Connect account involved. Also asks a cold-start question: charging the demand side before there is supply to meet it |
+| `BD-17` | **How do job requests divide between manitas and professionals?** | `W4-T07`, `W3-T08`, `W8` | **Explicitly open (operator, 2026-09-14):** *"manitas… will have no access to a range of job requests — not sure how to divide still."* One mechanism already exists and may be most of the answer: `W3-T08` licence-gates categories so `requiresLicence` work only surfaces verified pros (`BD-07`). So the real question is what divides them **beyond** licensed categories — job value above a threshold? urgency? client tier? — and whether that is a trust boundary or a commercial one. Worth answering as "what does a manitas *not* see, and why would a client accept that", rather than as a feed filter |
 | `BD-15` | **Landing-page content**: which categories × which cities we publish, and where the prose comes from — headless CMS vs MDX in the repo | `W12-T13`, `W12-T14`, `W12-T17` | The SEO surface, and half the cold-start answer (R3). A *curated* list, never a loop over every pair. Distinct from the W9 back office: a CMS is for marketing content, never for the ops console |
 
 ---
