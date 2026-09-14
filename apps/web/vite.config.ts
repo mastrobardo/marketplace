@@ -83,7 +83,23 @@ export default defineConfig(({ mode }) => {
       ...(mode === 'production' && !withMocks ? [stripMocks()] : []),
       ...(withFaults ? [] : [stripFaults()]),
     ],
-    server: { host: '127.0.0.1', port: 5173 },
+    /**
+     * `/api` reaches the API through the dev server, so the browser sees one origin — `W2-T01`
+     * §4.7, and the local mirror of what `W0-T28` does in preview and production.
+     *
+     * `ADR-005` rule 5 put the session in a `SameSite=Lax` cookie and chose a single origin
+     * precisely so that credentialed CORS is never needed. Configuring CORS for development only
+     * would make the one environment where auth is *developed* the one environment whose cookie
+     * behaviour matches nothing that is deployed — and cross-origin cookie failures are silent.
+     *
+     * `apps/web/src/shared/api.ts` already defaults `baseUrl()` to `/`, so nothing in the app
+     * changes; this is the half of that default that has been missing while every page ran on MSW.
+     */
+    server: {
+      host: '127.0.0.1',
+      port: 5173,
+      proxy: { '/api': { target: 'http://127.0.0.1:3000', changeOrigin: false } },
+    },
     build: { outDir: 'dist', sourcemap: true },
   };
 });

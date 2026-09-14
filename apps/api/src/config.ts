@@ -18,6 +18,31 @@ const EnvSchema = z.object({
   /** Required from the first commit, so that the day a module needs a database is not also the
    *  day the deployment discovers it has no connection string. Nothing connects to it yet. */
   DATABASE_URL: z.url(),
+
+  // ── W2-T01 §4.8 — authentication ──────────────────────────────────────────────────────────
+
+  /**
+   * Signs session tokens and verification links.
+   *
+   * **No default, deliberately.** Every other variable here degrades gracefully when unset; this
+   * one does not. A defaulted auth secret that reaches production is the whole security model
+   * gone, and it fails silently — everything works, and every token is forgeable by anyone who
+   * has read the repository. 32 characters is better-auth's own floor.
+   */
+  BETTER_AUTH_SECRET: z.string().min(32, 'must be at least 32 characters'),
+
+  /**
+   * The origin better-auth builds links against — the URL in a verification or reset email.
+   *
+   * ADR-005 rule 5 says the browser sees one origin, so in every deployed environment this is the
+   * *web* origin, not the API's own host: the link a user clicks has to land on the storefront.
+   */
+  BETTER_AUTH_URL: z.url(),
+
+  /** Mailpit locally (docker-compose, SMTP 1025); OPS-14 replaces the values, not the code. */
+  MAIL_SMTP_HOST: z.string().min(1).default('127.0.0.1'),
+  MAIL_SMTP_PORT: z.coerce.number().int().min(1).max(65535).default(1025),
+  MAIL_FROM: z.email().default('no-reply@marketplace.local'),
 });
 
 export type Config = Readonly<z.infer<typeof EnvSchema>>;

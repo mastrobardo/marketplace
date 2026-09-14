@@ -1,9 +1,18 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { getConfig, loadConfig } from '../src/config.js';
 
-/** The minimum an environment must supply for the API to boot. */
+/**
+ * The minimum an environment must supply for the API to boot.
+ *
+ * Three variables since `W2-T01`, not one: better-auth signs session tokens and verification links
+ * with `BETTER_AUTH_SECRET`, and a *defaulted* auth secret in production is the whole security
+ * model gone, silently. `auth-config.test.ts` owns the assertions about those two; this fixture
+ * just has to satisfy them, the same way a real deployment does.
+ */
 const VALID = {
   DATABASE_URL: 'postgres://marketplace:marketplace_local@127.0.0.1:5432/marketplace',
+  BETTER_AUTH_SECRET: 'test-secret-at-least-thirty-two-chars',
+  BETTER_AUTH_URL: 'http://127.0.0.1:5173',
 };
 
 describe('AC3/AC4/AC6 — a bad environment stops the process, loudly', () => {
@@ -39,7 +48,11 @@ describe('AC5 — optional variables have defaults a developer can rely on', () 
       PORT: 3000,
       LOG_LEVEL: 'info',
       APP_VERSION: '0.0.0-dev',
-      DATABASE_URL: VALID.DATABASE_URL,
+      // Mailpit's, which the local stack already runs (`W2-T01` §4.8).
+      MAIL_SMTP_HOST: '127.0.0.1',
+      MAIL_SMTP_PORT: 1025,
+      MAIL_FROM: 'no-reply@marketplace.local',
+      ...VALID,
     });
   });
 
@@ -57,9 +70,10 @@ describe('AC5 — optional variables have defaults a developer can rely on', () 
 });
 
 describe('AC7 — configuration is a value, read once', () => {
-  // getConfig() reads the real environment, so give it the one required variable.
+  // getConfig() reads the real environment, so give it every required variable — three since
+  // `W2-T01`, and `loadConfig` refuses the whole environment if any is missing.
   beforeAll(() => {
-    process.env['DATABASE_URL'] = VALID.DATABASE_URL;
+    Object.assign(process.env, VALID);
   });
 
   it('is pure: same input, equal output, and the environment is untouched', () => {

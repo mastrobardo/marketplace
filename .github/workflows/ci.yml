@@ -198,14 +198,37 @@ jobs:
 
       # The criteria W0-T02 and W0-T05 could only assert against a running stack. Without this job
       # they are skipped everywhere, forever, and the suite quietly measures less than it claims.
+      #
+      # **Not a list of files.** This named three suites by hand until `W2-T01`, whose 20 live auth
+      # tests would have been written, passed locally, and then never run here — the same shape as
+      # the hand-written migration list that ticket also had to fix, and the fourth instance in this
+      # repo of a subject list that silently measures less than it claims.
+      #
+      # Running the whole `apps/api` suite with `STACK_LIVE=1` derives the set instead: a live
+      # suite added tomorrow runs here on the day it lands. The DOM-free tests run twice — once in
+      # `unit`, once here — which costs a few seconds and removes a whole class of omission.
+      # These suites call `vitest` directly rather than through `pnpm test`, so turbo's
+      # `dependsOn: ["^build"]` never runs and `@marketplace/contracts` resolves to a `dist/` that
+      # does not exist. It went unnoticed while the job named three suites that happened not to
+      # import it; running the whole suite surfaced it immediately.
+      #
+      # `@marketplace/api^...` is turbo for "this package's dependencies, not the package itself" —
+      # derived, so a new workspace dependency is built here without anyone remembering to add it.
+      - name: Build the packages the suites import
+        run: pnpm turbo run build --filter='@marketplace/api^...'
+
       - name: Run the live suites
         run: |
           pnpm vitest run tests/local-stack.test.ts
-          pnpm --filter @marketplace/api exec vitest run tests/db.test.ts
-          pnpm --filter @marketplace/api exec vitest run tests/core-schema.test.ts
+          pnpm --filter @marketplace/api exec vitest run
         env:
           STACK_LIVE: '1'
           DATABASE_URL: postgres://marketplace:marketplace_local@127.0.0.1:5432/marketplace
+          # W2-T01 §4.8 — `loadConfig` refuses the whole environment without these, so every
+          # `apps/api` suite that builds a Config needs them, live or not. Test values: this
+          # database is a throwaway container and no session outlives the job.
+          BETTER_AUTH_SECRET: ci-test-secret-at-least-thirty-two-chars
+          BETTER_AUTH_URL: http://127.0.0.1:5173
 
       # Not `pnpm stack:logs` — that script follows, which would hang the job until its timeout.
       - name: Stack logs

@@ -31,7 +31,15 @@ function migrationFolders(): string[] {
 const LOCAL_URL = 'postgres://marketplace:marketplace_local@127.0.0.1:5432/marketplace';
 
 function config(overrides: Record<string, string> = {}) {
-  return loadConfig({ DATABASE_URL: LOCAL_URL, ...overrides });
+  return loadConfig({
+    DATABASE_URL: LOCAL_URL,
+    // Required since `W2-T01` §4.8, and `loadConfig` refuses the whole environment when one is
+    // missing — which is the behaviour that ticket wants, so the fixture satisfies it rather than
+    // the schema relaxing to suit a test.
+    BETTER_AUTH_SECRET: 'test-secret-at-least-thirty-two-chars',
+    BETTER_AUTH_URL: 'http://127.0.0.1:5173',
+    ...overrides,
+  });
 }
 
 /* ------------------------------------------------------------------------------------------- *
@@ -156,8 +164,26 @@ function seeder(id: string, overrides: Partial<Seeder> = {}): Seeder {
 }
 
 describe('AC13 — an empty registry is a working registry', () => {
-  it('ships no seeders', () => {
-    expect(seeders).toEqual([]);
+  /**
+   * This used to assert `seeders` was literally `[]`, which was true when `W0-T05` shipped the
+   * scaffold and became false the moment a slice did what the registry's own comment invites —
+   * `W2-T01` appended `auth.demo-users`. An assertion that the list is empty is not AC13; AC13 is
+   * that the *pipeline* works with nothing in it, which the test below is.
+   *
+   * What is worth pinning about the registry's contents is that every entry is well-formed, so a
+   * seeder added without an id or a reason fails here rather than at 03:00 against a real database.
+   */
+  it('ships only well-formed seeders', () => {
+    for (const entry of seeders) {
+      expect(entry.id, 'a seeder needs a stable, permanent id — it is the ledger key').toMatch(
+        /^[a-z0-9]+(\.[a-z0-9-]+)+$/,
+      );
+      expect(entry.description.length, `${entry.id} needs a description`).toBeGreaterThan(10);
+      expect(typeof entry.run).toBe('function');
+    }
+    expect(() => {
+      assertUniqueSeederIds([...seeders]);
+    }).not.toThrow();
   });
 
   it('accepts an empty list without complaint', () => {

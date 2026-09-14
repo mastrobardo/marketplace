@@ -1,5 +1,8 @@
 import { buildApp } from './app.js';
+import { buildAuth } from './auth/auth.js';
+import { createMailer } from './auth/mail.js';
 import { ConfigError, getConfig } from './config.js';
+import { getPrismaClient } from './db/client.js';
 
 /**
  * The process entry point: validate the environment, build the app, listen.
@@ -9,7 +12,14 @@ import { ConfigError, getConfig } from './config.js';
  */
 async function main(): Promise<void> {
   const config = getConfig();
-  const app = buildApp({ config });
+
+  // `buildApp` stays usable with no database — `/health` and every existing test depend on that —
+  // so the client, the mailer and better-auth are assembled here, at the one place that already
+  // knows it is a real process talking to a real environment.
+  const prisma = getPrismaClient(config);
+  const auth = buildAuth({ config, prisma, mailer: createMailer({ config }) });
+
+  const app = buildApp({ config, auth });
 
   for (const signal of ['SIGINT', 'SIGTERM'] as const) {
     process.once(signal, () => {

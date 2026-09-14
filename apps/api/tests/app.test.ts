@@ -7,6 +7,10 @@ import { loadConfig } from '../src/config.js';
 
 const ENV = {
   DATABASE_URL: 'postgres://marketplace:marketplace_local@127.0.0.1:5432/marketplace',
+  // Required since `W2-T01`, even though nothing in this file authenticates: `loadConfig` reports
+  // every problem at once and refuses the whole environment, which is the behaviour AC19 wants.
+  BETTER_AUTH_SECRET: 'test-secret-at-least-thirty-two-chars',
+  BETTER_AUTH_URL: 'http://127.0.0.1:5173',
   LOG_LEVEL: 'debug',
   APP_VERSION: '1.2.3-test',
 };
@@ -231,5 +235,49 @@ describe('AC17/AC18 — logs are structured, correlated and credential-free', ()
     const censored = sink.entries().find((entry) => entry['msg'] === 'inspecting headers');
     expect(censored, 'the headers line was not logged at all').toBeDefined();
     expect(JSON.stringify(censored)).toContain('[redacted]');
+  });
+});
+
+/**
+ * `W2-T01` §4.9 — a deployed API that cannot send mail says so at boot.
+ *
+ * `MAIL_SMTP_HOST` defaults to `127.0.0.1`: Mailpit locally, nothing at all on Fly. The failure is
+ * otherwise invisible, because better-auth returns `200` from a sign-up whose verification email
+ * threw — measured on the preview deploy, and pinned in `auth.test.ts`.
+ */
+describe('W2-T01 §4.9 — mail that cannot be delivered is announced at startup', () => {
+  function warningsFrom(env: Record<string, string>): string[] {
+    const sink = new LogSink();
+    buildApp({ config: loadConfig({ ...ENV, ...env }), logDestination: sink });
+    return sink.lines
+      .map((line) => JSON.parse(line) as { level: number; msg: string })
+      .filter((entry) => entry.level >= 40)
+      .map((entry) => entry.msg);
+  }
+
+  it('warns when a deployed environment points mail at this machine', () => {
+    const warnings = warningsFrom({ NODE_ENV: 'production' });
+    expect(warnings.join('\n')).toMatch(/MAIL_SMTP_HOST points at this machine/);
+  });
+
+  it('names OPS-14, so the warning says when it stops being true', () => {
+    expect(warningsFrom({ NODE_ENV: 'production' }).join('\n')).toContain('OPS-14');
+  });
+
+  for (const host of ['localhost', '127.0.0.1', '127.1.2.3', '::1']) {
+    it(`recognises ${host} as this machine`, () => {
+      const warnings = warningsFrom({ NODE_ENV: 'production', MAIL_SMTP_HOST: host });
+      expect(warnings.join('\n')).toMatch(/MAIL_SMTP_HOST/);
+    });
+  }
+
+  it('says nothing when a real host is configured', () => {
+    const warnings = warningsFrom({ NODE_ENV: 'production', MAIL_SMTP_HOST: 'smtp.example.com' });
+    expect(warnings.join('\n')).not.toMatch(/MAIL_SMTP_HOST/);
+  });
+
+  it('says nothing in development, where 127.0.0.1 is Mailpit and correct', () => {
+    const warnings = warningsFrom({ NODE_ENV: 'development' });
+    expect(warnings.join('\n')).not.toMatch(/MAIL_SMTP_HOST/);
   });
 });

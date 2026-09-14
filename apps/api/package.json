@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Fastify API \u2014 health, config, error envelope, request-id and structured logging.",
+  "description": "Fastify API — health, config, error envelope, request-id and structured logging.",
   "main": "dist/server.js",
   "scripts": {
     "dev": "tsx watch src/server.ts",
@@ -23,6 +23,7 @@
     "@marketplace/config": "workspace:*",
     "@marketplace/testing": "workspace:*",
     "@types/node": "^24.7.2",
+    "@types/nodemailer": "^8.0.1",
     "eslint": "^10.10.0",
     "prisma": "^6.19.3",
     "tsup": "^8.5.1",
@@ -33,7 +34,9 @@
   "dependencies": {
     "@marketplace/contracts": "workspace:*",
     "@prisma/client": "^6.19.3",
+    "better-auth": "1.7.4",
     "fastify": "^5.12.3",
+    "nodemailer": "^10.0.9",
     "zod": "^4.5.4"
   },
   "prisma": {

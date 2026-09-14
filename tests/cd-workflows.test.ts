@@ -854,7 +854,12 @@ describe('AC35 — the workbench is deployed beside the app, not instead of it',
 
   it('adds no new secret, because it is not a new service', () => {
     // The M0 four-services rule (Fly, Neon, Cloudflare, Sentry). A second Pages project is a
-    // project; a new secret name here would mean somebody had added a vendor.
+    // project; a new *vendor* secret here would mean somebody had added one.
+    //
+    // `PREVIEW_BETTER_AUTH_SECRET` is not a vendor credential — it is a signing key for a service
+    // we already run, held by us and used by nobody outside the Fly app (`ADR-005`: better-auth is
+    // a library, not a fifth service; that is most of why it was chosen). Listed rather than
+    // pattern-matched away, so a real fifth vendor still fails here.
     const names = [...code(PREVIEW).matchAll(/secrets\.([A-Z0-9_]+)/g)].map((m) => m[1]);
     expect([...new Set(names)].sort()).toEqual([
       'CLOUDFLARE_ACCOUNT_ID',
@@ -862,6 +867,7 @@ describe('AC35 — the workbench is deployed beside the app, not instead of it',
       'FLY_API_TOKEN',
       'NEON_API_KEY',
       'NEON_PROJECT_ID',
+      'PREVIEW_BETTER_AUTH_SECRET',
     ]);
   });
 });
