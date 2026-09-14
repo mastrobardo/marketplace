@@ -281,3 +281,44 @@ describe('W2-T01 §4.9 — mail that cannot be delivered is announced at startup
     expect(warnings.join('\n')).not.toMatch(/MAIL_SMTP_HOST/);
   });
 });
+
+/**
+ * `W2-T10` §2.2. Trusting an address nobody checked is a real cost, taken deliberately and only
+ * because `OPS-14` does not exist yet — so every environment that takes it says so at boot, the
+ * same way `MAIL_SMTP_HOST` does, and for the same reason: the failure is otherwise invisible.
+ */
+describe('W2-T10 §2.2 — a trusted sign-up is announced at startup', () => {
+  function warningsFrom(env: Record<string, string>): string[] {
+    const sink = new LogSink();
+    buildApp({ config: loadConfig({ ...ENV, ...env }), logDestination: sink });
+    return sink.lines
+      .map((line) => JSON.parse(line) as { level: number; msg: string })
+      .filter((entry) => entry.level >= 40)
+      .map((entry) => entry.msg);
+  }
+
+  it('AC6 — warns when a deployed environment trusts the address', () => {
+    const warnings = warningsFrom({ NODE_ENV: 'production', AUTH_TRUST_EMAIL_ON_SIGNUP: 'true' });
+    expect(warnings.join('\n')).toMatch(/AUTH_TRUST_EMAIL_ON_SIGNUP/);
+  });
+
+  it('names OPS-14 on *that* line, so the warning says when it stops being true', () => {
+    // The line, not the joined output: `MAIL_SMTP_HOST`'s warning also names OPS-14 and fires in
+    // the same environment, so asserting over everything would pass without this warning existing.
+    const warnings = warningsFrom({ NODE_ENV: 'production', AUTH_TRUST_EMAIL_ON_SIGNUP: 'true' });
+    const line = warnings.find((message) => message.includes('AUTH_TRUST_EMAIL_ON_SIGNUP'));
+    expect(line, 'no warning mentions the flag').toBeDefined();
+    expect(line).toContain('OPS-14');
+  });
+
+  it('says nothing when it is off', () => {
+    const warnings = warningsFrom({ NODE_ENV: 'production', AUTH_TRUST_EMAIL_ON_SIGNUP: 'false' });
+    expect(warnings.join('\n')).not.toMatch(/AUTH_TRUST_EMAIL_ON_SIGNUP/);
+  });
+
+  it('says nothing in development, where it is the intended local setting', () => {
+    const warnings = warningsFrom({ NODE_ENV: 'development', AUTH_TRUST_EMAIL_ON_SIGNUP: 'true' });
+    expect(warnings.join('\n')).not.toMatch(/AUTH_TRUST_EMAIL_ON_SIGNUP/);
+  });
+});
+

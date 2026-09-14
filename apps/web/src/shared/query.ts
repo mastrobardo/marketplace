@@ -18,7 +18,10 @@
  */
 import { QueryClient } from '@tanstack/react-query';
 import { createContext } from 'react-router';
-import { ApiError, type ApiClient } from './api.js';
+// The class from its own module and the interface as a *type*: a value import from `api.ts` here
+// would rebuild the cycle `api-error.ts` exists to break (`api.ts` → `session.ts` → `query.ts`).
+import { ApiError } from './api-error.js';
+import { type ApiClient } from './api.js';
 
 /** What every loader is handed. One place to add to when a second dependency appears. */
 export interface RouteContext {

@@ -427,3 +427,137 @@ describe('AC26 — a password is never anywhere it can be read later', () => {
     expect(window.location.href).not.toContain('una-contrase');
   });
 });
+
+/* ------------------------------------------------------------------------------------------- *
+ * `W2-T10` — sign-up that signs you in, and the header a signed-in visitor sees
+ * ------------------------------------------------------------------------------------------- */
+
+describe('AC8..AC10 — sign-up chains a sign-in, so the page needs to know nothing', () => {
+  it('AC8 — a usable account lands on the home page, signed in', async () => {
+    // What `AUTH_TRUST_EMAIL_ON_SIGNUP` produces on the server: the account is verified the moment
+    // it is created, so the sign-in the action chains succeeds. The page has no flag and no branch
+    // for it — it asks, and the answer decides.
+    const user = userEvent.setup();
+    const signUp = vi.fn().mockResolvedValue(undefined);
+    const signIn = vi.fn().mockResolvedValue(VERIFIED);
+    renderApp('/es/signup', stubApi({ signUp, signIn, getSession: () => Promise.resolve(null) }));
+    await screen.findByRole('banner');
+
+    await fill(user, es['auth.field.name.label'], 'Ana Pérez');
+    await fill(user, es['auth.field.email.label'], 'ana@example.com');
+    await fill(user, es['auth.field.password.label'], 'una-contraseña-larga');
+    await submit(user, es['auth.signup.submit']);
+
+    await screen.findByText(es['home.title']);
+    expect(signUp).toHaveBeenCalledTimes(1);
+    expect(signIn).toHaveBeenCalledWith({
+      email: 'ana@example.com',
+      password: 'una-contraseña-larga',
+    });
+    const nav = screen.getByRole('navigation', { name: es['nav.primary'] });
+    expect(within(nav).getByText(VERIFIED.name)).toBeDefined();
+  });
+
+  it('AC9 — an account that still needs verifying gets the inbox panel', async () => {
+    const user = userEvent.setup();
+    const signIn = vi.fn().mockRejectedValue(new ApiError(403, 'EMAIL_NOT_VERIFIED'));
+    renderApp('/es/signup', stubApi({ signIn }));
+    await screen.findByRole('banner');
+
+    await fill(user, es['auth.field.name.label'], 'Ana Pérez');
+    await fill(user, es['auth.field.email.label'], 'ana@example.com');
+    await fill(user, es['auth.field.password.label'], 'una-contraseña-larga');
+    await submit(user, es['auth.signup.submit']);
+
+    const panel = await screen.findByTestId('inbox-panel');
+    expect(within(panel).getByRole('button', { name: es['auth.inbox.resend'] })).toBeDefined();
+  });
+
+  it('AC10 — a duplicate address whose password is wrong gets the same panel, not an error', async () => {
+    // The uniform outcome matters: a page that showed something different here would be answering
+    // "does this address already have an account" — which is the question `W2-T01` §4.5 refuses.
+    const user = userEvent.setup();
+    const signIn = vi.fn().mockRejectedValue(new ApiError(401, 'INVALID_EMAIL_OR_PASSWORD'));
+    renderApp('/es/signup', stubApi({ signIn }));
+    await screen.findByRole('banner');
+
+    await fill(user, es['auth.field.name.label'], 'Ana Pérez');
+    await fill(user, es['auth.field.email.label'], 'ya-registrada@example.com');
+    await fill(user, es['auth.field.password.label'], 'una-contraseña-larga');
+    await submit(user, es['auth.signup.submit']);
+
+    expect(await screen.findByTestId('inbox-panel')).toBeDefined();
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+});
+
+describe('AC11..AC13 — the header stops offering what you already have', () => {
+  it('AC11/AC12 — signed in: the name links to the account page, and neither door is offered', async () => {
+    renderApp('/es', stubApi({ getSession: () => Promise.resolve(VERIFIED) }));
+    await screen.findByRole('banner');
+
+    const nav = screen.getByRole('navigation', { name: es['nav.primary'] });
+    const account = await within(nav).findByRole('link', { name: VERIFIED.name });
+    expect(account.getAttribute('href')).toBe('/es/account');
+    expect(within(nav).queryByRole('link', { name: es['nav.login'] })).toBeNull();
+    expect(within(nav).queryByRole('link', { name: es['nav.signup'] })).toBeNull();
+    // Sign-out moved to the account page: rarely used, reached deliberately.
+    expect(within(nav).queryByRole('button', { name: es['nav.logout'] })).toBeNull();
+  });
+
+  it('AC13 — signed out: both doors, and no account link', async () => {
+    renderApp('/es');
+    await screen.findByRole('banner');
+
+    const nav = screen.getByRole('navigation', { name: es['nav.primary'] });
+    expect(within(nav).getByRole('link', { name: es['nav.login'] })).toBeDefined();
+    expect(within(nav).getByRole('link', { name: es['nav.signup'] })).toBeDefined();
+    expect(within(nav).queryByRole('link', { name: es['nav.account'] })).toBeNull();
+  });
+});
+
+describe('AC14..AC17 — the account page', () => {
+  it('AC14 — shows who you are, from the session the shell already loaded', async () => {
+    const getSession = vi.fn().mockResolvedValue(VERIFIED);
+    renderApp('/es/account', stubApi({ getSession }));
+    await screen.findByRole('banner');
+
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toContain(VERIFIED.name);
+    expect(screen.getByText(VERIFIED.email)).toBeDefined();
+    // The shell loaded it; the page reads it. A second request here would be R3 broken on a page
+    // whose whole content is already in the cache.
+    expect(getSession).toHaveBeenCalledTimes(1);
+  });
+
+  it('AC15 — signing out from it returns the header to the signed-out state', async () => {
+    const user = userEvent.setup();
+    const signOut = vi.fn().mockResolvedValue(undefined);
+    renderApp('/es/account', stubApi({ getSession: () => Promise.resolve(VERIFIED), signOut }));
+    await screen.findByRole('banner');
+
+    await submit(user, es['account.signOut']);
+
+    await waitFor(() => expect(signOut).toHaveBeenCalledTimes(1));
+    const nav = screen.getByRole('navigation', { name: es['nav.primary'] });
+    await within(nav).findByRole('link', { name: es['nav.login'] });
+  });
+
+  it('AC16 — signed out, it sends you to the login page', async () => {
+    renderApp('/es/account');
+
+    await screen.findByRole('banner');
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe(es['auth.login.title']);
+  });
+
+  it('AC17 — the plan section is a boundary, not a control', async () => {
+    // `BD-16`/`BD-03` are undecided and `W5-T07`/`W5-T08` are both `[B]`: there is no tier in the
+    // schema, no price, and nothing an "upgrade" button could do. A sentence is the honest control.
+    renderApp('/es/account', stubApi({ getSession: () => Promise.resolve(VERIFIED) }));
+    await screen.findByRole('banner');
+
+    const plan = screen.getByRole('region', { name: es['account.plan.title'] });
+    expect(within(plan).queryByRole('button')).toBeNull();
+    expect(within(plan).queryByRole('link')).toBeNull();
+  });
+});
+
