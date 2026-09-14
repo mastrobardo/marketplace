@@ -29,6 +29,22 @@ export const ProviderRegistration: Story = {
   },
 };
 
+/**
+ * `W2-T09` — the first wall with somewhere to go.
+ *
+ * The story is here so that the *difference* is reviewable: `ProviderRegistration` above is the same
+ * wall before signup existed, and the two side by side are the whole argument for the prop being
+ * optional.
+ */
+export const WithAction: Story = {
+  args: {
+    title: 'Date de alta como profesional',
+    description:
+      'Empieza creando tu cuenta. El alta como profesional se completa después y todavía no está abierta.',
+    action: { label: 'Crea tu cuenta', href: '/es/signup' },
+  },
+};
+
 /** Inside a section that already owns the `h2`. */
 export const AsSubsection: Story = {
   args: { headingLevel: 3 },

@@ -16,7 +16,11 @@ export { Combobox, type ComboboxProps } from './primitives/Combobox.js';
 export { Dialog, type DialogProps } from './primitives/Dialog.js';
 export { Popover, type PopoverProps } from './primitives/Popover.js';
 
-export { AuthWall, type AuthWallProps } from './patterns/auth-wall/AuthWall.js';
+export {
+  AuthWall,
+  type AuthWallAction,
+  type AuthWallProps,
+} from './patterns/auth-wall/AuthWall.js';
 export { Card, type CardProps } from './patterns/card/Card.js';
 export { EmptyState, type EmptyStateProps } from './patterns/results/EmptyState.js';
 export { Pagination, type PaginationProps } from './patterns/results/Pagination.js';

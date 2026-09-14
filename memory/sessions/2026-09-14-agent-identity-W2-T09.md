@@ -2,7 +2,7 @@
 task:    W2-T09
 agent:   agent-identity
 session: 2026-09-14
-status:  open
+status:  closed
 ---
 
 # Session — W2-T09
@@ -13,8 +13,10 @@ The account pages: `/:lang/signup`, `/:lang/login`, `/:lang/verify-email` and pa
 `W2-T01` shipped the auth API and no door to it.
 
 ## Current state
-Branch `W2-T09-account-pages` off `main` at `11b5ed4` (#245 and #246 both merged). Nothing written
-yet beyond this file and the spec.
+**Done.** Branch `W2-T09-account-pages` off `main` at `11b5ed4`. Five routes, the header's doors,
+sign-out, `AuthWall`'s action, 46 i18n keys in both catalogues, spec and run record on the branch.
+`pnpm verify` green: 207/207 in `apps/web`, 250/250 in `packages/ui`. Driven end to end against the
+local stack (API + Mailpit + dev proxy) and then in a real browser.
 
 ## Log
 - 09:00 operator confirmed the two open decisions before any code:
@@ -49,9 +51,25 @@ yet beyond this file and the spec.
   password was right. That is what makes it safe to be distinguishable, and it is the reason the
   login page may branch on it.
 
+- 11:40 three findings that changed the code, all in the run record §4: `ensureQueryData` ignores
+  invalidation (the sign-out bug); an empty `application/json` body is a `400` before better-auth
+  sees it; the session must not retry, because the shell blocks on it. Promoted to
+  `memory/slices/agent-identity.md`.
+- 12:10 two gates earned their keep: `tokens.test.ts` AC6 and the Storybook axe run both failed the
+  new `AuthWall` link on contrast, twice (3.96:1, then 4.19:1). It is the wall's text colour,
+  underlined.
+- 12:30 **found, not fixed**: `apps/web` never imports `@marketplace/ui/styles.css`, so the whole
+  storefront renders with unstyled design-system components. Confirmed by adding the import and
+  re-screenshotting, then reverted — L10. Filed as `W12-T20` and named in the `▶ NEXT` pointer.
+
 ## Blocked / escalations
-None.
+None. One thing for the operator: **`chore-backlog-ticks` has three unmerged commits and is behind
+`main`** — its `W2-T01`/`W2-T02` lines predate #246, so merging it as-is would revert them. Its
+`W2-T09` commit is superseded by this branch.
 
 ## Handoff
-Spec is `docs/specs/S2/W2-T09-account-pages.md`. Next action: the red phase — `apps/web/tests/auth.test.tsx`.
-Do **not** re-derive the better-auth route shapes above or re-ask the two operator decisions.
+Merged? Then the `▶ NEXT` pointer names `W12-T20` (the missing stylesheet, one line plus the review
+of every page it changes), then `W3-T05`/`W3-T07`.
+
+Do **not** re-derive: the better-auth route shapes above, the two operator decisions, or any of the
+six measurements in the run record — all six were made against a running stack, not reasoned.

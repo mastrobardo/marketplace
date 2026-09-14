@@ -25,6 +25,7 @@ import {
 } from '@marketplace/contracts';
 import { type SearchQuery } from '@marketplace/ui';
 import axios, { type AxiosInstance } from 'axios';
+import { SessionSchema, type SessionUser } from './session.js';
 
 /**
  * What a failed call looks like to a loader.
@@ -66,6 +67,44 @@ export interface ApiClient {
    * caller is the one route that can render a 404 instead of sending a request nobody should send.
    */
   getProvider: (id: string, locale: string) => Promise<ProviderProfile>;
+
+  /**
+   * ── The auth calls — `W2-T09` §4.3 ───────────────────────────────────────────────────────────
+   *
+   * Here rather than behind better-auth's client SDK, because ADR-011 §4 asks for exactly one
+   * module the storefront gets data from and this one already has the properties these calls need:
+   * same origin by default (which is what makes the `SameSite=Lax` cookie work through the dev
+   * proxy and through `W0-T28` in preview), one place that turns a transport failure into
+   * `ApiError`, and one file to replace when `W1-T03` generates the real client. A second HTTP
+   * client for five endpoints would put the session cookie on a code path no other call uses — and
+   * the cookie is the part most likely to break.
+   *
+   * The paths are better-auth 1.7.4's own, read from the installed package.
+   */
+
+  /**
+   * Returns **nothing**, and that is the point.
+   *
+   * `W2-T01` §4.5 answers a duplicate signup with a synthetic `200` — a user object with
+   * `roles: null` and no row written — so that the endpoint cannot be used to discover which
+   * addresses are registered. Handing that body back to a page puts the enumeration oracle one
+   * `if` away from the screen. The client sees the request succeeded; nothing else.
+   */
+  signUp: (input: {
+    name: string;
+    email: string;
+    password: string;
+    /** Where the emailed link should land. Relative, so `trustedOrigins` needs no entry. */
+    callbackURL: string;
+  }) => Promise<void>;
+  signIn: (input: { email: string; password: string }) => Promise<void>;
+  signOut: () => Promise<void>;
+  /** `null` for a visitor with no session — better-auth answers `200` with a null body, not `401`. */
+  getSession: () => Promise<SessionUser | null>;
+  /** Works without a session, is floored at 500 ms, and answers `200` for an address it cannot find. */
+  resendVerification: (input: { email: string; callbackURL: string }) => Promise<void>;
+  requestPasswordReset: (input: { email: string; redirectTo: string }) => Promise<void>;
+  resetPassword: (input: { token: string; newPassword: string }) => Promise<void>;
 }
 
 /**
@@ -77,13 +116,36 @@ function baseUrl(): string {
   return typeof configured === 'string' && configured !== '' ? configured : '/';
 }
 
+/**
+ * The machine-readable code a failed response carries, in whichever of the two shapes it arrives.
+ *
+ * Our own API answers `{ error: { code, … } }` (README, `apps/api/src/lib/errors.ts`); better-auth
+ * answers `{ code, message }`. Both are *codes*, and a code is the only field a client may branch
+ * on — `403 EMAIL_NOT_VERIFIED` has to be distinguishable from the `403` an origin check produces,
+ * or the login page tells a user to check their inbox because a proxy header was wrong.
+ *
+ * The status alone is not enough, and the human message is not stable enough. This is the one place
+ * that knows either shape exists.
+ */
+function errorCode(data: unknown): string | undefined {
+  if (typeof data !== 'object' || data === null) return undefined;
+  const body = data as { code?: unknown; error?: { code?: unknown } };
+  if (typeof body.code === 'string') return body.code;
+  if (typeof body.error?.code === 'string') return body.error.code;
+  return undefined;
+}
+
 /** Every call goes through here, so there is one place that turns a transport error into `ApiError`. */
 async function call<T>(request: () => Promise<T>): Promise<T> {
   try {
     return await request();
   } catch (error) {
     if (axios.isAxiosError(error)) {
-      throw new ApiError(error.response?.status, error.message, { cause: error });
+      // The code when there is one, axios's own sentence when there is not — a request that never
+      // got an answer has no code, and inventing one would be claiming to know what the server did.
+      throw new ApiError(error.response?.status, errorCode(error.response?.data) ?? error.message, {
+        cause: error,
+      });
     }
     throw error;
   }
@@ -116,6 +178,50 @@ export function createApiClient(
         http.get<unknown>(`providers/${id}`, { headers: { 'Accept-Language': locale } }),
       );
       return ProviderProfileSchema.parse(response.data);
+    },
+
+    async signUp(input) {
+      // The response is awaited and dropped. See the interface: a client that returns it is a page
+      // that can tell a duplicate from a new account.
+      await call(() => http.post<unknown>('api/auth/sign-up/email', input));
+    },
+
+    async signIn(input) {
+      await call(() => http.post<unknown>('api/auth/sign-in/email', input));
+    },
+
+    async signOut() {
+      /**
+       * `{}` rather than no body, and it is not a formality — measured against the running API.
+       *
+       * Sign-out is the one auth route with nothing to send, and a `POST` that announces
+       * `application/json` with an empty body is rejected by Fastify's own JSON parser before
+       * better-auth sees it: `400 VALIDATION_FAILED, "Body cannot be empty when content-type is set
+       * to 'application/json'"`. (`plugins/auth.ts`'s pass-through parser is registered as `*`,
+       * which Fastify uses only for content types that have no parser of their own — so JSON still
+       * goes through the built-in one.) An empty object costs two bytes and does not depend on
+       * whether the HTTP client felt like sending a content-type header.
+       */
+      await call(() => http.post<unknown>('api/auth/sign-out', {}));
+    },
+
+    async getSession() {
+      const response = await call(() => http.get<unknown>('api/auth/get-session'));
+      // `.catch(null)` in the schema, not a `safeParse` here: a session body we cannot read is a
+      // visitor we cannot identify, which is the signed-out rendering — never a thrown loader.
+      return SessionSchema.parse(response.data)?.user ?? null;
+    },
+
+    async resendVerification(input) {
+      await call(() => http.post<unknown>('api/auth/send-verification-email', input));
+    },
+
+    async requestPasswordReset(input) {
+      await call(() => http.post<unknown>('api/auth/request-password-reset', input));
+    },
+
+    async resetPassword(input) {
+      await call(() => http.post<unknown>('api/auth/reset-password', input));
     },
   };
 }

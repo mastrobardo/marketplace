@@ -62,4 +62,8 @@ export const queryKeys = {
   // differ by ordering alone.
   search: (locale: string, query: string) => ['search', locale, query] as const,
   provider: (locale: string, id: string) => ['provider', locale, id] as const,
+  // No locale in the key: who is signed in does not change with the language, and a locale-keyed
+  // session would re-fetch on every language switch and — worse — keep a stale entry per language
+  // for a sign-out to miss.
+  session: () => ['session'] as const,
 };

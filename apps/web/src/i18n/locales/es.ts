@@ -57,7 +57,8 @@ export const es = {
   'pro.benefits.payment.title': 'Cobro garantizado',
   'pro.benefits.payment.body':
     'El cliente paga por la plataforma antes de que empieces el trabajo.',
-  'pro.pending': 'El registro de profesionales todavía no está abierto.',
+  'pro.pending':
+    'Empieza creando tu cuenta. El alta como profesional se completa después y todavía no está abierta.',
 
   'notFound.title': 'Página no encontrada',
   'notFound.body': 'La dirección que has abierto no existe o ha cambiado.',
@@ -158,6 +159,76 @@ export const es = {
   'error.title': 'Algo ha fallado',
   'error.body': 'No hemos podido cargar esta página. Vuelve a intentarlo en un momento.',
   'error.retry': 'Reintentar',
+
+  'nav.login': 'Acceder',
+  'nav.signup': 'Crear cuenta',
+  'nav.logout': 'Salir',
+  'nav.account': 'Tu cuenta',
+
+  'auth.signup.title': 'Crea tu cuenta',
+  'auth.signup.intro':
+    'Con una cuenta puedes pedir presupuestos y hablar con profesionales. Es gratis.',
+  'auth.signup.submit': 'Crear cuenta',
+  'auth.signup.haveAccount': '\u00bfTienes cuenta? Accede',
+
+  'auth.login.title': 'Accede a tu cuenta',
+  'auth.login.submit': 'Entrar',
+  'auth.login.noAccount': '\u00bfTodav\u00eda no tienes cuenta? Cr\u00e9ala',
+  'auth.login.refused':
+    'No hemos podido acceder con esos datos. Rev\u00edsalos e int\u00e9ntalo otra vez.',
+  'auth.login.forgot': '\u00bfHas olvidado la contrase\u00f1a?',
+
+  'auth.field.name.label': 'Nombre',
+  'auth.field.email.label': 'Correo electr\u00f3nico',
+  'auth.field.password.label': 'Contrase\u00f1a',
+  'auth.field.password.hint': 'Al menos 8 caracteres.',
+  'auth.field.newPassword.label': 'Nueva contrase\u00f1a',
+  'auth.field.confirmPassword.label': 'Repite la contrase\u00f1a',
+
+  'auth.error.name.required': 'Escribe tu nombre.',
+  'auth.error.email.invalid': 'Escribe un correo electr\u00f3nico v\u00e1lido.',
+  'auth.error.password.required': 'Escribe tu contraseña.',
+  'auth.error.password.tooShort': 'La contrase\u00f1a debe tener al menos 8 caracteres.',
+  'auth.error.password.tooLong': 'La contrase\u00f1a no puede pasar de 128 caracteres.',
+  'auth.error.password.mismatch': 'Las dos contrase\u00f1as no coinciden.',
+  'auth.error.failed': 'No hemos podido completar la operación. Inténtalo de nuevo.',
+  'auth.pending': 'Enviando…',
+  'auth.error.unreachable':
+    'No hemos podido conectar con el servicio. Int\u00e9ntalo de nuevo en un momento.',
+
+  'auth.inbox.title': 'Revisa tu correo',
+  'auth.inbox.body':
+    'Hemos enviado un enlace a {{email}}. \u00c1brelo para confirmar tu direcci\u00f3n.',
+  'auth.inbox.spam': 'Si no aparece en unos minutos, mira en la carpeta de spam.',
+  'auth.inbox.resend': 'Enviar otro enlace',
+  'auth.inbox.resent': 'Hemos enviado otro enlace.',
+  'auth.inbox.resendFailed':
+    'No hemos podido enviar el mensaje. El env\u00edo de correo todav\u00eda no est\u00e1 activo en este entorno.',
+
+  'auth.verify.verified.title': 'Tu direcci\u00f3n est\u00e1 confirmada',
+  'auth.verify.verified.body': 'Ya puedes usar tu cuenta.',
+  'auth.verify.verified.continue': 'Ir al inicio',
+  'auth.verify.expired.title': 'Este enlace ha caducado',
+  'auth.verify.expired.body':
+    'Los enlaces duran una hora y solo se pueden usar una vez. Escribe tu direcci\u00f3n y te enviamos otro.',
+
+  'auth.reset.request.title': 'Restablecer la contrase\u00f1a',
+  'auth.reset.request.intro':
+    'Escribe tu direcci\u00f3n y te enviaremos un enlace para elegir una contrase\u00f1a nueva.',
+  'auth.reset.request.submit': 'Enviar enlace',
+  'auth.reset.request.sent.title': 'Revisa tu correo',
+  'auth.reset.request.sent.body':
+    'Si {{email}} tiene una cuenta, encontrar\u00e1s ah\u00ed un enlace para cambiar la contrase\u00f1a.',
+
+  'auth.reset.set.title': 'Elige una contrase\u00f1a nueva',
+  'auth.reset.set.submit': 'Guardar la contrase\u00f1a',
+  'auth.reset.set.done.title': 'Contrase\u00f1a cambiada',
+  'auth.reset.set.done.body': 'Ya puedes acceder con la nueva.',
+  'auth.reset.set.done.login': 'Acceder',
+  'auth.reset.set.invalid.title': 'Este enlace ha caducado',
+  'auth.reset.set.invalid.body':
+    'Los enlaces duran una hora y solo se pueden usar una vez. Pide otro para cambiar la contrase\u00f1a.',
+  'auth.reset.set.invalid.again': 'Pedir otro enlace',
 
   'footer.rights': 'Todos los derechos reservados',
 } as const;

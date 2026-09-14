@@ -23,3 +23,21 @@
   max-width: 52ch;
   color: var(--mp-wall-description-fg);
 }
+
+/* Only rendered when a caller passes an action — which is only where the flow it names exists.
+   `W2-T09` gave `become-a-pro` a signup page to point at; the provider profile still has none. */
+.action {
+  align-self: flex-start;
+  /* The wall's own text colour, underlined, rather than an accent: `tokens.test.ts` AC6 measured
+     both accent roles against this muted surface at 3.96:1 and 4.19:1, and AA wants 4.5:1. A link
+     that is only recognisable by its colour fails a second way anyway — so the underline is doing
+     the work the colour would have done, and doing it for people who cannot see the difference. */
+  color: var(--mp-wall-fg);
+  font-weight: var(--mp-font-weight-bold);
+  text-decoration: underline;
+}
+
+.action:focus-visible {
+  outline: var(--mp-focus-ring-width) solid var(--mp-color-focus);
+  outline-offset: 2px;
+}
