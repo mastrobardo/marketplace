@@ -99,12 +99,16 @@ first symptom is a JSON parse error in a browser nobody has opened yet. So the w
 That single request proves the whole seam — Pages served the worker, the worker resolved the origin,
 Fly answered, and the response came back through the edge.
 
-### 2.5 Preview and staging; production waits for `OPS-16`
+### 2.5 Preview and staging; production has nothing to unify yet
 
-Both deploy `*.pages.dev` + `*.fly.dev`, so both get the worker. **Production is left alone**: it has
-no domain yet (`OPS-16`), nothing to verify against, and the moment it has one the right answer may
-be a Worker route on the real domain rather than this file. Changing it now would be a change
-nobody can test, in the environment where that is least acceptable.
+Both deploy `*.pages.dev` + `*.fly.dev`, so both get the worker.
+
+**Production is left alone, and checking why corrected the assumption behind this section.**
+`release-production.yml` deploys **no web app**: it migrates and promotes the API image, full stop.
+There is no production storefront and no domain (`OPS-16`), so there is no second origin to unify
+and nothing a change there could be verified against. When a production storefront arrives it
+inherits either this worker with a different origin, or a Worker route on the real domain — a
+decision that needs the domain to exist first.
 
 ## 3. Acceptance criteria
 
@@ -124,7 +128,8 @@ nobody can test, in the environment where that is least acceptable.
 - **AC10** In both, the web deploy step precedes the step that sets the API's secrets, which
   precedes the API deploy.
 - **AC11** Both verify `<web-url>/api/health` after deploying and fail if it does not answer.
-- **AC12** `release-production.yml` is unchanged, and the spec says why.
+- **AC12** `release-production.yml` is unchanged — it deploys no web app, asserted, so the
+  exemption rests on a fact rather than on an omission. Preview and staging both still do.
 - **AC13** The preview comment tells a reviewer that auth now works there — and that mail still does
   not, until `OPS-14`.
 

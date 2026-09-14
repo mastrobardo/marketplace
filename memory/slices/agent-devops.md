@@ -238,3 +238,37 @@ Keep it to facts that changed how you would work. Task-specific detail stays in 
   secret to a workflow fails the build until all three agree. Do not weaken that to a subset check.
 - **evidence**: `scripts/deploy/config.ts`; `docs/specs/S0/W0-T07-deploy-environments.run.md` (deviation 8)
 - **status**: active
+
+### One origin is a Pages `_worker.js`, and `BETTER_AUTH_URL` is half of it
+- **id**: MEM-2026-09-14-1
+- **scope**: slice:S0
+- **fact**: `*.pages.dev` cannot carry a Worker route and `_redirects` cannot rewrite to another
+  host with a `200`, so the only mechanism is advanced mode: a `_worker.js` at the root of the
+  deployed directory, which takes over every request and gets the static site as `env.ASSETS`. The
+  API origin has to be baked in at build time — `wrangler pages deploy` cannot set a variable for
+  the deployment it is creating, and a project-level variable is one value shared by every preview
+  while each preview has its own API.
+- **why**: two failures, not one, and fixing only the first leaves it broken: no
+  `Access-Control-Allow-Origin` (better-auth trusts only `BETTER_AUTH_URL`'s origin), and then a
+  `SameSite=Lax` cookie that is never sent because `pages.dev` and `fly.dev` are different
+  registrable domains. `ADR-005` rule 3 chose one origin over credentialed CORS for this reason.
+- **apply**: `BETTER_AUTH_URL` must be the **web** URL — it is both what the emailed links are built
+  from and what `trustedOrigins` defaults to. It is known only after `wrangler pages deploy` prints
+  it, so the web deploys before the API's secrets are set. Never construct a `*.pages.dev` name.
+- **evidence**: `docs/specs/S0/W0-T28-one-origin.run.md` §3, driven through `wrangler pages dev`
+- **status**: active
+
+### A deployed path only reaches the API if it starts with `/api`
+- **id**: MEM-2026-09-14-2
+- **scope**: slice:S0
+- **fact**: with one origin the edge splits traffic by path. `/health` is at the API's **root** and
+  is not reachable through the edge at all (`/api/health` is a 404), and the storefront's
+  `categories`/`search`/`providers/:id` were rootless too — the edge would have answered each with
+  the SPA's `index.html`: a `200` full of HTML that fails as a JSON parse error far from its cause.
+- **why**: nothing catches it locally (the dev proxy forwards `/api` and MSW answers the rest on a
+  wildcard) and nothing catches it in a unit test. It appears only on a deploy.
+- **apply**: every endpoint the browser calls lives under `/api`; `W3-T01`/`W3-T05`/`W3-T07` must
+  mount their routes there. Probe the seam with `/api/auth/get-session`, never `/api/health`.
+- **evidence**: `W0-T28` run record §2.1–§2.2; `apps/web/tests/api-proxy.test.ts` AC7
+- **status**: active
+

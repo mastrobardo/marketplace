@@ -90,36 +90,6 @@ jobs:
       # The API exits on boot without DATABASE_URL (`z.url()`, no default), and setting it on the
       # migrate step alone leaves the container without it. `--stage` holds it for the deploy below.
 
-      # `BETTER_AUTH_URL` is the API's own origin, not the web app's — for now.
-      #
-      # better-auth builds its own endpoint URLs from this, and the verification link it emails is
-      # `<baseURL>/api/auth/verify-email?token=...`, which is served by *this* app. Once `W0-T28`
-      # routes `/api/*` from Cloudflare to Fly, the browser sees one origin and this becomes the web
-      # URL — a one-line change, in the same ticket that makes it true.
-      #
-      # It cannot be the web URL today even if we wanted it: the Pages URL is read back from
-      # wrangler *after* this step, and this workflow refuses to construct a `*.pages.dev` name
-      # rather than guess one (see the comment above the deploy step).
-      - name: Give the API its database and its auth secret
-        run: >
-          flyctl secrets set
-          DATABASE_URL="$DATABASE_URL"
-          BETTER_AUTH_SECRET="$BETTER_AUTH_SECRET"
-          BETTER_AUTH_URL="$BETTER_AUTH_URL"
-          --app marketplace-api-staging --stage
-        env:
-          DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
-          # W2-T01 §4.8: required, no default. Without it the container exits 78 on boot.
-          BETTER_AUTH_SECRET: ${{ secrets.STAGING_BETTER_AUTH_SECRET }}
-          BETTER_AUTH_URL: https://marketplace-api-staging.fly.dev
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-
-      - name: Deploy the API
-        run: flyctl deploy --app marketplace-api-staging --config infra/fly/api.staging.toml --image "$IMAGE"
-        env:
-          IMAGE: registry.fly.io/marketplace-api-staging:${{ github.sha }}
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-
       # `turbo run`, not `pnpm --filter`: the web app became a runtime consumer of
       # `@marketplace/contracts` in `W12-T09`, and that package resolves to `dist/`. `pnpm --filter`
       # builds only the named package, so the import failed to resolve here while passing locally,
@@ -135,18 +105,104 @@ jobs:
           # Drop endpoints from `mocks/handlers.ts` as `W3` lands; remove this line when it is empty.
           # `release-production.yml` deliberately does **not** set it.
           VITE_ENABLE_MOCKS: 'true'
-          VITE_API_URL: https://marketplace-api-staging.fly.dev
+          # `W0-T28`. **Not `VITE_API_URL`**: that pointed the browser at Fly, a different
+          # registrable domain from `*.pages.dev`, so every call was cross-origin and the
+          # `SameSite=Lax` session cookie was never sent. `baseUrl()` now returns `/`, and this is
+          # the origin the edge worker forwards `/api/*` to.
+          VITE_API_ORIGIN: https://marketplace-api-staging.fly.dev
 
       # Direct, for the same reason as deploy-preview.yml: the action cannot install wrangler in a
       # pnpm workspace, and declaring it as a dependency breaks the API image build. AC34.
+      # The URL is read back from wrangler, never constructed — `W0-T24`'s lesson, and `W0-T28`
+      # gives it a second consumer: `BETTER_AUTH_URL` below. A guessed hostname would now do more
+      # than send a reviewer to a dead link; it would hand better-auth a trusted-origin list that
+      # does not contain the site, and every signed-in request would be a `403`.
       - name: Deploy the web app to Cloudflare Pages
+        id: pages
         run: |
+          set -euo pipefail
           npx --yes wrangler@3.90.0 pages deploy apps/web/dist \
             --project-name marketplace-web \
-            --branch main
+            --branch main 2>&1 | tee pages-deploy.log
+
+          urls="$(sed -nE 's|.*(https://[a-zA-Z0-9.-]+\.pages\.dev).*|\1|p' pages-deploy.log)"
+
+          alias_url=""
+          for candidate in $urls; do
+            case "$candidate" in
+              "https://main."*)
+                alias_url="$candidate"
+                break
+                ;;
+            esac
+          done
+          deployment_url="$(printf '%s\n' "$urls" | head -1)"
+          url="${alias_url:-$deployment_url}"
+
+          if [ -z "$url" ]; then
+            echo "wrangler printed no *.pages.dev URL — refusing to hand better-auth a guess." >&2
+            exit 1
+          fi
+          echo "url=$url" >> "$GITHUB_OUTPUT"
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      # `BETTER_AUTH_URL` is the **web** app's origin — `W0-T28`, and it does two jobs at once.
+      #
+      # better-auth builds its own endpoint URLs from it, so the verification link it emails is
+      # `<web>/api/auth/verify-email?token=...`, which the edge worker forwards back here. And it is
+      # what `trustedOrigins` defaults to, so it decides which `Origin` the API accepts on a
+      # cookie-carrying POST. Pointed at Fly, both fail: no `Access-Control-Allow-Origin` for the
+      # Pages host, and a cookie that is never sent because the two are different registrable
+      # domains.
+      #
+      # Which is why the web app is deployed before this step rather than after it.
+      - name: Give the API its database and its auth secret
+        run: >
+          flyctl secrets set
+          DATABASE_URL="$DATABASE_URL"
+          BETTER_AUTH_SECRET="$BETTER_AUTH_SECRET"
+          BETTER_AUTH_URL="$BETTER_AUTH_URL"
+          --app marketplace-api-staging --stage
+        env:
+          DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+          # W2-T01 §4.8: required, no default. Without it the container exits 78 on boot.
+          BETTER_AUTH_SECRET: ${{ secrets.STAGING_BETTER_AUTH_SECRET }}
+          BETTER_AUTH_URL: ${{ steps.pages.outputs.url }}
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
+      - name: Deploy the API
+        run: flyctl deploy --app marketplace-api-staging --config infra/fly/api.staging.toml --image "$IMAGE"
+        env:
+          IMAGE: registry.fly.io/marketplace-api-staging:${{ github.sha }}
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
+      # One request through the edge, for the reason `deploy-preview.yml` spells out: a worker that
+      # failed to deploy is silent — `/api/*` falls through to `index.html` and the first symptom is
+      # a JSON parse error in somebody's browser.
+      - name: Check the API answers through the web origin
+        run: |
+          set -euo pipefail
+          # `/api/auth/get-session` rather than `/health`: the API serves `/health` at its **root**,
+          # and the edge only forwards `/api/*`. Measured, not assumed — `/api/health` is a 404 from
+          # the API's own error envelope. This path is better anyway: a `200` with a `null` body
+          # proves Pages served the worker, the worker resolved the origin, Fly answered, and
+          # better-auth is mounted — which is the whole seam this ticket builds.
+          # curl does the waiting: a machine that has just been deployed may still be starting, and
+          # `--retry-all-errors --retry-connrefused` covers both "not listening yet" and a 5xx while
+          # it boots. A hand-rolled loop would need `sleep`, which this job has no reason to install.
+          status="$(curl -sS --retry 5 --retry-delay 5 --retry-all-errors --retry-connrefused \
+            -o body.json -w '%{http_code}' "$WEB_URL/api/auth/get-session")"
+          echo "$WEB_URL/api/auth/get-session -> $status"
+          echo "body: $(head -c 300 body.json)"
+          if [ "$status" != "200" ]; then
+            echo "The API is not reachable through the web origin: the edge worker did not deploy," >&2
+            echo "or it is pointed at an origin that is not answering." >&2
+            exit 1
+          fi
+        env:
+          WEB_URL: ${{ steps.pages.outputs.url }}
 
       # W12-T06. On merge as well as per pull request, so the workbench a reviewer is sent to for
       # "how is this component supposed to look" is the one that is actually on `main` — not

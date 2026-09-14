@@ -2,7 +2,7 @@
 task:    W0-T28
 agent:   agent-devops
 session: 2026-09-14
-status:  open
+status:  closed
 ---
 
 # Session — W0-T28
@@ -12,7 +12,9 @@ Make a deployed browser see one origin: `/api/*` served from the Pages host, for
 this lands, no deployed environment can sign anybody in.
 
 ## Current state
-Branch `W0-T28-one-origin` off `main` at `11b5ed4`. Spec written; nothing implemented.
+**Done.** `_worker.js` emitted by the web build, both deploy workflows reordered and checking their
+own work, every client path under `/api`. `pnpm verify` green. Driven end to end through a real
+`wrangler pages dev` worker — including the cookie-carrying POST that 403s when origins differ.
 
 ## Log
 - 15:40 the operator hit it live on #247's preview: *"blocked by CORS policy: No
@@ -29,10 +31,24 @@ Branch `W0-T28-one-origin` off `main` at `11b5ed4`. Spec written; nothing implem
   the deployment it creates, and a project-level variable is one value shared by every preview,
   while each preview has its own API.
 
+- 16:20 `/api/health` is a 404: the API serves `/health` at its root and the edge forwards only
+  `/api/*`. Probe is `/api/auth/get-session` — better proof anyway.
+- 16:25 the storefront called `categories`/`search`/`providers/:id` at the root; with one origin
+  those hit the SPA. Prefixed all three, and `AC7` derives the check from the source.
+- 16:35 `AC29` and `AC31` both rejected the smoke step (`cat` is not an installed CLI; `|| true`
+  swallows errors). `curl --retry --retry-all-errors --retry-connrefused` removes the loop, the
+  `sleep` and the `cat` at once.
+- 16:40 `release-production.yml` deploys no web app — the AC that assumed otherwise now asserts the
+  fact instead.
+
 ## Blocked / escalations
 None.
 
 ## Handoff
-Spec is `docs/specs/S0/W0-T28-one-origin.md`. Next action: the red phase —
-`apps/web/tests/api-proxy.test.ts` (load the emitted module and exercise it) and the workflow
-assertions in `tests/cd-workflows.test.ts`.
+Verify the **browser** half on #247's preview once this lands: the auth pages do not exist on
+`main`, so nothing here could click them. Staging is the same change in a workflow only `main` can
+run — the first merge is its first real exercise.
+
+Do not re-derive: the mechanism (advanced-mode `_worker.js`; `*.pages.dev` cannot take a Worker
+route, `_redirects` cannot rewrite cross-host), why the origin is baked at build time, or the
+`/api` prefix rule. All three are in `memory/slices/agent-devops.md`.

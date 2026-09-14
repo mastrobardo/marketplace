@@ -223,43 +223,6 @@ jobs:
           NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
           NEON_PROJECT_ID: ${{ secrets.NEON_PROJECT_ID }}
 
-      # After the migration, not before: the step above may have recreated the branch, and staging
-      # the pre-migration URL would point the deployed API at a database that no longer exists.
-      # `--stage` holds it for the deploy that follows rather than restarting the app twice.
-
-      # `BETTER_AUTH_URL` is the API's own origin, not the web app's — for now.
-      #
-      # better-auth builds its own endpoint URLs from this, and the verification link it emails is
-      # `<baseURL>/api/auth/verify-email?token=...`, which is served by *this* app. Once `W0-T28`
-      # routes `/api/*` from Cloudflare to Fly, the browser sees one origin and this becomes the web
-      # URL — a one-line change, in the same ticket that makes it true.
-      #
-      # It cannot be the web URL today even if we wanted it: the Pages URL is read back from
-      # wrangler *after* this step, and this workflow refuses to construct a `*.pages.dev` name
-      # rather than guess one (see the comment above the deploy step).
-      - name: Give the preview API its own database and auth secret
-        run: >
-          flyctl secrets set
-          DATABASE_URL="$DATABASE_URL"
-          BETTER_AUTH_SECRET="$BETTER_AUTH_SECRET"
-          BETTER_AUTH_URL="https://${APP}.fly.dev"
-          --app "$APP" --stage
-        env:
-          APP: ${{ needs.preflight.outputs.app }}
-          DATABASE_URL: ${{ steps.migrate.outputs.url }}
-          # W2-T01 §4.8. One secret shared by every preview: they are short-lived, torn down with
-          # the branch, and hold no data worth isolating from another preview.
-          BETTER_AUTH_SECRET: ${{ secrets.PREVIEW_BETTER_AUTH_SECRET }}
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-
-      - name: Deploy the API
-        # --ha=false: Fly provisions two machines by default for availability. A preview is one
-        # reviewer clicking a link, and the second machine is pure cost on every open PR.
-        run: flyctl deploy --app "$APP" --config infra/fly/api.preview.toml --remote-only --ha=false --wait-timeout 300
-        env:
-          APP: ${{ needs.preflight.outputs.app }}
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-
       # `turbo run`, not `pnpm --filter`: the web app became a runtime consumer of
       # `@marketplace/contracts` in `W12-T09`, and that package resolves to `dist/`. `pnpm --filter`
       # builds only the named package, so the import failed to resolve here while passing locally,
@@ -275,7 +238,11 @@ jobs:
           # Drop endpoints from `mocks/handlers.ts` as `W3` lands; remove this line when it is empty.
           # `release-production.yml` deliberately does **not** set it.
           VITE_ENABLE_MOCKS: 'true'
-          VITE_API_URL: https://${{ needs.preflight.outputs.app }}.fly.dev
+          # `W0-T28`. **Not `VITE_API_URL`** — that pointed the browser straight at Fly, which is a
+          # different registrable domain from `*.pages.dev`, so every call was cross-origin and the
+          # `SameSite=Lax` session cookie was never sent. `baseUrl()` now returns `/` and this names
+          # the origin the *edge* forwards `/api/*` to, inside `_worker.js`.
+          VITE_API_ORIGIN: https://${{ needs.preflight.outputs.app }}.fly.dev
 
       # Run wrangler directly rather than through cloudflare/wrangler-action. The action bootstraps
       # its own tool with `pnpm add wrangler@…` at the workspace root, which pnpm refuses without
@@ -323,6 +290,77 @@ jobs:
           PAGES_BRANCH: ${{ needs.preflight.outputs.pages-branch }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      # After the migration, not before: the step above may have recreated the branch, and staging
+      # the pre-migration URL would point the deployed API at a database that no longer exists.
+      # `--stage` holds it for the deploy that follows rather than restarting the app twice.
+
+      # `BETTER_AUTH_URL` is the **web** app's origin — `W0-T28`, and it is two things at once.
+      #
+      # better-auth builds its own endpoint URLs from it, so the verification link it emails is
+      # `<web>/api/auth/verify-email?token=...` — which the edge worker forwards back here. And it
+      # is what `trustedOrigins` defaults to, so it decides which `Origin` header the API will
+      # accept on a cookie-carrying POST. Point it at Fly and you get both failures the operator
+      # saw on #247: no `Access-Control-Allow-Origin` for the Pages host, and a cookie that is never
+      # sent because the two hosts are different registrable domains.
+      #
+      # This is why the web app is deployed *before* this step: the URL is read back from wrangler,
+      # never constructed. `W0-T24` learned that a guessed `*.pages.dev` hostname gives every
+      # reviewer a dead link; here it would also give better-auth a trusted-origin list with the
+      # site missing from it.
+      - name: Give the preview API its own database and auth secret
+        run: >
+          flyctl secrets set
+          DATABASE_URL="$DATABASE_URL"
+          BETTER_AUTH_SECRET="$BETTER_AUTH_SECRET"
+          BETTER_AUTH_URL="$WEB_URL"
+          --app "$APP" --stage
+        env:
+          APP: ${{ needs.preflight.outputs.app }}
+          WEB_URL: ${{ steps.pages.outputs.url }}
+          DATABASE_URL: ${{ steps.migrate.outputs.url }}
+          # W2-T01 §4.8. One secret shared by every preview: they are short-lived, torn down with
+          # the branch, and hold no data worth isolating from another preview.
+          BETTER_AUTH_SECRET: ${{ secrets.PREVIEW_BETTER_AUTH_SECRET }}
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
+      - name: Deploy the API
+        # --ha=false: Fly provisions two machines by default for availability. A preview is one
+        # reviewer clicking a link, and the second machine is pure cost on every open PR.
+        run: flyctl deploy --app "$APP" --config infra/fly/api.preview.toml --remote-only --ha=false --wait-timeout 300
+        env:
+          APP: ${{ needs.preflight.outputs.app }}
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
+      # ── The seam, proved ───────────────────────────────────────────────────────────────────
+      #
+      # A worker that failed to deploy is **silent**: `/api/*` falls through to the SPA's
+      # `index.html`, the browser gets HTML where it expected JSON, and the first symptom is a parse
+      # error in a tab nobody has opened yet. One request through the edge proves the whole seam —
+      # Pages served the worker, the worker resolved the origin, Fly answered, and the response came
+      # back — and it is the single check that would have caught `W0-T28` existing at all.
+      - name: Check the API answers through the web origin
+        run: |
+          set -euo pipefail
+          # `/api/auth/get-session` rather than `/health`: the API serves `/health` at its **root**,
+          # and the edge only forwards `/api/*`. Measured, not assumed — `/api/health` is a 404 from
+          # the API's own error envelope. This path is better anyway: a `200` with a `null` body
+          # proves Pages served the worker, the worker resolved the origin, Fly answered, and
+          # better-auth is mounted — which is the whole seam this ticket builds.
+          # curl does the waiting: a machine that has just been deployed may still be starting, and
+          # `--retry-all-errors --retry-connrefused` covers both "not listening yet" and a 5xx while
+          # it boots. A hand-rolled loop would need `sleep`, which this job has no reason to install.
+          status="$(curl -sS --retry 5 --retry-delay 5 --retry-all-errors --retry-connrefused \
+            -o body.json -w '%{http_code}' "$WEB_URL/api/auth/get-session")"
+          echo "$WEB_URL/api/auth/get-session -> $status"
+          echo "body: $(head -c 300 body.json)"
+          if [ "$status" != "200" ]; then
+            echo "The API is not reachable through the web origin: the edge worker did not deploy," >&2
+            echo "or it is pointed at an origin that is not answering." >&2
+            exit 1
+          fi
+        env:
+          WEB_URL: ${{ steps.pages.outputs.url }}
 
       # ── The component workbench (W12-T06) ──────────────────────────────────────────────────
       #
@@ -398,8 +436,20 @@ jobs:
               '### Preview environment',
               '',
               `- Web: ${web}`,
-              `- API: https://${app}.fly.dev/health`,
+              `- API: ${web}/api/health (direct: https://${app}.fly.dev/health)`,
               `- Components: ${workbench}`,
+              '',
+              // `W0-T28`: the API is reachable *through* the web origin now, which is what makes
+              // signing in work here at all. Saying so on the comment is half the point — a
+              // reviewer who does not know it is one origin will test through the Fly host and
+              // conclude that auth is broken.
+              'Signing up and logging in work here: `/api/*` is served from the web origin, so the',
+              'session cookie is first-party.',
+              '',
+              '**Email does not.** There is no mail provider in any deployed environment until',
+              '`OPS-14`, so a sign-up here returns 200, sends nothing, and strands the account —',
+              'sign-in then refuses with `EMAIL_NOT_VERIFIED`. The full flow works locally against',
+              'Mailpit (`pnpm stack:up`).',
               '',
               'Destroyed automatically when this pull request closes.',
             ].join('\n');
