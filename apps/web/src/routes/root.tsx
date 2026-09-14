@@ -12,8 +12,6 @@ import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
 import { SearchBar } from '@marketplace/ui';
 import { type CategorySummary } from '@marketplace/contracts';
-import { Form } from 'react-router';
-import { Button } from '@marketplace/ui';
 import { LanguageSwitcher } from '../shared/LanguageSwitcher.js';
 import { changeLanguage, isLocale, LOCALES } from '../i18n/index.js';
 import { loadCategories } from '../shared/categories.js';
@@ -166,19 +164,18 @@ export function Component(): ReactElement {
             {/* `W2-T09`: the door. `W2-T01` shipped the API and the header still had no way in, so
                 a visitor could only register with `curl`. Rendered from the loader's session rather
                 than from a fetch on mount, which is why it is right on first paint (R3). */}
+            {/* `W2-T10`: the header stops offering what you already have. Signed in, the two
+                doors are gone and the name is the way into the account area — where sign-out now
+                lives, because it is a deliberate, rare act rather than a piece of navigation. */}
             {session === null ? (
               <>
                 <Link to={`/${locale}/login`}>{t('nav.login')}</Link>
                 <Link to={`/${locale}/signup`}>{t('nav.signup')}</Link>
               </>
             ) : (
-              <>
-                <span className="mp-nav__account">{session.name}</span>
-                <Form method="post" action={`/${locale}`}>
-                  <input type="hidden" name="intent" value="signout" />
-                  <Button type="submit">{t('nav.logout')}</Button>
-                </Form>
-              </>
+              <Link className="mp-nav__account" to={`/${locale}/account`}>
+                {session.name}
+              </Link>
             )}
             <LanguageSwitcher locale={locale} />
           </nav>

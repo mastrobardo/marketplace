@@ -65,3 +65,33 @@ Keep it to facts that changed how you would work. Task-specific detail stays in 
   anything a write changes goes through `fetchQuery`.
 - **evidence**: query-core 5.102 `queryClient.ts:75`; `W2-T09` run record §4.1.
 - **status**: active
+
+### `requireEmailVerification` is also the anti-enumeration switch
+- **id**: MEM-2026-09-14-4
+- **scope**: slice:S2
+- **fact**: better-auth 1.7.4 computes
+  `shouldReturnGenericDuplicateResponse = requireEmailVerification || autoSignIn === false`. So the
+  option that forces verification is *also* what makes a duplicate sign-up return the synthetic
+  `200` — and what makes a genuine sign-up return `token: null`, since it skips auto sign-in for
+  everyone.
+- **why**: "just turn verification off so accounts work" looks like a convenience setting and is
+  actually a deletion of `W2-T01` §4.5's enumeration defence, with no error and no symptom.
+- **apply**: to make an account usable without mail, mark it verified in
+  `databaseHooks.user.create.before` (`AUTH_TRUST_EMAIL_ON_SIGNUP`, off by default). Never flip
+  `requireEmailVerification`. `auth-config.test.ts` asserts it stays `true`.
+- **evidence**: `node_modules/better-auth/dist/api/routes/sign-up.mjs:162`; `W2-T10` run record §2
+- **status**: active
+
+### The storefront had a runtime import cycle, and it failed somewhere else
+- **id**: MEM-2026-09-14-5
+- **scope**: slice:S2
+- **fact**: `api.ts → session.ts → query.ts → api.ts`. It crashed `signup.tsx` with
+  `seedSession is not a function` — a real error pointing at an innocent line — while `login.tsx`
+  worked, because a cycle resolves by entry order. `ApiError` now lives in `shared/api-error.ts`.
+- **why**: the symptom names the wrong module, and the 500 page rendered with nothing in the log.
+  An hour went into the wrong hypotheses before the import graph was the thing to look at.
+- **apply**: `query.ts` may import only *types* from `api.ts`. If a shared module needs a value from
+  the API client, that value belongs in its own module.
+- **evidence**: `W2-T10` run record §3
+- **status**: active
+

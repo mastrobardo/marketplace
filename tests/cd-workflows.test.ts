@@ -1120,3 +1120,30 @@ describe('W0-T28 AC12 — production is deliberately untouched, and here is why'
     }
   });
 });
+
+/**
+ * A comment inside a folded scalar is not a comment.
+ *
+ * `run: >` folds every line into one string, and `#` has no special meaning there — so a note
+ * written inside a folded `flyctl secrets set` is handed to `flyctl` as arguments. It looks right
+ * in the diff, parses as valid YAML, and breaks the deploy. Caught once, on `W2-T10`, by a rebase
+ * rather than by a test; this is the test.
+ */
+describe('a folded run: block carries no prose', () => {
+  for (const file of DEPLOY_WORKFLOWS) {
+    it(`${file} never folds a comment into a command`, () => {
+      for (const [name, job] of Object.entries(jobs(file))) {
+        for (const step of steps(job)) {
+          const run = step.run ?? '';
+          // A literal block (`run: |`) keeps its newlines, so `#` there really is a shell comment.
+          // A folded one arrives as a single line — which is exactly when a `#` is a problem.
+          if (run.includes('\n')) continue;
+          expect(
+            run,
+            `${file}:${name} "${step.name ?? ''}" folds a comment into the command`,
+          ).not.toMatch(/\s#\s/);
+        }
+      }
+    });
+  }
+});

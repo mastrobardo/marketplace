@@ -592,4 +592,3 @@ describeLive('W2-T10 — trusting the address at sign-up', () => {
     expect(users).toHaveLength(1);
   });
 });
-

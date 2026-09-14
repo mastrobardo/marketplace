@@ -84,15 +84,27 @@ describe('AC4..AC7 — signup', () => {
     });
   });
 
-  it('AC5 — a duplicate address renders exactly the panel a new account renders', async () => {
-    // The API answers both with a `200`; `signUp` resolves either way because `api.ts` discards the
-    // body (see `auth-api.test.ts`, which is where that is asserted). So this test is about the
-    // *page*: two different addresses, one rendered outcome, and no branch to add a hint to.
+  it('AC5 — every reason a sign-up cannot sign you in renders the same panel', async () => {
+    /**
+     * **Changed by `W2-T10`, and the property it protects is unchanged.**
+     *
+     * `W2-T09` asserted that a duplicate address rendered the same panel as a new account, because
+     * both ended there. Now a sign-up chains a sign-in (`W2-T10` §2.3), so a *usable* account goes
+     * to the home page and only the ones that cannot sign in render the panel — an unverified new
+     * account (`403`) and a duplicate whose password is not the account's (`401`).
+     *
+     * Those two are what must stay indistinguishable: they are the pair that would otherwise
+     * answer "does this address already have an account". Asserted on the rendered text, with the
+     * address masked, because that is what a person and an attacker both actually see.
+     */
     const rendered: string[] = [];
 
-    for (const email of ['nueva@example.com', 'ya-registrada@example.com']) {
+    for (const [email, error] of [
+      ['nueva@example.com', new ApiError(403, 'EMAIL_NOT_VERIFIED')],
+      ['ya-registrada@example.com', new ApiError(401, 'INVALID_EMAIL_OR_PASSWORD')],
+    ] as const) {
       const user = userEvent.setup();
-      renderApp('/es/signup');
+      renderApp('/es/signup', stubApi({ signIn: () => Promise.reject(error) }));
       await screen.findByRole('banner');
 
       await fill(user, es['auth.field.name.label'], 'Ana Pérez');
@@ -101,7 +113,6 @@ describe('AC4..AC7 — signup', () => {
       await submit(user, es['auth.signup.submit']);
 
       const panel = await screen.findByTestId('inbox-panel');
-      // The address itself differs by construction; everything else must not.
       rendered.push(panel.textContent?.replace(email, '<address>') ?? '');
       cleanup();
     }
@@ -390,11 +401,13 @@ describe('AC17..AC21 — the entry points', () => {
     // only go back to the two links if the action seeded `null` from a successful sign-out.
     const getSession = vi.fn().mockResolvedValue(VERIFIED);
     const signOut = vi.fn().mockResolvedValue(undefined);
-    renderApp('/es', stubApi({ getSession, signOut }));
+    // From the account page: `W2-T10` moved the control off the header, and the header is still
+    // what this asserts about — it has to go back to offering the two doors.
+    renderApp('/es/account', stubApi({ getSession, signOut }));
     await screen.findByRole('banner');
-    await screen.findByText(VERIFIED.name);
+    await screen.findByText(VERIFIED.email);
 
-    await submit(user, es['nav.logout']);
+    await submit(user, es['account.signOut']);
 
     await waitFor(() => expect(signOut).toHaveBeenCalledTimes(1));
     const nav = screen.getByRole('navigation', { name: es['nav.primary'] });
@@ -408,14 +421,18 @@ describe('AC17..AC21 — the entry points', () => {
     const user = userEvent.setup();
     const getSession = vi.fn().mockResolvedValue(VERIFIED);
     const signOut = vi.fn().mockRejectedValue(new ApiError(500, 'INTERNAL'));
-    renderApp('/es', stubApi({ getSession, signOut }));
+    renderApp('/es/account', stubApi({ getSession, signOut }));
     await screen.findByRole('banner');
-    await screen.findByText(VERIFIED.name);
+    await screen.findByText(VERIFIED.email);
 
-    await submit(user, es['nav.logout']);
+    await submit(user, es['account.signOut']);
 
     await waitFor(() => expect(getSession).toHaveBeenCalledTimes(2));
-    expect(screen.getByText(VERIFIED.name)).toBeDefined();
+    // Signing out navigates to the home page — the form posts to the layout route, and staying on
+    // a page whose loader requires a session would only bounce to the login form. So the assertion
+    // is the header: the sign-out failed, so the person is still signed in, and it still says so.
+    const nav = screen.getByRole('navigation', { name: es['nav.primary'] });
+    expect(await within(nav).findByRole('link', { name: VERIFIED.name })).toBeDefined();
   });
 
   it('AC19 — a session lookup that fails is signed out, not a broken site', async () => {
@@ -589,4 +606,3 @@ describe('AC14..AC17 — the account page', () => {
     expect(within(plan).queryByRole('link')).toBeNull();
   });
 });
-

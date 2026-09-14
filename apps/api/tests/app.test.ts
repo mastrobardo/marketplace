@@ -321,4 +321,3 @@ describe('W2-T10 §2.2 — a trusted sign-up is announced at startup', () => {
     expect(warnings.join('\n')).not.toMatch(/AUTH_TRUST_EMAIL_ON_SIGNUP/);
   });
 });
-

@@ -223,8 +223,12 @@ describe('W2-T10 §2.2 — trusting the address is opt-in, and off by default', 
   });
 
   it('AC1 — reads the string a deploy actually sets', () => {
-    expect(loadConfig({ ...VALID, AUTH_TRUST_EMAIL_ON_SIGNUP: 'true' }).AUTH_TRUST_EMAIL_ON_SIGNUP).toBe(true);
-    expect(loadConfig({ ...VALID, AUTH_TRUST_EMAIL_ON_SIGNUP: 'false' }).AUTH_TRUST_EMAIL_ON_SIGNUP).toBe(false);
+    expect(
+      loadConfig({ ...VALID, AUTH_TRUST_EMAIL_ON_SIGNUP: 'true' }).AUTH_TRUST_EMAIL_ON_SIGNUP,
+    ).toBe(true);
+    expect(
+      loadConfig({ ...VALID, AUTH_TRUST_EMAIL_ON_SIGNUP: 'false' }).AUTH_TRUST_EMAIL_ON_SIGNUP,
+    ).toBe(false);
   });
 
   /**
@@ -257,4 +261,3 @@ describe('W2-T10 §2.2 — trusting the address is opt-in, and off by default', 
     expect(source).toMatch(/requireEmailVerification:\s*true/);
   });
 });
-

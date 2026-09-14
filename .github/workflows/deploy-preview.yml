@@ -308,12 +308,22 @@ jobs:
       # never constructed. `W0-T24` learned that a guessed `*.pages.dev` hostname gives every
       # reviewer a dead link; here it would also give better-auth a trusted-origin list with the
       # site missing from it.
+      # `W2-T10` §2.2 — `AUTH_TRUST_EMAIL_ON_SIGNUP` below is temporary, and deliberately set here
+      # rather than defaulted in code. There is no mail provider in any deployed environment until
+      # `OPS-14`, so without it every sign-up creates an account nobody can use; with it, an address
+      # is trusted the moment somebody types it. The API warns about it at boot. Delete the line the
+      # day a real sender exists.
+      #
+      # It sits *inside* the folded `run: >` block, so it carries no comment of its own: `#` is not
+      # a comment character inside a folded scalar, and a note written there would be handed to
+      # `flyctl` as arguments.
       - name: Give the preview API its own database and auth secret
         run: >
           flyctl secrets set
           DATABASE_URL="$DATABASE_URL"
           BETTER_AUTH_SECRET="$BETTER_AUTH_SECRET"
           BETTER_AUTH_URL="$WEB_URL"
+          AUTH_TRUST_EMAIL_ON_SIGNUP="true"
           --app "$APP" --stage
         env:
           APP: ${{ needs.preflight.outputs.app }}

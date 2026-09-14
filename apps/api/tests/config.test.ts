@@ -52,6 +52,10 @@ describe('AC5 — optional variables have defaults a developer can rely on', () 
       MAIL_SMTP_HOST: '127.0.0.1',
       MAIL_SMTP_PORT: 1025,
       MAIL_FROM: 'no-reply@marketplace.local',
+      // `W2-T10` §2.2: off unless an environment asks for it, which is the whole safety property.
+      // This assertion is exhaustive on purpose — a new variable has to be added here, which is
+      // where somebody notices that a flag weakening address ownership has grown a default.
+      AUTH_TRUST_EMAIL_ON_SIGNUP: false,
       ...VALID,
     });
   });
