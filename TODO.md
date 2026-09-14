@@ -339,6 +339,17 @@ Promotion happens in the same PR as the work. A separate "memory PR" never gets 
 
 Task IDs are stable — use them as board card titles.
 
+> ### ▶ NEXT — `W2-T09`, the account pages
+>
+> `W2-T01` shipped the auth **API** and no way for a person to reach it: the header has Home and a
+> language switcher, and the two `AuthWall`s lead nowhere. A user cannot register at all today
+> except with `curl`. Operator, 2026-09-14 — *"I need to test the Auth flow, so next task should be
+> the register/login pages."*
+>
+> Everything a cold session needs is on the `W2-T09` line in `W2` below, including the two answers
+> that would otherwise be re-derived: **where React Hook Form meets React Query**, and **what the
+> API actually answers**, measured rather than assumed.
+
 **Execution labels**
 
 | Label | Meaning |
@@ -440,6 +451,23 @@ for data), so no feature is blocked waiting for an account that is not needed ye
 - `W2-T06` `[M]` Phone verification (SMS), required for providers *(human: SMS provider account + credentials)*
 - `W2-T07` `[A]` Rate limiting, brute-force lockout, audit log on auth events — the first two come from `better-auth`; the audit half stays ours, emitting into `AuditRecord` through `W1-T07`'s helper (`ADR-005`)
 - `W2-T08` `[M]` `[B]` GDPR: export my data, delete my account (soft-delete + anonymise) *(human: retention policy decision)*
+- `W2-T09` `[A]` **▶ NEXT — the account pages.** `W2-T01` shipped the API and no door to it: the header nav is Home plus the language switcher, there is no `/login` or `/signup` route, and the `AuthWall`s on `become-a-pro` and the provider profile lead nowhere. That was honest while the form did not exist and now reads as broken. **`M1`'s exit criterion — *"anyone can sign up as client/manitas/pro on staging"* — depends on this and no ticket described it.**
+
+  **Routes**, untranslated (ADR-011 Amendment 1): `/:lang/signup`, `/:lang/login`, `/:lang/verify-email` (where the emailed link lands), and password reset as request + set. **Entry points are half the ticket**: a real link in the header, and `AuthWall` gaining an action so the two existing walls go somewhere.
+
+  **React Hook Form** *(operator, 2026-09-14)*. Nothing is installed today — it is a new dependency. **How it meets React Query, so this is not re-derived:** they do not compete. RHF owns field state and client-side validation; the submit goes through a React Router **`action`**, not `useMutation`. `R3` says data comes from the loader and a component never fetches on mount, and an `action` is the write-side of that same rule — it is also what survives `W12-T14`'s SSR switch, which a `useMutation` in a component would not. React Query's job on a write is invalidating the session query *afterwards*. Validation from zod through `@hookform/resolvers`: `apps/web` may import `packages/contracts` (`packages/ui` may not — `W12-T07`), which is why the forms live in the app and only the primitives come from the design system. **There is no contracts schema for auth input** — better-auth owns those routes and `W1-T03`/`W1-T04` are unstarted — so decide whether the schemas go in `packages/contracts` or stay local.
+
+  **What the API actually answers** — measured against the preview deploy on 2026-09-14, not assumed:
+  - After signup, sign-in is `403 EMAIL_NOT_VERIFIED`. Deliberately *distinguishable*: the address is already known to whoever owns it, and a user must be able to tell "check your inbox" from "you are locked out".
+  - A duplicate signup returns a **synthetic `200`** — a user object with `roles: null` and **no row written**. The page must **not** say "that address is taken". That response exists so the API cannot be used to discover which addresses are registered, and a UI that reports it defeats the whole design.
+  - Every sign-in failure is **byte-identical** — wrong password, suspended, soft-deleted, unknown address. One message, no branching.
+  - **No SMTP in any deployed environment until `OPS-14`.** Operator, 2026-09-14: *"emails are fine as they are for now… having the logic is fine."* So signup returns `200`, no mail arrives, and the account is stranded — sign-in refuses, re-registering is the synthetic `200`, resend is a `500`. The verify page must handle "nothing arrived" without lying, and the resend button will fail in any deployed environment. This works end to end **locally**, against Mailpit.
+
+  **Subscription tiers are coming and this form is not where they go** *(operator, 2026-09-14: tiers exist, all free for now, Stripe will update the flow)*. There is no tier anywhere in the schema today and `W5-T07`/`W5-T08` are both `[B]`. So: **build no tier selection**, and do not shape the account form so that adding a plan step later is a rewrite rather than a new step. A tier belongs to a provider's subscription, not to an account.
+
+  **`ADR-005` Q1 is now on the critical path**: does signup ask client-vs-provider, or always create a `CLIENT` who upgrades later? `W2-T01` made `roles` `input: false`, so a signup body *cannot* set it — the second path is the only one that works without new API surface. Recommended: always create a client, and let `become-a-pro` be the upgrade (`W2-T05`). Confirm with the operator before building the fork.
+
+  Forms on `packages/ui`'s `Field`/`TextInput`/`Button`, axe-gated like every story. **No MSW for auth** (`W2-T01` AC23) — these pages talk to the real API, and the `W2-T01` §4.7 Vite proxy is what makes the cookie work in development. Not blocked on `W2-T02`.
 
 ### W3 — Providers & discovery (`agent-providers`, `agent-discovery`)
 - `W3-T01` `[M]` `[B]` Category tree + seed data for reformas/mantenimiento/urgencias, `requiresLicence` flag *(human: which categories legally require a licence in ES)*
