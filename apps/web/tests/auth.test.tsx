@@ -18,7 +18,7 @@ import { changeLanguage, setupI18n } from '../src/i18n/index.js';
 import { es } from '../src/i18n/locales/es.js';
 import { en } from '../src/i18n/locales/en.js';
 import { ApiError } from '../src/shared/api.js';
-import { renderApp, stubApi, type SessionUser } from './app-harness.js';
+import { renderApp, stubApi, STUB_USER, type SessionUser } from './app-harness.js';
 
 beforeEach(async () => {
   await setupI18n();
@@ -29,12 +29,7 @@ afterEach(() => {
   cleanup();
 });
 
-const VERIFIED: SessionUser = {
-  id: '11111111-1111-4111-8111-111111111111',
-  name: 'Ana Pérez',
-  email: 'ana@example.com',
-  emailVerified: true,
-};
+const VERIFIED: SessionUser = STUB_USER;
 
 /** Fill a labelled text field. Every auth field is a `TextInput`, so one helper covers all of them. */
 async function fill(user: ReturnType<typeof userEvent.setup>, label: string, value: string) {
@@ -197,20 +192,14 @@ describe('AC8..AC10 — login', () => {
     expect(screen.queryByText(es['auth.login.refused'])).toBeNull();
   });
 
-  it('AC10 — a successful sign-in re-reads the session and lands on the home page', async () => {
+  it('AC10 — a successful sign-in lands on the home page, signed in', async () => {
     const user = userEvent.setup();
-    // Signed out until the sign-in succeeds. If the action does not invalidate the session query,
-    // React Query answers the shell's loader from its 60-second cache and the header stays wrong —
-    // which is the bug this assertion exists for.
-    let signedIn = false;
-    const api = stubApi({
-      getSession: () => Promise.resolve(signedIn ? VERIFIED : null),
-      signIn: () => {
-        signedIn = true;
-        return Promise.resolve();
-      },
-    });
-    renderApp('/es/login', api);
+    // `getSession` answers "signed out" *forever* here, deliberately. The header can only end up
+    // showing a name if the action seeded the cache from the sign-in response — a stub that started
+    // returning the user after sign-in would let either implementation pass.
+    const getSession = vi.fn().mockResolvedValue(null);
+    const signIn = vi.fn().mockResolvedValue(VERIFIED);
+    renderApp('/es/login', stubApi({ getSession, signIn }));
     await screen.findByRole('banner');
 
     await fill(user, es['auth.field.email.label'], 'ana@example.com');
@@ -220,6 +209,33 @@ describe('AC8..AC10 — login', () => {
     await screen.findByText(es['home.title']);
     const nav = screen.getByRole('navigation', { name: es['nav.primary'] });
     expect(within(nav).getByText(VERIFIED.name)).toBeDefined();
+  });
+
+  it('AC27 — signing in is one API call', async () => {
+    // Operator, 2026-09-14: *"the whole login flow should be 1 api call"*. It was three — the
+    // shell's session read on page load, the sign-in, and a second session read after the redirect
+    // because the action invalidated. The third is the one this assertion removes: the sign-in
+    // response already carries the user, so asking again asks for what we were just told.
+    const user = userEvent.setup();
+    const getSession = vi.fn().mockResolvedValue(null);
+    const signIn = vi.fn().mockResolvedValue(VERIFIED);
+    renderApp('/es/login', stubApi({ getSession, signIn }));
+    await screen.findByRole('banner');
+
+    // The one the page load costs, before anything is typed. Every page pays it: it is the header
+    // knowing who you are before it paints.
+    expect(getSession).toHaveBeenCalledTimes(1);
+
+    await fill(user, es['auth.field.email.label'], 'ana@example.com');
+    await fill(user, es['auth.field.password.label'], 'una-contraseña-larga');
+    await submit(user, es['auth.login.submit']);
+    await screen.findByText(es['home.title']);
+
+    expect(signIn).toHaveBeenCalledTimes(1);
+    expect(
+      getSession,
+      'the session was re-read after a response that already carried it',
+    ).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -368,17 +384,13 @@ describe('AC17..AC21 — the entry points', () => {
     expect(getSession).toHaveBeenCalledTimes(1);
   });
 
-  it('AC18 — signing out calls the API and the header goes back', async () => {
+  it('AC18 — signing out calls the API, once, and the header goes back', async () => {
     const user = userEvent.setup();
-    let signedIn = true;
-    const signOut = vi.fn().mockImplementation(() => {
-      signedIn = false;
-      return Promise.resolve();
-    });
-    renderApp(
-      '/es',
-      stubApi({ getSession: () => Promise.resolve(signedIn ? VERIFIED : null), signOut }),
-    );
+    // Same shape as AC27: `getSession` keeps insisting the user is signed in, so the header can
+    // only go back to the two links if the action seeded `null` from a successful sign-out.
+    const getSession = vi.fn().mockResolvedValue(VERIFIED);
+    const signOut = vi.fn().mockResolvedValue(undefined);
+    renderApp('/es', stubApi({ getSession, signOut }));
     await screen.findByRole('banner');
     await screen.findByText(VERIFIED.name);
 
@@ -387,6 +399,23 @@ describe('AC17..AC21 — the entry points', () => {
     await waitFor(() => expect(signOut).toHaveBeenCalledTimes(1));
     const nav = screen.getByRole('navigation', { name: es['nav.primary'] });
     await within(nav).findByRole('link', { name: es['nav.login'] });
+    expect(getSession).toHaveBeenCalledTimes(1);
+  });
+
+  it('AC28 — a sign-out that fails asks rather than asserting', async () => {
+    // The asymmetry worth keeping: a call that *failed* has told us nothing, so seeding either
+    // answer would be the client inventing one. Here the re-read is the correct second request.
+    const user = userEvent.setup();
+    const getSession = vi.fn().mockResolvedValue(VERIFIED);
+    const signOut = vi.fn().mockRejectedValue(new ApiError(500, 'INTERNAL'));
+    renderApp('/es', stubApi({ getSession, signOut }));
+    await screen.findByRole('banner');
+    await screen.findByText(VERIFIED.name);
+
+    await submit(user, es['nav.logout']);
+
+    await waitFor(() => expect(getSession).toHaveBeenCalledTimes(2));
+    expect(screen.getByText(VERIFIED.name)).toBeDefined();
   });
 
   it('AC19 — a session lookup that fails is signed out, not a broken site', async () => {
@@ -416,7 +445,7 @@ describe('AC17..AC21 — the entry points', () => {
 describe('AC26 — a password is never anywhere it can be read later', () => {
   it('keeps it out of the URL after a submit', async () => {
     const user = userEvent.setup();
-    renderApp('/es/login', stubApi({ signIn: () => Promise.resolve() }));
+    renderApp('/es/login', stubApi({ signIn: () => Promise.resolve(VERIFIED) }));
     await screen.findByRole('banner');
 
     await fill(user, es['auth.field.email.label'], 'ana@example.com');

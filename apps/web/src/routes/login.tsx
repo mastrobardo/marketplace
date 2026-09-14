@@ -15,7 +15,7 @@ import {
   resendVerification,
   type ResendOutcome,
 } from '../features/auth/actions.js';
-import { invalidateSession } from '../shared/session.js';
+import { seedSession } from '../shared/session.js';
 import { type TranslationKey } from '../i18n/locales/es.js';
 
 /**
@@ -47,10 +47,11 @@ export async function action({
   if (!parsed.success) return { kind: 'failed', message: 'auth.login.refused' };
 
   try {
-    await apiFrom(context).signIn(parsed.data);
-    // React Query's whole job on a write. Without it the shell's loader answers from a 60-second
-    // cache and the header still says "log in" to somebody who just did.
-    await invalidateSession(context);
+    // **One API call, and this is the line that makes it one.** The sign-in response carries the
+    // authenticated user, so seeding the session cache with it means the loader that runs after the
+    // redirect finds warm data instead of asking `get-session` for something we were just told.
+    // Invalidating here would be correct and would cost a second round trip on every login.
+    seedSession(context, await apiFrom(context).signIn(parsed.data));
     return redirect(`/${locale}`);
   } catch (error) {
     if (isUnverified(error)) return { kind: 'unverified', email: parsed.data.email };

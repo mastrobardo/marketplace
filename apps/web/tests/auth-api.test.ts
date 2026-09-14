@@ -95,21 +95,28 @@ describe('the auth calls go where better-auth listens', () => {
   });
 
   it('signs in, out, and reads the session', async () => {
+    const user = {
+      id: '11111111-1111-4111-8111-111111111111',
+      name: 'Ana Pérez',
+      email: 'ana@example.com',
+      emailVerified: true,
+    };
     const { calls, http } = recordingHttp({
-      'api/auth/get-session': {
-        user: {
-          id: '11111111-1111-4111-8111-111111111111',
-          name: 'Ana Pérez',
-          email: 'ana@example.com',
-          emailVerified: true,
-        },
-      },
+      'api/auth/sign-in/email': { redirect: false, token: 'opaque', user },
+      'api/auth/get-session': { user },
     });
     const api = createApiClient(http);
 
-    await api.signIn({ email: 'ana@example.com', password: 'una-contraseña-larga' });
+    const signedIn = await api.signIn({
+      email: 'ana@example.com',
+      password: 'una-contraseña-larga',
+    });
     const session = await api.getSession();
     await api.signOut();
+
+    // The sign-in response carries the user, which is what lets the login action seed the session
+    // cache instead of asking `get-session` for something the server just said.
+    expect(signedIn.name).toBe('Ana Pérez');
 
     expect(calls.map((call) => `${call.method} ${call.url}`)).toEqual([
       'post api/auth/sign-in/email',
