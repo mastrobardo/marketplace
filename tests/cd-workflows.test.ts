@@ -1012,3 +1012,111 @@ describe('W12-T16 — nightly visual regression', () => {
     expect([...new Set(names)].sort()).toEqual(['GITHUB_TOKEN']);
   });
 });
+
+/* ------------------------------------------------------------------------------------------- *
+ * One origin — W0-T28 AC8..AC12
+ *
+ * The browser must reach the API at the *web* origin, or the session cookie is never sent. These
+ * assertions are about the three ways that can quietly stop being true: the SPA being pointed at
+ * the API's own host again, `BETTER_AUTH_URL` drifting back to a `fly.dev` URL, and the deploy
+ * being reordered so the web URL is not known when the API's secrets are set.
+ * ------------------------------------------------------------------------------------------- */
+
+/** The two that serve `*.pages.dev` from a `*.fly.dev` API. Production waits for `OPS-16`. */
+const ONE_ORIGIN = [PREVIEW, STAGING] as const;
+
+describe('W0-T28 AC8 — the SPA is not pointed at the API host', () => {
+  for (const file of ONE_ORIGIN) {
+    it(`${file} builds the web app without VITE_API_URL`, () => {
+      // `baseUrl()` returns `/` when this is unset, which is the whole point: same-origin requests,
+      // no CORS, and a `SameSite=Lax` cookie that is actually sent.
+      expect(code(file)).not.toMatch(/VITE_API_URL/);
+    });
+  }
+});
+
+describe('W0-T28 AC9 — better-auth is told the web origin, not its own', () => {
+  for (const file of ONE_ORIGIN) {
+    it(`${file} takes BETTER_AUTH_URL from the web deploy's output`, () => {
+      const assignments = [...code(file).matchAll(/BETTER_AUTH_URL[:=]\s*"?([^"\n]+)"?/g)].map(
+        (match) => (match[1] ?? '').trim(),
+      );
+
+      expect(assignments.length, `${file} never sets BETTER_AUTH_URL`).toBeGreaterThan(0);
+      for (const value of assignments) {
+        expect(value, `${file} points BETTER_AUTH_URL at the API`).not.toMatch(/fly\.dev/);
+      }
+      // It is the URL wrangler printed, not one this workflow built: `W0-T24` learned that a
+      // guessed `*.pages.dev` hostname gives every reviewer a dead link, and here it would also
+      // give better-auth a trusted-origin list that does not contain the site.
+      expect(code(file)).toMatch(/BETTER_AUTH_URL[:=][^\n]*(steps\.pages\.outputs\.url|WEB_URL)/);
+    });
+  }
+});
+
+describe('W0-T28 AC10 — the web URL exists before the API is told about it', () => {
+  for (const file of ONE_ORIGIN) {
+    it(`${file} deploys the web app, then sets the secrets, then deploys the API`, () => {
+      const body = code(file);
+      const pages = body.indexOf('pages deploy apps/web/dist');
+      const secrets = body.indexOf('flyctl secrets set');
+      const api = body.indexOf('flyctl deploy');
+
+      expect(pages, `${file} never deploys the web app`).toBeGreaterThan(-1);
+      expect(secrets, `${file} never sets the API's secrets`).toBeGreaterThan(-1);
+      expect(api, `${file} never deploys the API`).toBeGreaterThan(-1);
+
+      expect(pages, `${file} sets BETTER_AUTH_URL before it can know it`).toBeLessThan(secrets);
+      expect(secrets, `${file} deploys the API before giving it its secrets`).toBeLessThan(api);
+    });
+  }
+});
+
+describe('W0-T28 AC11 — the deploy proves the seam, rather than assuming it', () => {
+  for (const file of ONE_ORIGIN) {
+    it(`${file} calls the API through the web origin after deploying`, () => {
+      // A worker that failed to deploy is silent: `/api/*` falls through to `index.html`, and the
+      // first symptom is a JSON parse error in a browser nobody has opened. One request through the
+      // edge proves Pages served the worker, the worker resolved the origin, and Fly answered.
+      //
+      // Asserted per *step* rather than over the file: the command wraps across lines, and a regex
+      // that needs them on one line breaks the day somebody reformats it — which is a gate failing
+      // for a reason that has nothing to do with what it guards.
+      const checks = Object.values(jobs(file))
+        .flatMap((job) => steps(job))
+        .filter((step) => {
+          const run = step.run ?? '';
+          return /\bcurl\b/.test(run) && /\/api\/(health|auth\/get-session)/.test(run);
+        });
+
+      expect(checks.length, `${file} never calls the API after deploying`).toBeGreaterThan(0);
+      for (const check of checks) {
+        // Through the *web* origin. Curling the Fly host would prove the API is up and nothing
+        // about the seam this ticket exists to build.
+        // Through the web origin, at a path the API actually serves. `/health` is at the API's
+        // **root** and the edge forwards only `/api/*`, so `/api/health` is a 404 — measured, and
+        // the reason the probe is `/api/auth/get-session`, which answers `200` with `null`.
+        expect(check.run ?? '', `${file} checks the API's own host, not the web origin`).toMatch(
+          /\$\{?WEB_URL\}?\/api\//,
+        );
+        expect(JSON.stringify(check.env ?? {})).toMatch(/steps\.pages\.outputs\.url/);
+      }
+    });
+  }
+});
+
+describe('W0-T28 AC12 — production is deliberately untouched, and here is why', () => {
+  it('deploys no web app at all, so there is no origin to unify yet', () => {
+    // Checked rather than assumed, and the check corrected the assumption: the release promotes the
+    // API image and nothing else. There is no production storefront, no domain (`OPS-16`), and
+    // therefore nothing this ticket could verify a change against. When one arrives it inherits
+    // either this worker with a different origin, or a Worker route on the real domain.
+    expect(code(RELEASE)).not.toMatch(/pages deploy/);
+  });
+
+  it('is the only deploy workflow that does not, so the exemption cannot spread silently', () => {
+    for (const file of ONE_ORIGIN) {
+      expect(code(file), `${file} no longer deploys a web app`).toMatch(/pages deploy/);
+    }
+  });
+});

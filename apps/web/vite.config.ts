@@ -1,5 +1,6 @@
 import react from '@vitejs/plugin-react';
 import { defineConfig, loadEnv, type Plugin } from 'vite';
+import { apiProxyPlugin } from './vite/api-proxy.js';
 
 /**
  * Replace the MSW entry point with a no-op.
@@ -77,11 +78,22 @@ export default defineConfig(({ mode }) => {
    */
   const withFaults = env['VITE_ENABLE_FAULT_ROUTES'] === 'true';
 
+  /**
+   * `W0-T28`. Where a deployed `/api/*` request is forwarded to — the Fly app, named at build time
+   * because `wrangler pages deploy` cannot hand a variable to the deployment it creates.
+   *
+   * Unset everywhere else, which is correct everywhere else: in development the dev server's proxy
+   * below does the same job, and a build with no API to point at must not ship a worker that
+   * forwards to nothing. `vite/api-proxy.ts` emits the file only when this has a value.
+   */
+  const apiOrigin = env['VITE_API_ORIGIN'];
+
   return {
     plugins: [
       react(),
       ...(mode === 'production' && !withMocks ? [stripMocks()] : []),
       ...(withFaults ? [] : [stripFaults()]),
+      apiProxyPlugin(apiOrigin),
     ],
     /**
      * `/api` reaches the API through the dev server, so the browser sees one origin — `W2-T01`

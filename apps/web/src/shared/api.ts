@@ -117,6 +117,20 @@ function baseUrl(): string {
 }
 
 /**
+ * **Every path in this file starts with `api/`, and `W0-T28` is why.**
+ *
+ * One origin means the storefront and the API share a hostname, and the edge decides which is
+ * which by the path: `/api/*` is forwarded to the API and everything else is the application. A
+ * call to `categories` would therefore be answered by the SPA's own `index.html` — a 200 full of
+ * HTML, which fails as a JSON parse error somewhere far from the cause.
+ *
+ * It costs nothing today: better-auth already lives under `/api/auth`, and the three endpoints
+ * below do not exist yet (`W3-T01`, `W3-T05`, `W3-T07`) — the MSW handlers that stand in for them
+ * match on a wildcard prefix. Which is exactly why the prefix goes in now rather than when the
+ * first of them ships and breaks only when deployed.
+ */
+
+/**
  * The machine-readable code a failed response carries, in whichever of the two shapes it arrives.
  *
  * Our own API answers `{ error: { code, … } }` (README, `apps/api/src/lib/errors.ts`); better-auth
@@ -156,7 +170,7 @@ export function createApiClient(
 ): ApiClient {
   return {
     async getCategories(locale) {
-      const response = await http.get<unknown>('categories', {
+      const response = await http.get<unknown>('api/categories', {
         // The endpoint resolves `nameEs`/`nameEn` down to one `name`, so it has to be told which.
         headers: { 'Accept-Language': locale },
       });
@@ -165,7 +179,7 @@ export function createApiClient(
 
     async search(query, locale) {
       const params = new URLSearchParams(Object.entries(query));
-      const response = await http.get<unknown>(`search?${params.toString()}`, {
+      const response = await http.get<unknown>(`api/search?${params.toString()}`, {
         headers: { 'Accept-Language': locale },
       });
       // Parsed on the way in, like the categories call. A client that trusts the wire is a second
@@ -175,7 +189,7 @@ export function createApiClient(
 
     async getProvider(id, locale) {
       const response = await call(() =>
-        http.get<unknown>(`providers/${id}`, { headers: { 'Accept-Language': locale } }),
+        http.get<unknown>(`api/providers/${id}`, { headers: { 'Accept-Language': locale } }),
       );
       return ProviderProfileSchema.parse(response.data);
     },
