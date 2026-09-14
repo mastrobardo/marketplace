@@ -373,3 +373,52 @@ come from real experience.
 - **evidence**: `docs/specs/S10/W12-T05-token-layers-and-themes.run.md` §Findings;
   `apps/web/dist/assets/index-*.css`
 - **status**: active
+
+### A comment inside a folded `run: >` block is not a comment
+- **id**: MEM-2026-09-14-1
+- **scope**: repo
+- **fact**: YAML's folded scalar joins every line into one string, and `#` has no special meaning
+  inside it. A note written in the middle of a folded `flyctl secrets set` is handed to `flyctl` as
+  arguments. It looks correct in the diff, parses as valid YAML, and breaks the deploy.
+- **why**: Every other block in these workflows is `run: |`, where `#` really is a shell comment, so
+  the habit transfers and the failure mode does not. It was caught by a rebase conflict rather than
+  by a test, which means it could equally well have been caught by neither.
+- **apply**: Put the explanation **above the step**, outside the scalar. `cd-workflows.test.ts`
+  ("a folded run: block carries no prose") now fails any `run` that arrives as a single line
+  containing ` # `.
+- **evidence**: `docs/specs/S2/W2-T10-account-page.run.md`; `.github/workflows/deploy-preview.yml`
+  "Give the preview API its own database and auth secret"
+- **status**: active
+
+### A squash-merge takes the branch at that instant — later pushes are lost silently
+- **id**: MEM-2026-09-14-2
+- **scope**: repo
+- **fact**: `W2-T09`'s "login is one API call" commit was pushed at 17:37:43; #247 was
+  squash-merged at 17:35:26. `main` received the account pages **without** it. No warning, no
+  conflict, no red check: the commit stays on the merged branch and nothing looks at it again. It
+  surfaced an hour later as a compile error in unrelated work (`seedSession` missing).
+- **why**: A human reviews and merges while an agent is still pushing to the same PR. Between "it is
+  ready" and a follow-up improvement there is no signal to either side that the two crossed.
+- **apply**: After pushing to a PR that has been announced as ready, check it is still open
+  (`gh pr view <n> --json state,mergedAt`). Before starting new work off `main`, grep `main` for a
+  symbol the last commit added rather than trusting the merge commit's subject. Recovery is a
+  cherry-pick onto the next branch, declared in that PR's description.
+- **evidence**: commit `fd578c2`; PR #247 merged 2026-09-14T15:35:26Z;
+  `docs/specs/S2/W2-T10-account-page.run.md` §1
+- **status**: active
+
+### Deployed, an endpoint that does not start with `/api` is answered by the storefront
+- **id**: MEM-2026-09-14-3
+- **scope**: repo
+- **fact**: `W0-T28` puts the web app and the API on one origin by splitting traffic **at the edge,
+  by path**: a Pages `_worker.js` forwards `/api/*` to Fly and hands everything else to the static
+  site. A request to `/categories` therefore gets `index.html` — a `200` full of HTML that fails as
+  a JSON parse error a long way from its cause, and only in a deployed environment.
+- **why**: It cannot be reproduced locally. The dev server proxies `/api` and MSW answers the rest
+  on a wildcard, so a rootless path works on a laptop and breaks on a preview.
+- **apply**: Every endpoint the browser calls lives under `/api` — on both sides. `W3-T01`,
+  `W3-T05` and `W3-T07` must mount their routes there; `apps/web/tests/api-proxy.test.ts` (AC7)
+  derives the client half from the source and fails a call without the prefix. `/health` stays at
+  the API's root for Fly's own checks and is *not* reachable through the edge.
+- **evidence**: `docs/specs/S0/W0-T28-one-origin.run.md` §2.1–§2.2; PR #248
+- **status**: active
