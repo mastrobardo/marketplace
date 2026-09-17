@@ -586,3 +586,40 @@ come from real experience.
 - **evidence**: `packages/testing/src/builders.ts` `ProviderProfileInput`;
   `packages/testing/tests/factories.test.ts` AC17; `apps/api/tests/provider-live.test.ts`
 - **status**: active — narrowed by `W3-T07`
+
+### `author-identity` fails on merge commits GitHub itself wrote
+
+- **id**: MEM-2026-09-17-16
+- **scope**: repo
+- **fact**: PR #257 failed the gate on `03e8651`, whose committer is `noreply@github.com` — the
+  squash-merge commit GitHub created when #256 was merged through the web UI. Every merge GitHub
+  performs is committed by that address, so any PR whose range contains one fails, and the gate's
+  own remedy (`git rebase --root --exec 'git commit --amend --reset-author'`) cannot be applied to
+  a commit the platform authored on a branch that is already merged.
+- **why**: The range a PR gate walks is "commits not in the base", and a stacked branch — or any
+  branch cut from a branch that was merged on GitHub rather than locally — carries platform merge
+  commits in that range. The gate's premise is that every commit in a PR was written by a human on
+  this machine, which stacking makes false.
+- **apply**: A failure naming `noreply@github.com` on a merge commit is the gate being wrong, not
+  the branch. Do not rewrite it; rebase the branch onto the merged `main` so the platform commit
+  falls out of the range (`git rebase --onto origin/main <old-base> <branch>` — check the tree is
+  unchanged afterwards with `git diff --stat <old-head> HEAD`). Whether the gate should exclude
+  merge commits, or exist at all, is part of `W0-T29`: the operator's steer of 2026-09-17 is that
+  `spec-present` is the gate worth its slot and this one is not.
+- **evidence**: PR #257 `author-identity`; PR #258 passing the same gate after the rebase
+- **status**: active
+
+### `pnpm lint` is not what CI's `lint` job runs
+
+- **id**: MEM-2026-09-17-17
+- **scope**: repo
+- **fact**: The root `lint` script is `turbo run lint && eslint .` — ESLint only. CI's `lint` job
+  runs `pnpm format:check` (`prettier --check .`) as a second step, so a branch with clean ESLint
+  and one mis-wrapped import fails CI while passing every local check.
+- **why**: The job name suggests one tool and runs two. A formatting failure is the cheapest
+  possible red and it still costs a full CI round trip, which on this repo is ~13 minutes.
+- **apply**: `pnpm lint && pnpm format:check` before pushing, or `pnpm format` to fix in place.
+  Prettier's own output is the arbiter — do not hand-wrap to guess it.
+- **evidence**: PR #258's first run (`apps/api/tests/provider.test.ts`); `.github/workflows/ci.yml`
+  `lint` job
+- **status**: active
