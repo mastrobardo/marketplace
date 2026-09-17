@@ -3,6 +3,11 @@ import { createRoot } from 'react-dom/client';
 import { App } from './app/App.js';
 import { setupI18n } from './i18n/index.js';
 import '@marketplace/ui/tokens.css';
+// The component layer. Ordered between the tokens it reads and the shell's own layout classes, so
+// that a page's `.mp-*` rule wins a same-specificity collision with a design-system update.
+// Its absence is why every React Aria control rendered as a raw browser widget from `W12-T01`
+// until `W2-T09` noticed — `ui-package.test.ts` AC3 is what can see it now (`W12-T20`).
+import '@marketplace/ui/styles.css';
 import './styles/app.css';
 
 const container = document.getElementById('root');

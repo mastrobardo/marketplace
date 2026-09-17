@@ -1147,3 +1147,72 @@ describe('a folded run: block carries no prose', () => {
     });
   }
 });
+
+/**
+ * `W12-T20` — the accept path for the route baselines.
+ *
+ * `W12-T16` built regeneration for stories only, and for `main` only. Both assumptions break the
+ * moment a ticket *introduces* a route: its first baselines do not exist, so its own pull request
+ * is red until they do, and there is no way to produce them except on that branch.
+ */
+describe('W12-T20 — regenerating the route baselines', () => {
+  const BASELINES = 'visual-baselines.yml';
+
+  it('builds and serves the storefront the same way the nightly does', () => {
+    const code_ = code(BASELINES);
+
+    // A route shot against a dev server is a picture of a different application: no minification,
+    // no `stripMocks`, no `stripFaults`. The baseline has to come from the build the nightly will
+    // compare against, or every comparison is between two different things.
+    expect(code_).toContain('vite preview');
+    expect(code_, 'without mocks the pages are shot in their degraded shape').toContain(
+      "VITE_ENABLE_MOCKS: 'true'",
+    );
+    expect(code_, 'the 500 page has no URL without this').toContain(
+      "VITE_ENABLE_FAULT_ROUTES: 'true'",
+    );
+    expect(code_, 'the route suite skips itself without a base URL').toContain('WEB_BASE_URL');
+  });
+
+  it('sends the baselines to a branch or to a pull request, never to both', () => {
+    const all = steps(jobs(BASELINES)['regenerate'] as Job);
+    const commit = all.find((step) => step.name === 'Commit the baselines to the branch');
+    const pr = all.find((step) => step.uses?.startsWith('peter-evans/create-pull-request'));
+
+    expect(commit?.if, 'the branch path is unconditional').toBe("inputs.ref != 'main'");
+    expect(pr?.if, 'the pull-request path is unconditional').toBe("inputs.ref == 'main'");
+  });
+
+  it('commits only the images, and as the personal identity', () => {
+    const commit = steps(jobs(BASELINES)['regenerate'] as Job).find(
+      (step) => step.name === 'Commit the baselines to the branch',
+    );
+    const run = commit?.run ?? '';
+
+    // The same reasoning as AC15's `add-paths`: a regeneration run that can commit source is a run
+    // that can launder a code change through a "just the baselines" commit.
+    expect(run).toContain('git add packages/ui/visual/baselines');
+    expect(run, 'the branch commit can carry source').not.toMatch(
+      /git add[^\n]*(packages\/ui\/src|apps\/web)/,
+    );
+
+    // `author-identity` checks the committer as well as the author, and the runner's default is
+    // `github-actions[bot]` — which would fail the branch it just pushed to.
+    expect(run).toContain("git config user.email 'mastrobardo@gmail.com'");
+
+    // On `main` a baselines-only change skips CI deliberately. On a branch, skipping CI would skip
+    // the checks that have to go green before the pull request can merge.
+    expect(run, 'the branch commit skips the checks it exists to turn green').not.toContain(
+      '[skip ci]',
+    );
+  });
+
+  it('gives the pull-request path the same identity', () => {
+    const pr = steps(jobs(BASELINES)['regenerate'] as Job).find((step) =>
+      step.uses?.startsWith('peter-evans/create-pull-request'),
+    );
+
+    expect(String(pr?.with?.['committer'])).toContain('mastrobardo@gmail.com');
+    expect(String(pr?.with?.['author'])).toContain('mastrobardo@gmail.com');
+  });
+});

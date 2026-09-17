@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { execFileSync } from 'node:child_process';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -115,5 +116,83 @@ describe('AC4/AC5 — one shared TypeScript base, extended not copied', () => {
     const base = readJson<TsConfig>(join(root, 'packages/config/tsconfig/base.json'));
     expect(base.compilerOptions?.['strict']).toBe(true);
     expect(base.compilerOptions?.['noUncheckedIndexedAccess']).toBe(true);
+  });
+});
+
+describe('W12-T20 AC7 — `pnpm dev` works on a clean checkout', () => {
+  interface Manifest {
+    scripts?: Record<string, string>;
+    dependencies?: Record<string, string>;
+    exports?: Record<string, unknown>;
+  }
+
+  /**
+   * The workspace packages `apps/web` imports whose exports map points into a build output.
+   *
+   * Derived rather than listed: `@marketplace/ui` is the only one today, and the day a second one
+   * appears is exactly the day nobody remembers to add it here. `W12-T20` exists because a
+   * stylesheet that is never loaded fails silently; a `dist/` export that was never built fails
+   * loudly, but only for whoever cloned the repo — never in CI, where `turbo.json`'s `^build`
+   * already covers it.
+   */
+  function builtDependencies(): string[] {
+    const web = readJson<Manifest>(join(root, 'apps/web/package.json'));
+    return Object.entries(web.dependencies ?? {})
+      .filter(([, version]) => version.startsWith('workspace:'))
+      .map(([name]) => name)
+      .filter((name) => {
+        const dir = join(root, 'packages', name.replace('@marketplace/', ''));
+        let manifest: Manifest;
+        try {
+          manifest = readJson<Manifest>(join(dir, 'package.json'));
+        } catch {
+          return false;
+        }
+        return JSON.stringify(manifest.exports ?? {}).includes('dist/');
+      });
+  }
+
+  it('finds at least one workspace dependency that must be built first', () => {
+    // The completeness half: a derivation that derives nothing makes the assertion below vacuous.
+    expect(
+      builtDependencies().length,
+      'no built workspace dependency was derived — the assertion below proves nothing',
+    ).toBeGreaterThan(0);
+  });
+
+  it('builds every one of them before starting the dev server', () => {
+    const dev = readJson<Manifest>(join(root, 'package.json')).scripts?.['dev'] ?? '';
+
+    // `turbo`, not `pnpm --filter`: the latter does not build a package's own workspace
+    // dependencies, which is how a deploy job failed on a clean checkout while every local build
+    // passed (MEM-2026-09-11-19, and the same note in `nightly-visual.yml`).
+    expect(dev, '`pnpm dev` does not build anything before starting the server').toContain(
+      'turbo run build',
+    );
+
+    const filter = /--filter=(?:'([^']+)'|"([^"]+)"|(\S+))/.exec(dev);
+    expect(filter, '`pnpm dev` runs turbo with no filter').not.toBeNull();
+    const selector = filter?.[1] ?? filter?.[2] ?? filter?.[3] ?? '';
+
+    // Asked of turbo rather than matched as a string: the point is which packages the filter
+    // actually selects, and a selector like `@marketplace/web^...` names none of them literally.
+    const dry = execFileSync(
+      'pnpm',
+      ['turbo', 'run', 'build', `--filter=${selector}`, '--dry=json'],
+      {
+        cwd: root,
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'ignore'],
+      },
+    );
+    const selected = new Set(
+      (JSON.parse(dry) as { tasks?: { package: string }[] }).tasks?.map((t) => t.package) ?? [],
+    );
+
+    for (const name of builtDependencies()) {
+      expect([...selected], `\`pnpm dev\` starts the web app without building ${name}`).toContain(
+        name,
+      );
+    }
   });
 });

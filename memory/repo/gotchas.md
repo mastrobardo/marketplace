@@ -422,3 +422,75 @@ come from real experience.
   the API's root for Fly's own checks and is *not* reachable through the edge.
 - **evidence**: `docs/specs/S0/W0-T28-one-origin.run.md` §2.1–§2.2; PR #248
 - **status**: active
+
+### A CSS Modules class name is in the JS bundle whether or not the stylesheet ever loaded
+- **id**: MEM-2026-09-17-1
+- **scope**: repo
+- **fact**: `W12-T20` asserts that a production build of `apps/web` contains the design system's
+  component rules, with the needles derived from `packages/ui/dist/ui.css`. The first version
+  searched for the bare hash (`_button_u46b4_1`) and reported **8 of 67 missing** on a build with no
+  component CSS in it at all. CSS Modules compile to a JS object mapping each name to its hash, so
+  `dist/index.js` carries every class name of every component the app renders. The eight it found
+  were `Dialog` and `Popover` — unused by the storefront, so tree-shaken out of the JS. The gate was
+  measuring tree-shaking.
+- **why**: A class name is a string in the JS and a selector in the CSS. Searching a whole bundle
+  for the string finds the JS copy first, and the result looks *more* credible than a pass — a
+  specific count of specific missing components reads as a gate that is working.
+- **apply**: When asserting that a stylesheet reached a build, search for `.<name>` — the leading
+  dot appears in a rule and never in a `className` string. More generally: before trusting a new
+  gate, run it against a build you know is broken and check the number it reports is the number you
+  expect, not merely non-zero.
+- **evidence**: `docs/specs/S10/W12-T20-design-system-stylesheet.run.md` Finding 1;
+  `apps/web/tests/ui-package.test.ts` AC3
+- **status**: active
+
+### The storefront rendered no component CSS for seven tickets, and five suites could not see it
+- **id**: MEM-2026-09-17-2
+- **scope**: repo
+- **fact**: `apps/web` imported `@marketplace/ui/tokens.css` and never `@marketplace/ui/styles.css`,
+  so every React Aria control in the product was a raw browser widget from `W12-T01` until `W2-T09`
+  noticed. Axe was green on every route throughout — roles, names and landmarks do not depend on
+  CSS. The story screenshots were green because Storybook's preview always loaded the stylesheet.
+  `ui-package.test.ts` read `main.tsx`'s imports and was satisfied by the tokens line.
+- **why**: Every gate was working. Between them they had no assertion about *appearance* on a
+  **route**, and the only test looking at the entry point checked for the import that was there.
+- **apply**: A page's appearance needs an observer that looks at a page. The route screenshots in
+  `packages/ui/visual/routes.spec.ts` are it — the same list axe walks, so the two cannot drift.
+  When adding a route, `visual-routes.test.ts` fails until the baseline exists; regenerate with
+  `visual-baselines.yml` against the branch (`ref: <branch>`, `subjects: routes`), never locally.
+- **evidence**: `docs/specs/S10/W12-T20-design-system-stylesheet.md` §1;
+  `docs/specs/S10/W12-T20-design-system-stylesheet.run.md`
+- **status**: active
+
+### `create-pull-request` commits as a bot, and `author-identity` fails a bot
+- **id**: MEM-2026-09-17-3
+- **scope**: repo
+- **fact**: `peter-evans/create-pull-request` defaults to `github-actions[bot]` for both author and
+  committer. The `author-identity` gate fails any commit whose author *or* committer is not
+  `mastrobardo@gmail.com`. `visual-baselines.yml` has never tripped this only because its commit
+  carries `[skip ci]`, so the gate never runs on that pull request.
+- **why**: A workflow that writes commits inherits the runner's identity, not the repo's rule. The
+  `[skip ci]` that makes a baselines-only PR cheap is also what hid the mismatch.
+- **apply**: Any workflow that commits sets `user.name`/`user.email` (or the action's
+  `committer`/`author` inputs) to the personal identity. A workflow commit onto a *feature* branch
+  must not carry `[skip ci]` — the checks it skips are the ones it exists to turn green.
+- **evidence**: `.github/workflows/visual-baselines.yml`; `tests/cd-workflows.test.ts` (W12-T20);
+  `scripts/gates/author-identity.ts`
+- **status**: active
+
+### A workflow that pushes with `GITHUB_TOKEN` cannot start the checks on what it pushed
+- **id**: MEM-2026-09-17-4
+- **scope**: repo
+- **fact**: `visual-baselines.yml` committed the route baselines to `W12-T20`'s branch as
+  `mastrobardo@gmail.com`. `CI` and `Deploy preview` were created on the new head with status
+  `action_required` and never started: GitHub does not run workflows for a push made with
+  `GITHUB_TOKEN`. They ran after `gh api -X POST repos/:owner/:repo/actions/runs/:id/approve`.
+- **why**: The recursion guard is unconditional, and a pull request whose required checks have not
+  started looks exactly like one whose checks are queued — there is no red, no message, nothing to
+  notice.
+- **apply**: After any workflow pushes to a branch, look at the run list for the new head and
+  approve the runs, or push a commit yourself. Do not wait for checks that will never start. A PAT
+  or the `OPS-19` GitHub App would remove the step; neither is worth it for baselines.
+- **evidence**: runs 35248674237 / 35248674485 on `W12-T20-design-system-stylesheet`;
+  `docs/specs/S10/W12-T20-design-system-stylesheet.run.md` Finding 5
+- **status**: active

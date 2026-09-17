@@ -718,3 +718,20 @@ Keep it to facts that changed how you would work. Task-specific detail stays in 
 - **evidence**: `packages/ui/visual/index-check.ts`;
   `docs/specs/S10/W12-T16-visual-regression.run.md` §Finding 4
 - **status**: active
+
+### The application loads three stylesheets, in one order, and the order is a decision
+- **id**: MEM-2026-09-17-4
+- **scope**: slice/agent-ui
+- **fact**: `apps/web/src/main.tsx` imports `@marketplace/ui/tokens.css`, then
+  `@marketplace/ui/styles.css`, then `./styles/app.css`. Tokens declare the custom properties;
+  the component layer reads them; the shell's `.mp-*` layout classes come last so a page can win a
+  same-specificity collision with a design-system update. `styles.css` resolves to `dist/ui.css`,
+  a **build output** — which is why `pnpm dev` now builds the workspace packages first.
+- **why**: Between `W12-T01` and `W12-T20` the middle line was missing and nothing rendered as
+  designed. Anyone adding a fourth entry point (`W12-T14`'s SSR root is the next one) has to carry
+  all three, and `ui-package.test.ts` AC2 is what says so.
+- **apply**: A new entry point imports all three, in this order. Never restyle a React Aria control
+  in `app.css` — if a component looks wrong, it is wrong in `packages/ui`, which is ADR-012 §1.
+- **evidence**: `apps/web/src/main.tsx`; `apps/web/tests/ui-package.test.ts` AC1–AC3;
+  `docs/specs/S10/W12-T20-design-system-stylesheet.md` §4.2
+- **status**: active

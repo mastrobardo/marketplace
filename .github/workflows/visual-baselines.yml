@@ -17,6 +17,18 @@
 # `pull-requests: write`. Putting it in the nightly would hand a scheduled job a token it never
 # uses, and putting it in `ci.yml` would widen a pull-request workflow's permissions — a security
 # regression traded for a file.
+#
+# `W12-T20` adds the second subject and the second destination:
+#
+#   - **Routes as well as stories.** The storefront's pages now have baselines too, which means the
+#     storefront has to be built and served here exactly as `nightly-visual.yml` builds and serves
+#     it — same flags, same preview server. A route shot against a dev server is a picture of a
+#     different application.
+#   - **A branch as well as `main`.** A ticket that *introduces* a route owns its first baselines,
+#     and they belong in that ticket's pull request where they are reviewed with the change that
+#     caused them. Opening a second pull request into a feature branch would be a stacked PR, which
+#     this repo does not do, so the branch case commits straight to the branch — it is not
+#     protected, and its pull request is the review. `main` keeps the pull-request path unchanged.
 
 name: visual-baselines
 
@@ -27,6 +39,17 @@ on:
         description: 'Why the baselines are being regenerated (goes in the PR body)'
         required: true
         type: string
+      ref:
+        description: 'Branch to regenerate on. `main` opens a pull request; any other branch is committed to directly.'
+        required: false
+        default: main
+        type: string
+      subjects:
+        description: 'Which baselines to regenerate'
+        required: false
+        default: both
+        type: choice
+        options: [both, stories, routes]
 
 permissions:
   contents: read
@@ -54,6 +77,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.ref }}
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v5
         with:
@@ -66,17 +91,78 @@ jobs:
         run: pnpm turbo run build --filter=@marketplace/ui
       - run: pnpm --filter @marketplace/ui build:storybook
 
+      # The same build the nightly shoots against — a real production build behind `vite preview`,
+      # with the two flags that give the mocked pages their data and the 500 page a URL. Skipped
+      # when only the stories are being regenerated, because then nothing needs a storefront.
+      - name: Build the storefront
+        if: inputs.subjects != 'stories'
+        run: pnpm turbo run build --filter=@marketplace/web
+        env:
+          VITE_ENABLE_MOCKS: 'true'
+          VITE_ENABLE_FAULT_ROUTES: 'true'
+
+      - name: Serve the storefront
+        if: inputs.subjects != 'stories'
+        run: |
+          pnpm --filter @marketplace/web exec vite preview --port 4173 --host 127.0.0.1 &
+          npx --yes wait-on@8 http://127.0.0.1:4173 --timeout 60000
+
       # `--update-snapshots` overrides the config's `updateSnapshots: 'none'`, which is the only
-      # place that override is legitimate. Only the story screenshots: the axe pass has no baselines
-      # and a failing route should not be quietly re-blessed by a regeneration run.
+      # place that override is legitimate.
+      #
+      # The axe assertions have no baselines to update, and `--update-snapshots` does not re-bless
+      # them: a route whose axe pass fails still fails this run, which is the intended behaviour —
+      # a regeneration must not launder an accessibility regression into a committed image.
       - name: Regenerate
-        run: >
-          pnpm --filter @marketplace/ui exec playwright test visual/stories.spec.ts
-          --update-snapshots
+        env:
+          SUBJECTS: ${{ inputs.subjects }}
+          # Absent for a stories-only run, which is what makes the route suite skip itself rather
+          # than fail on a server that is not there.
+          WEB_BASE_URL: ${{ inputs.subjects != 'stories' && 'http://127.0.0.1:4173' || '' }}
+        run: |
+          case "$SUBJECTS" in
+            stories) spec=visual/stories.spec.ts ;;
+            routes)  spec=visual/routes.spec.ts ;;
+            *)       spec= ;;
+          esac
+          pnpm --filter @marketplace/ui exec playwright test $spec --update-snapshots
+
+      # A feature branch: commit to it. The pull request that introduces the route is the review,
+      # and a second pull request into a branch would be the stacked PR this repo has been burned
+      # by twice.
+      #
+      # No `[skip ci]` here, deliberately — on `main` that tag keeps a baselines-only change from
+      # spending a CI run, but on a branch it would skip the very checks that have to turn green
+      # before the pull request can merge (`visual-routes.test.ts` is red until these images exist).
+      - name: Commit the baselines to the branch
+        if: inputs.ref != 'main'
+        env:
+          REASON: ${{ inputs.reason }}
+          REF: ${{ inputs.ref }}
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          # The identity the `author-identity` gate requires of every commit, including this one
+          # (docs/board/IDENTITY.md). The default `github-actions[bot]` would fail the branch.
+          git config user.name 'mastrobardo'
+          git config user.email 'mastrobardo@gmail.com'
+
+          # Only the images and the fingerprint: a regeneration run that can commit source is a run
+          # that can launder a code change through a "just the baselines" commit.
+          git add packages/ui/visual/baselines packages/ui/visual/fingerprint.json
+          if git diff --cached --quiet; then
+            echo 'No baseline changed — nothing to commit.'
+            exit 0
+          fi
+          git commit -m 'chore(visual): regenerate screenshot baselines' -m "$REASON"
+          git push origin "HEAD:$REF"
 
       - name: Open the pull request
+        if: inputs.ref == 'main'
         uses: peter-evans/create-pull-request@v7
         with:
+          # Same identity rule as the branch path above, for the same gate.
+          committer: 'mastrobardo <mastrobardo@gmail.com>'
+          author: 'mastrobardo <mastrobardo@gmail.com>'
           branch: visual-baselines/${{ github.run_id }}
           base: main
           # Never stacked, never a push to main: every PR in this repo targets `main` (standing
