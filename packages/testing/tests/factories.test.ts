@@ -208,10 +208,30 @@ describe('AC3..AC7 — a builder produces a complete, distinct, ordered row', ()
 
   it('AC3 — the provider defaults satisfy the schema CHECKs, not merely its types', () => {
     const provider = buildProviderProfile();
+    // The three nullable columns default to a set value, so the default row is an ordinary
+    // bookable provider. A CHECK constrains a value, not a null, so this comes first.
+    expect(provider.serviceRadiusMetres).not.toBeNull();
+    expect(provider.hourlyRateCents).not.toBeNull();
     // CHECK (service_radius_metres > 0 AND <= 200000) and CHECK (hourly_rate_cents >= 0).
-    expect(provider.serviceRadiusMetres).toBeGreaterThan(0);
-    expect(provider.serviceRadiusMetres).toBeLessThanOrEqual(200_000);
-    expect(provider.hourlyRateCents).toBeGreaterThanOrEqual(0);
+    expect(provider.serviceRadiusMetres ?? 0).toBeGreaterThan(0);
+    expect(provider.serviceRadiusMetres ?? 0).toBeLessThanOrEqual(200_000);
+    expect(provider.hourlyRateCents ?? -1).toBeGreaterThanOrEqual(0);
+  });
+
+  it('AC17 — the provider builder can express every nullable column the schema has', () => {
+    // `MEM-2026-09-17-10`: typed non-nullable, these three could not be expressed at all, and both
+    // `W3-T05` and `W3-T07` reached past the factories to Prisma to build the rows they turn on.
+    // A null radius is *unsearchable*, a null rate is quote-only, and a set `baseAddressId` is the
+    // join the geo search runs through — none of them edge cases.
+    const unsearchable = buildProviderProfile({ serviceRadiusMetres: null });
+    const quoteOnly = buildProviderProfile({ hourlyRateCents: null });
+    const based = buildProviderProfile({ baseAddressId: '3f2504e0-4f89-41d3-9a0c-0305e82c3301' });
+
+    expect(unsearchable.serviceRadiusMetres).toBeNull();
+    expect(quoteOnly.hourlyRateCents).toBeNull();
+    expect(based.baseAddressId).toBe('3f2504e0-4f89-41d3-9a0c-0305e82c3301');
+    // The default is the state a provider is actually in before they set one.
+    expect(buildProviderProfile().baseAddressId).toBeNull();
   });
 
   it('AC4 — overrides replace defaults and leave everything else alone', () => {

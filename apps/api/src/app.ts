@@ -13,6 +13,8 @@ import { generateRequestId, REQUEST_ID_HEADER, requestIdHook } from './plugins/r
 import { healthRoutes } from './routes/health.js';
 import { searchRoutes } from './modules/search/routes.js';
 import { type SearchRepository } from './modules/search/repository.js';
+import { providerRoutes } from './modules/providers/routes.js';
+import { type ProviderRepository } from './modules/providers/repository.js';
 
 export interface BuildAppOptions {
   config: Config;
@@ -35,6 +37,13 @@ export interface BuildAppOptions {
    * tests pass a recording stub; a build with neither simply has no `/api/search`.
    */
   search?: SearchRepository;
+  /**
+   * The provider-profile data layer (`W3-T07`).
+   *
+   * Optional for the reason `search` is: `buildApp` must stay buildable without a database. A build
+   * with neither simply has no `/api/providers/:id`.
+   */
+  providers?: ProviderRepository;
 }
 
 /**
@@ -66,6 +75,7 @@ export function buildApp({
   logDestination,
   auth,
   search,
+  providers,
 }: BuildAppOptions): FastifyInstance {
   const app = Fastify({
     logger: {
@@ -107,6 +117,11 @@ export function buildApp({
    */
   if (search !== undefined) {
     app.register(searchRoutes({ repository: search }), { prefix: '/api' });
+  }
+
+  /** `W3-T07`, under the same prefix and for the same reason. */
+  if (providers !== undefined) {
+    app.register(providerRoutes({ repository: providers }), { prefix: '/api' });
   }
 
   /**

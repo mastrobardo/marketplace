@@ -29,7 +29,7 @@ tools: Read, Write, Edit, Bash, Grep, Glob
 
 ## Your boundaries
 **You may write:**
-- `apps/api/src/modules/professionals/**`
+- `apps/api/src/modules/providers/**`
 - `apps/web/src/features/{provider-profile,portfolio,availability}/**`
 
 **You must not write:**

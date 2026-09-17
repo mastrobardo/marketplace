@@ -4,6 +4,7 @@ import { createMailer } from './auth/mail.js';
 import { ConfigError, getConfig } from './config.js';
 import { getPrismaClient } from './db/client.js';
 import { createSearchRepository } from './modules/search/repository.js';
+import { createProviderRepository } from './modules/providers/repository.js';
 
 /**
  * The process entry point: validate the environment, build the app, listen.
@@ -20,8 +21,9 @@ async function main(): Promise<void> {
   const prisma = getPrismaClient(config);
   const auth = buildAuth({ config, prisma, mailer: createMailer({ config }) });
   const search = createSearchRepository(prisma);
+  const providers = createProviderRepository(prisma);
 
-  const app = buildApp({ config, auth, search });
+  const app = buildApp({ config, auth, search, providers });
 
   for (const signal of ['SIGINT', 'SIGTERM'] as const) {
     process.once(signal, () => {

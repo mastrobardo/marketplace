@@ -31,13 +31,24 @@ export interface ClientProfileInput {
   updatedAt: Date;
 }
 
+/**
+ * Three of these are nullable, and the nullability is the interesting part (`MEM-2026-09-17-10`).
+ *
+ * `schema.prisma` makes `service_radius_metres`, `hourly_rate_cents` and `base_address_id` all
+ * optional, and each null is a distinct state the discovery and provider slices are built on: a
+ * null radius means *unsearchable* (neither zero nor infinite), a null rate is what `mode=booking`
+ * filters on, and `baseAddressId` is the join the whole geo search runs through. Typed
+ * non-nullable, these factories could not build any of those rows — `W3-T05` and `W3-T07` both
+ * reached past them to Prisma before this was widened.
+ */
 export interface ProviderProfileInput {
   id: string;
   userId: string;
   kind: ProviderKind;
   displayName: string;
-  serviceRadiusMetres: number;
-  hourlyRateCents: number;
+  baseAddressId: string | null;
+  serviceRadiusMetres: number | null;
+  hourlyRateCents: number | null;
   ratingCount: number;
   createdAt: Date;
   updatedAt: Date;
@@ -126,7 +137,13 @@ export function buildProviderProfile(
     // missing licence check fails the test rather than passing it.
     kind: 'MANITAS',
     displayName: `Proveedor ${String(n)}`,
-    // CHECK (service_radius_metres > 0 AND <= 200000); CHECK (hourly_rate_cents >= 0).
+    // Null until set. A provider with no base is not searchable at all (`schema.prisma:213`), so
+    // the default is the state a new provider is actually in; a test that needs a searchable
+    // provider says so, and `W3-T02` is what stops the state existing in the product.
+    baseAddressId: null,
+    // CHECK (service_radius_metres > 0 AND <= 200000); CHECK (hourly_rate_cents >= 0). Both
+    // default to a set value: the *defaults* describe an ordinary bookable provider, and a test
+    // that wants "not set" or "quote-only" passes null explicitly.
     serviceRadiusMetres: 15_000,
     hourlyRateCents: 3_500,
     ratingCount: 0,

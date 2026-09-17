@@ -575,9 +575,14 @@ come from real experience.
   on. "Not set" is neither zero nor infinite (a null radius means *unsearchable*), a null rate is
   what `mode=booking` filters on, and `baseAddressId` is the join the entire geo search runs
   through.
-- **apply**: Until the factories are widened (`agent-qa` owns shared fixtures), take defaults from
-  `buildProviderProfile` and apply the nullable fields through Prisma directly, with the reason at
-  the call site — see `apps/api/tests/search-live.test.ts`. Widening them is worth doing before a
-  second slice writes the same workaround.
-- **evidence**: `packages/testing/src/builders.ts:34-44`; `apps/api/tests/search-live.test.ts`
-- **status**: active
+- **apply**: **Closed for `ProviderProfileInput` by `W3-T07`** — `serviceRadiusMetres` and
+  `hourlyRateCents` are now `number | null` and `baseAddressId` exists, so all three are ordinary
+  overrides and `apps/api/tests/provider-live.test.ts` builds its whole world through the factories.
+  `apps/api/tests/search-live.test.ts` still carries the older workaround and can be simplified
+  whenever that file is next touched. **Two gaps remain**: `ProviderProfileInput` has no `ratingAvg`
+  (`Decimal(3,2)?`, so a rated provider still needs a Prisma `update` — `W12-T12` Q3), and
+  `AddressInput` has no `line2` (`line2 String?`). Both are `agent-qa`'s to widen; the pattern to
+  copy meanwhile is the commented Prisma call in `provider-live.test.ts`.
+- **evidence**: `packages/testing/src/builders.ts` `ProviderProfileInput`;
+  `packages/testing/tests/factories.test.ts` AC17; `apps/api/tests/provider-live.test.ts`
+- **status**: active — narrowed by `W3-T07`
