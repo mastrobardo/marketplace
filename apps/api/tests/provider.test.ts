@@ -13,7 +13,10 @@ import { type FastifyInstance } from 'fastify';
 import { coarsenPoint, type ProviderProfile } from '@marketplace/contracts';
 import { buildApp } from '../src/app.js';
 import { loadConfig } from '../src/config.js';
-import { type ProviderCriteria, type ProviderRepository } from '../src/modules/providers/repository.js';
+import {
+  type ProviderCriteria,
+  type ProviderRepository,
+} from '../src/modules/providers/repository.js';
 
 const ENV = {
   DATABASE_URL: 'postgres://marketplace:marketplace_local@127.0.0.1:5432/marketplace',
