@@ -122,3 +122,16 @@ that split only holds while something checks — and because after the collapse 
 At the observed rate of the first 273 runs, ~3 minutes a run is ~345 minutes — 17% of every minute
 this repository has billed. Minutes are free while the repo is public; the three runner slots per
 push are the part that is still worth having.
+
+**Measured on this PR's own run**, against the run immediately before it (`35266494648`, the last
+one with four gate jobs):
+
+| | before (run `35266494648`) | after (run `35268024394`) |
+|---|---|---|
+| gate jobs | `spec-present` 0.4 · `intervention-logged` 0.5 · `author-identity` 0.4 · `agents-drift` 0.4 | `gates` **0.4** |
+| compute | 1.7 min | 0.4 min |
+| **billed** | **4 min** | **1 min** |
+
+Of that 0.4 minute, the gates themselves are **0.9 seconds** — `19:58:57.36` to `19:58:58.22` in
+the job log. The rest is the setup tax, which is now paid once instead of four times, and it is why
+the saving is three whole minutes rather than the one second of work suggests.
