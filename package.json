@@ -28,7 +28,7 @@
     "db:migrate:deploy": "pnpm --filter @marketplace/api db:migrate:deploy",
     "db:migrate:status": "pnpm --filter @marketplace/api db:migrate:status",
     "db:seed": "pnpm --filter @marketplace/api db:seed",
-    "db:reset": "pnpm --filter @marketplace/api db:reset",
+    "db:reset": "pnpm--filter @marketplace/api db:reset",
     "dev": "pnpm turbo run build --filter='@marketplace/web^...' && pnpm --filter @marketplace/web dev",
     "dev:api": "pnpm --filter @marketplace/api dev",
     "storybook": "pnpm --filter @marketplace/ui storybook",
