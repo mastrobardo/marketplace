@@ -8,7 +8,21 @@
  *
  * `W3-T05` (`agent-discovery`) implements the real endpoint against the same schemas — `TODO.md` §6
  * has it as the geo-search API, and ADR-011 §4's table naming `W3-T04` is the id that is wrong
- * (`W12-T11` §10 Q1). When it lands, this file is deleted, not migrated.
+ * (`W12-T11` §10 Q1).
+ *
+ * **`W3-T05` has landed, and this file did not go with it.** The original instruction here was
+ * "deleted, not migrated", and it turned out to describe two things this repo cannot do yet:
+ *
+ * 1. Nothing seeds providers, addresses or categories. `auth-demo-users` is the only seeder and
+ *    `W3-T01` is blocked on `BD-07`, so removing the search handler would point `pnpm dev` at a
+ *    real endpoint over an empty table — a search page that works correctly and shows nothing.
+ * 2. `tests/mocks.test.ts` AC14–AC16 are `W12-T08`'s criteria *about the contract*, asserted
+ *    through this handler. Deleting the handler deletes them, which is a bigger decision than a
+ *    ticket about an API endpoint gets to make on its own.
+ *
+ * So the retirement is one follow-up ticket, not this one — `W3-T10`: **a demo provider seeder, and
+ * then the search handler and `search.ts` go.** The categories handler goes with `W3-T01`, which is
+ * what finally empties this file. `GET /api/providers/:id` is `W3-T07` and is in the same position.
  */
 import {
   CategoryListSchema,

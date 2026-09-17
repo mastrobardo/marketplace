@@ -8,8 +8,15 @@
  * the logic over it. A component test that disagrees with the MSW handler teaches the page a
  * behaviour the dev server does not have.
  *
- * `W3-T05` implements the real endpoint against the same schemas. When it lands, this file is
- * deleted, not migrated.
+ * `W3-T05` implemented the real endpoint against the same schemas, and this file outlived it by one
+ * ticket — see `handlers.ts` for why (nothing seeds providers yet). It is deleted, not migrated,
+ * once a demo provider seeder exists.
+ *
+ * **One behaviour here is knowingly not what the API does.** The facets below are counted over
+ * `page.items`; the contract says *"counts within the matched set"* and `GET /api/search`
+ * implements that, so the real rail shows larger numbers that do not change as the user pages.
+ * Left alone deliberately: this file is scheduled for deletion, and `apps/web/tests/app-harness.tsx`
+ * pins the current numbers for component tests.
  */
 import {
   PAGE_LIMIT_DEFAULT,

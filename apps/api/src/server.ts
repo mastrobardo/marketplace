@@ -3,6 +3,7 @@ import { buildAuth } from './auth/auth.js';
 import { createMailer } from './auth/mail.js';
 import { ConfigError, getConfig } from './config.js';
 import { getPrismaClient } from './db/client.js';
+import { createSearchRepository } from './modules/search/repository.js';
 
 /**
  * The process entry point: validate the environment, build the app, listen.
@@ -18,8 +19,9 @@ async function main(): Promise<void> {
   // knows it is a real process talking to a real environment.
   const prisma = getPrismaClient(config);
   const auth = buildAuth({ config, prisma, mailer: createMailer({ config }) });
+  const search = createSearchRepository(prisma);
 
-  const app = buildApp({ config, auth });
+  const app = buildApp({ config, auth, search });
 
   for (const signal of ['SIGINT', 'SIGTERM'] as const) {
     process.once(signal, () => {

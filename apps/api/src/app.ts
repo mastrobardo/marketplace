@@ -11,6 +11,8 @@ import { type Auth } from './auth/auth.js';
 import { registerAuth } from './plugins/auth.js';
 import { generateRequestId, REQUEST_ID_HEADER, requestIdHook } from './plugins/request-id.js';
 import { healthRoutes } from './routes/health.js';
+import { searchRoutes } from './modules/search/routes.js';
+import { type SearchRepository } from './modules/search/repository.js';
 
 export interface BuildAppOptions {
   config: Config;
@@ -24,6 +26,15 @@ export interface BuildAppOptions {
    * nothing in the composition root may reach for ambient state.
    */
   auth?: Auth;
+  /**
+   * The search data layer (`W3-T05`).
+   *
+   * Optional for the same reason `auth` is: `buildApp` must stay buildable without a database, and
+   * `db/client.ts` states the rule this follows — *"a module that needs data should receive a
+   * client rather than reach for one"*. `server.ts` passes the Prisma-backed one; the boundary
+   * tests pass a recording stub; a build with neither simply has no `/api/search`.
+   */
+  search?: SearchRepository;
 }
 
 /**
@@ -50,7 +61,12 @@ const REDACTED_PATHS = [
  * Kept separate from `server.ts` so tests can build an app and `inject()` into it without opening
  * a socket, and so nothing here depends on the process environment.
  */
-export function buildApp({ config, logDestination, auth }: BuildAppOptions): FastifyInstance {
+export function buildApp({
+  config,
+  logDestination,
+  auth,
+  search,
+}: BuildAppOptions): FastifyInstance {
   const app = Fastify({
     logger: {
       level: config.LOG_LEVEL,
@@ -82,6 +98,16 @@ export function buildApp({ config, logDestination, auth }: BuildAppOptions): Fas
    * the *only* carve-out: every other route, including 404 and 500, still answers in the envelope.
    */
   if (auth !== undefined) registerAuth(app, auth);
+
+  /**
+   * `W3-T05`. The `/api` prefix is applied here, once, rather than written into each route: the
+   * edge splits traffic by path (`MEM-2026-09-14-3`), so a domain route that escapes the prefix is
+   * answered with the SPA's `index.html` — a 200 full of HTML that only fails in a deployed
+   * environment. `/health` stays at the root for Fly's probes and is not reachable through the edge.
+   */
+  if (search !== undefined) {
+    app.register(searchRoutes({ repository: search }), { prefix: '/api' });
+  }
 
   /**
    * `W2-T01` §4.9. `MAIL_SMTP_HOST` defaults to `127.0.0.1`, which is Mailpit locally and nothing

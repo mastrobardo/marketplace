@@ -540,3 +540,44 @@ come from real experience.
   `POSTGRES_PORT=5433` here while CI uses 5432.
 - **evidence**: PR #237; `docker-compose.yml`
 - **status**: active
+
+### `Math.round(v * 10**n) === v * 10**n` is not a valid "already rounded" check
+
+- **id**: MEM-2026-09-17-9
+- **scope**: repo
+- **fact**: `packages/contracts`' `isCoarse` tested whether a coordinate had been through
+  `coarsenPoint` by scaling it and comparing to its own rounding. Scaling reintroduces exactly the
+  floating-point error rounding removed — `40.764 * 1000` is `40763.99999999999` — so the refinement
+  rejected **~1.63% of the values `coarsenPoint` itself produced**. `Number(v.toFixed(n)) === v` is
+  the correct form and has zero failures on the same sample.
+- **why**: The bug is invisible to a fixed fixture. `SearchPointSchema`'s own test used Puerta del
+  Sol, which is exactly representable, and stayed green for the whole period the predicate was
+  wrong. It surfaced only when `W3-T05` served real coordinates: at 20 results a page, ~28% of
+  search pages would have returned a 500 from the endpoint parsing its own response.
+- **apply**: Never verify "this number is already rounded" by multiplying it back up. Ask whether
+  rounding changes it. And when a predicate's subject is a *range* of values, test it over a range —
+  `packages/contracts/tests/search.test.ts` now samples Spain's bounding box with a seeded LCG, and
+  that test was confirmed to fail against the old predicate (18 rejections in 1000) before it was
+  kept. A property test that has never seen the bug proves nothing.
+- **evidence**: `packages/contracts/src/search.ts` `isCoarse`;
+  `docs/specs/S5/W3-T05-geo-search.run.md` §1
+- **status**: active
+
+### `packages/testing` cannot express a provider's nullable columns
+
+- **id**: MEM-2026-09-17-10
+- **scope**: repo
+- **fact**: `ProviderProfileInput` types `serviceRadiusMetres` and `hourlyRateCents` as
+  non-nullable `number` and has no `baseAddressId` field at all, while `schema.prisma` makes all
+  three nullable or optional. The factories therefore cannot build a provider with no service
+  radius, a quote-only provider, or a provider with a base address.
+- **why**: Those three are not edge cases — they are the distinctions the discovery slice is built
+  on. "Not set" is neither zero nor infinite (a null radius means *unsearchable*), a null rate is
+  what `mode=booking` filters on, and `baseAddressId` is the join the entire geo search runs
+  through.
+- **apply**: Until the factories are widened (`agent-qa` owns shared fixtures), take defaults from
+  `buildProviderProfile` and apply the nullable fields through Prisma directly, with the reason at
+  the call site — see `apps/api/tests/search-live.test.ts`. Widening them is worth doing before a
+  second slice writes the same workaround.
+- **evidence**: `packages/testing/src/builders.ts:34-44`; `apps/api/tests/search-live.test.ts`
+- **status**: active
