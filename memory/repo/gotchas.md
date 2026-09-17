@@ -477,3 +477,20 @@ come from real experience.
 - **evidence**: `.github/workflows/visual-baselines.yml`; `tests/cd-workflows.test.ts` (W12-T20);
   `scripts/gates/author-identity.ts`
 - **status**: active
+
+### A workflow that pushes with `GITHUB_TOKEN` cannot start the checks on what it pushed
+- **id**: MEM-2026-09-17-4
+- **scope**: repo
+- **fact**: `visual-baselines.yml` committed the route baselines to `W12-T20`'s branch as
+  `mastrobardo@gmail.com`. `CI` and `Deploy preview` were created on the new head with status
+  `action_required` and never started: GitHub does not run workflows for a push made with
+  `GITHUB_TOKEN`. They ran after `gh api -X POST repos/:owner/:repo/actions/runs/:id/approve`.
+- **why**: The recursion guard is unconditional, and a pull request whose required checks have not
+  started looks exactly like one whose checks are queued — there is no red, no message, nothing to
+  notice.
+- **apply**: After any workflow pushes to a branch, look at the run list for the new head and
+  approve the runs, or push a commit yourself. Do not wait for checks that will never start. A PAT
+  or the `OPS-19` GitHub App would remove the step; neither is worth it for baselines.
+- **evidence**: runs 35248674237 / 35248674485 on `W12-T20-design-system-stylesheet`;
+  `docs/specs/S10/W12-T20-design-system-stylesheet.run.md` Finding 5
+- **status**: active

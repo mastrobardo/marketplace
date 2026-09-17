@@ -111,7 +111,22 @@ sets the identity explicitly, and the same two lines were added to the pull-requ
 outside the stated scope, and recorded here rather than left as a trap for whoever regenerates
 baselines the first time that PR runs CI.
 
-### 5. `import.meta.url` is an http URL under jsdom
+### 5. A workflow's own push does not start the checks it exists to turn green
+
+The branch path worked: `visual-baselines.yml` ran against this branch, shot the seven routes,
+committed `23bdc83` as `mastrobardo@gmail.com`, and `visual-routes.test.ts` went green.
+
+What it could not do is *run the checks*. A push made with `GITHUB_TOKEN` does not trigger a
+workflow — GitHub's recursion guard — so `CI` and `Deploy preview` were created on the new head in
+`action_required` and sat there. They ran after
+`POST /repos/:owner/:repo/actions/runs/:id/approve`.
+
+So the accept path is two steps, not one, and the second is a human's. That is tolerable — a
+baseline change is meant to be looked at — but it must be *stated*, because a pull request whose
+required checks never start looks identical to one whose checks are slow. The alternative is a PAT
+or the `OPS-19` GitHub App, and neither is worth introducing for this.
+
+### 6. `import.meta.url` is an http URL under jsdom
 
 The route-baseline assertions were written into `tests/visual-coverage.test.ts` and failed to
 collect: `TypeError: The URL must be of scheme file`. That file runs in the jsdom project because it
@@ -144,6 +159,7 @@ ticket that ships them.
   unavoidable, per Finding 3.
 - **The identity fix in Finding 4** is a correction to `W12-T16`'s workflow, not to this ticket's
   subject.
+- **The branch accept path needs a run approval** (Finding 5), which the spec did not anticipate.
 
 ## Known gaps, carried deliberately
 
