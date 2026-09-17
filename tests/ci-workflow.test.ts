@@ -65,11 +65,11 @@ const GATES = [
   'unit',
   'database',
   'workflows',
-  // W0-T12: the gates AGENTS.md and TODO.md §5.5 had claimed were enforced since before they existed.
-  'spec-present',
-  'intervention-logged',
-  'author-identity',
-  'agents-drift',
+  // W0-T12 brought four gates AGENTS.md and TODO.md §5.5 had claimed were enforced since before
+  // they existed. W0-T29 collapsed them into one job: four jobs that each paid ~30s of setup to run
+  // ~2s of gate, and each billed a whole minute. One job, one install, every gate reported in the
+  // run summary and annotated by name on a failure.
+  'gates',
 ] as const;
 
 /**

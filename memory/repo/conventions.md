@@ -151,3 +151,24 @@ How we do things here, beyond what lint and CI enforce automatically.
   `MEM-2026-09-17-9` survived four storefront tickets that were all "tested against the contract".
 - **evidence**: `apps/api/src/modules/search/routes.ts`; `docs/specs/S5/W3-T05-geo-search.md` §2.7
 - **status**: active
+
+### A CI job earns its own name by having its own setup
+
+- **id**: MEM-2026-09-17-18
+- **scope**: repo
+- **fact**: GitHub bills **per job, rounded up to a whole minute**. This repo's first 273 runs billed
+  1,993 minutes for 1,328 of compute, and 345 of those minutes were four gate jobs that ran the
+  *same* script with a different argument — each paying ~30s of `checkout` + `setup-node` +
+  `pnpm install` to run ~2s of gate. `ci.yml`'s rule was "one job per failure class"; the rule that
+  survives `W0-T29` is **one job per setup**.
+- **why**: splitting by failure class is good for the reader and free only when the jobs do not
+  share a setup. When they do, each split costs a whole billed minute and a runner slot that the
+  jobs a reviewer is actually waiting on could have used — and it costs a *required check name*,
+  which is the expensive half: GitHub matches branch protection by name, so every extra job is a
+  name someone has to keep in step for as long as the repo exists.
+- **apply**: before adding a job, ask what setup it needs that an existing job has not already paid
+  for. Same setup → a step or a gate inside the job that has it, reported by name with an
+  `::error title=…::` annotation, which is what makes a failure legible on the Checks tab. Its own
+  toolchain (Docker, a container action, a browser) → its own job.
+- **evidence**: `.github/workflows/ci.yml`; `docs/specs/S0/W0-T29-gate-consolidation.md` §1
+- **status**: active

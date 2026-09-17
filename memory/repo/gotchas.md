@@ -607,7 +607,8 @@ come from real experience.
   merge commits, or exist at all, is part of `W0-T29`: the operator's steer of 2026-09-17 is that
   `spec-present` is the gate worth its slot and this one is not.
 - **evidence**: PR #257 `author-identity`; PR #258 passing the same gate after the rebase
-- **status**: active
+- **status**: superseded-by MEM-2026-09-17-20 — `W0-T29` stopped the gate judging the committer
+  trailer of a commit GitHub itself wrote, so the rebase workaround is no longer needed for it.
 
 ### `pnpm lint` is not what CI's `lint` job runs
 
@@ -622,4 +623,43 @@ come from real experience.
   Prettier's own output is the arbiter — do not hand-wrap to guess it.
 - **evidence**: PR #258's first run (`apps/api/tests/provider.test.ts`); `.github/workflows/ci.yml`
   `lint` job
+- **status**: active
+
+### A GitHub annotation keeps only its first line unless newlines are encoded
+
+- **id**: MEM-2026-09-17-19
+- **scope**: repo
+- **fact**: `::error title=…::message` is a workflow command, and its message is single-line. A raw
+  `\n` ends the command: GitHub shows the first line and silently drops the rest — which, for a
+  gate, is the half that says what to do about it. `%` must be escaped **before** the newlines
+  (`%` → `%25`, then `\r` → `%0D`, `\n` → `%0A`), or the encodings that follow get corrupted.
+- **why**: nothing fails. The annotation appears, looks fine, and is missing its remedy, so the
+  loss is only visible to someone who knows what the message was supposed to say.
+- **apply**: encode in that order whenever writing `::error`/`::warning`/`::notice`. Assert it in a
+  test — `tests/ci-gates.test.ts` checks that a multi-line gate failure reaches the annotation
+  `%0A`-encoded, because the eye cannot tell a truncated annotation from a short one.
+- **evidence**: `scripts/gates/run.ts` `annotate()`; `tests/ci-gates.test.ts` AC3–AC6
+- **status**: active
+
+### GitHub's committer trailer says who pressed the button, not who wrote the code
+
+- **id**: MEM-2026-09-17-20
+- **scope**: repo
+- **fact**: every commit the platform makes on your behalf — a squash merge, the "Update branch"
+  button, an edit through the web UI — is committed by `GitHub <noreply@github.com>` and leaves the
+  **author** untouched. Since `W0-T29` the `author-identity` gate judges the author of such a commit
+  and ignores its committer trailer, because that trailer can never be a personal address no matter
+  what anyone configures. Supersedes `MEM-2026-09-17-16`, whose workaround (rebase so the platform
+  commit falls out of the range) is no longer needed for this reason.
+- **why**: the gate's premise was that every commit in a pull request's range was written by a human
+  on this machine. Stacking a branch on one that GitHub squash-merged makes that false, and the
+  gate's own remedy — amend and reset-author — cannot be applied to a commit on a merged branch.
+  It fired exactly once in this repo's history and that was the case.
+- **apply**: a work address on an **author** trailer is still a real failure and still fixed with
+  `git config user.email` + `git rebase --root --exec 'git commit --amend --no-edit --reset-author'`.
+  `noreply@github.com` on a committer is not a failure and no longer reported as one. Any workflow
+  that *writes* commits still sets the personal identity explicitly (`MEM-2026-09-17-3`) — the
+  runner's default is `github-actions[bot]`, which is a bot, not the platform, and is judged.
+- **evidence**: `scripts/gates/author-identity.ts` `PLATFORM_COMMITTER`; `tests/ci-gates.test.ts`
+  AC4; PR #257's failure on `03e8651`
 - **status**: active

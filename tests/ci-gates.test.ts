@@ -17,6 +17,7 @@ import { parseBranch } from '../scripts/gates/task-id.js';
 import { checkSpecPresent } from '../scripts/gates/spec-present.js';
 import { checkInterventionLogged } from '../scripts/gates/intervention-logged.js';
 import { checkAuthorIdentity, EXPECTED_EMAIL } from '../scripts/gates/author-identity.js';
+import { checkAgentsDrift } from '../scripts/gates/agents-drift.js';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 
@@ -219,6 +220,32 @@ describe('AC4 — author-identity rejects any commit that is not the personal id
   it('is case-insensitive about the address', () => {
     expect(checkAuthorIdentity([{ ...good, authorEmail: 'Mastrobardo@Gmail.com' }]).ok).toBe(true);
   });
+
+  // W0-T29 AC9. MEM-2026-09-17-16: the gate has fired exactly once in this repo's history, on
+  // `03e8651` — the squash-merge commit GitHub wrote when #256 was merged through the web UI. A
+  // commit whose *committer* is `noreply@github.com` was committed by the platform, never by a
+  // person, so that trailer is not evidence about identity and its remedy (amend, reset-author)
+  // cannot be applied to it. The author is still the trailer the rule is about.
+  it('does not judge the committer of a commit GitHub itself committed', () => {
+    const result = checkAuthorIdentity([
+      { sha: '03e8651', authorEmail: EXPECTED_EMAIL, committerEmail: 'noreply@github.com' },
+    ]);
+    expect(result.ok, 'a GitHub squash-merge in the range reddens a branch nobody mis-signed').toBe(
+      true,
+    );
+  });
+
+  it('still judges the author of a commit GitHub committed', () => {
+    const result = checkAuthorIdentity([
+      {
+        sha: '03e8651',
+        authorEmail: 'davide.arcinotti@iagl.com',
+        committerEmail: 'noreply@github.com',
+      },
+    ]);
+    expect(result.ok).toBe(false);
+    expect(result.message).toContain('author');
+  });
 });
 
 describe('AC5 — the ledger and the PR template exist for the gate to point at', () => {
@@ -239,7 +266,7 @@ describe('AC5 — the ledger and the PR template exist for the gate to point at'
   });
 });
 
-describe('AC6 — ci.yml actually runs the four gates', () => {
+describe('AC6 — ci.yml runs every gate, in one job (W0-T29)', () => {
   interface Job {
     name?: string;
     steps?: { uses?: string; run?: string; with?: Record<string, unknown> }[];
@@ -248,31 +275,66 @@ describe('AC6 — ci.yml actually runs the four gates', () => {
     jobs?: Record<string, Job>;
   };
   const jobs = ci.jobs ?? {};
+  const gates = Object.values(jobs).find((job) => job.name === 'gates');
 
-  for (const gate of ['spec-present', 'intervention-logged', 'agents-drift', 'author-identity']) {
-    it(`has a job named ${gate}`, () => {
+  it('has a job named gates', () => {
+    expect(gates, 'no job named "gates"').toBeDefined();
+  });
+
+  // W0-T29. Four jobs ran the same script with a different argument, each paying ~30s of checkout,
+  // setup-node and install to run ~2s of gate — and each billing a whole minute, because GitHub
+  // rounds every job up. The names are gone from branch protection deliberately (spec §4); what
+  // kept a red PR legible is now an annotation per failing gate, not a job name.
+  for (const retired of [
+    'spec-present',
+    'intervention-logged',
+    'author-identity',
+    'agents-drift',
+  ]) {
+    it(`no longer has a job named ${retired}`, () => {
       const names = Object.values(jobs).map((job) => job.name);
-      expect(names).toContain(gate);
+      expect(
+        names,
+        `${retired} is still its own job — four setup taxes for four seconds of work`,
+      ).not.toContain(retired);
     });
   }
 
-  it('agents-drift runs the generator in --check mode', () => {
-    const drift = Object.values(jobs).find((job) => job.name === 'agents-drift');
-    const runs = (drift?.steps ?? []).map((step) => step.run ?? '').join('\n');
-    expect(runs).toContain('generate-claude-agents.ts');
-    expect(runs).toContain('--check');
+  it('is the only job that runs the gate runner', () => {
+    const runners = Object.entries(jobs)
+      .filter(([, job]) =>
+        (job.steps ?? []).some((step) => /gates\/run\.ts|pnpm gates/.test(step.run ?? '')),
+      )
+      .map(([key]) => key);
+    expect(runners).toEqual(['gates']);
   });
 
-  it('the history-reading gates check out full history, not a shallow clone', () => {
+  it('runs the same command an agent runs locally', () => {
+    const runs = (gates?.steps ?? []).map((step) => step.run ?? '').join('\n');
+    expect(runs, 'the gates job runs a CI-only variant command').toContain('pnpm gates');
+
+    const manifest = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')) as {
+      scripts?: Record<string, string>;
+    };
+    expect(manifest.scripts?.['gates'] ?? '', 'no root `gates` script to run locally').toContain(
+      'scripts/gates/run.ts',
+    );
+  });
+
+  it('checks out full history, not a shallow clone', () => {
     // With the default `fetch-depth: 1` there is no base commit to diff against and no commit
-    // range to walk, so both gates would pass by seeing nothing at all.
-    for (const gate of ['spec-present', 'author-identity']) {
-      const job = Object.values(jobs).find((j) => j.name === gate);
-      const checkout = (job?.steps ?? []).find((s) =>
-        (s.uses ?? '').startsWith('actions/checkout'),
-      );
-      expect(checkout?.with?.['fetch-depth'], `${gate} must not use a shallow clone`).toBe(0);
-    }
+    // range to walk, so the gates would pass by seeing nothing at all.
+    const checkout = (gates?.steps ?? []).find((step) =>
+      (step.uses ?? '').startsWith('actions/checkout'),
+    );
+    expect(checkout?.with?.['fetch-depth'], 'the gates must not run on a shallow clone').toBe(0);
+  });
+
+  it('still passes the PR labels in as JSON', () => {
+    // A label may legally contain commas and spaces, and interpolating one into a `run:` string is
+    // how a label becomes a command.
+    const raw = readFileSync(join(root, '.github', 'workflows', 'ci.yml'), 'utf8');
+    expect(raw).toMatch(/PR_LABELS:\s*\$\{\{\s*toJSON\(github\.event\.pull_request\.labels/);
   });
 });
 
@@ -375,3 +437,153 @@ describe('AC7 — a gate that cannot see its inputs refuses, rather than passing
     expect(status).toBe(2);
   });
 }, 60_000);
+
+/* ------------------------------------------------------------------------------------------- *
+ * W0-T29 — one invocation, every gate, one round trip
+ * ------------------------------------------------------------------------------------------- */
+
+describe('AC8 — agents-drift is a gate verdict like any other', () => {
+  it('passes when the generator finds nothing out of date', () => {
+    const result = checkAgentsDrift({
+      exitCode: 0,
+      output: '.claude/agents is in sync with agents/roles\n',
+    });
+    expect(result.ok).toBe(true);
+  });
+
+  it('fails carrying the generator’s own message, and the command that fixes it', () => {
+    const result = checkAgentsDrift({
+      exitCode: 1,
+      output: 'drift: .claude/agents/agent-ui.md is out of date with agents/roles/agent-ui.md\n',
+    });
+    expect(result.ok).toBe(false);
+    expect(result.code).toBe('AGENTS_DRIFT');
+    expect(result.message, 'the verdict drops which file drifted').toContain('agent-ui.md');
+    expect(result.message, 'the verdict does not say how to fix it').toContain(
+      'generate-claude-agents.ts',
+    );
+  });
+
+  it('never reports a crash as a pass', () => {
+    // A generator that cannot run at all is not a repository in sync.
+    const result = checkAgentsDrift({ exitCode: 2, output: 'Error: ENOENT agents/roles' });
+    expect(result.ok).toBe(false);
+  });
+});
+
+describe('AC3–AC6 — the runner judges every gate in one invocation', () => {
+  const cli = join(root, 'scripts', 'gates', 'run.ts');
+
+  /**
+   * The GitHub variables are cleared before each run rather than inherited: this suite itself runs
+   * in CI, where `GITHUB_BASE_REF` is set to whatever pull request is being checked, and a test
+   * that reads the host's pull request proves nothing about the gate.
+   */
+  function runAll(cwd: string, env: Record<string, string>): { status: number; output: string } {
+    // The repo's own `tsx`, not `pnpm tsx`: pnpm refuses to run in a directory with no
+    // package.json, and two of these runs stand in a scratch git repository on purpose.
+    const result = spawnSync(join(root, 'node_modules', '.bin', 'tsx'), [cli, '--all'], {
+      cwd,
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        GITHUB_BASE_REF: '',
+        GITHUB_HEAD_REF: '',
+        GITHUB_STEP_SUMMARY: '',
+        GITHUB_ACTIONS: '',
+        PR_LABELS: '',
+        ...env,
+      },
+    });
+    return { status: result.status ?? -1, output: `${result.stdout ?? ''}${result.stderr ?? ''}` };
+  }
+
+  /** A branch that fails two gates at once: no spec, and a commit signed with a work address. */
+  function scratchRepo(): string {
+    const scratch = mkdtempSync(join(tmpdir(), 'gates-all-'));
+    const git = (...args: string[]) =>
+      spawnSync('git', args, { cwd: scratch, encoding: 'utf8', env: { ...process.env } });
+
+    git('init', '-q', '-b', 'main');
+    git('config', 'user.email', EXPECTED_EMAIL);
+    git('config', 'user.name', 'mastrobardo');
+    writeFileSync(join(scratch, 'a.txt'), 'one\n');
+    git('add', '-A');
+    git('commit', '-qm', 'base');
+
+    git('checkout', '-qb', 'W9-T99-no-spec');
+    writeFileSync(join(scratch, 'b.txt'), 'two\n');
+    git('add', '-A');
+    git('-c', 'user.email=davide.arcinotti@iagl.com', 'commit', '-qm', 'work identity, no spec');
+    git('update-ref', 'refs/remotes/origin/main', 'main');
+    return scratch;
+  }
+
+  it('reports both failures from one run, and every gate’s verdict', () => {
+    const scratch = scratchRepo();
+    const summary = join(scratch, 'summary.md');
+    try {
+      const { status, output } = runAll(scratch, {
+        GITHUB_BASE_REF: 'main',
+        GITHUB_HEAD_REF: 'W9-T99-no-spec',
+        GITHUB_STEP_SUMMARY: summary,
+        GITHUB_ACTIONS: 'true',
+      });
+
+      // AC6 — one failing gate is a failing job.
+      expect(status, 'a failing gate did not fail the job').toBe(1);
+
+      // AC3 — the second failure is not hidden behind the first. Four jobs used to buy this;
+      // stopping at the first gate would cost a whole CI round trip to find the next one.
+      expect(output).toContain('SPEC_MISSING');
+      expect(output).toContain('AUTHOR_IDENTITY');
+
+      // AC5 — a red check names its gate on the Checks tab, without opening a log.
+      expect(output).toContain('::error title=gate: spec-present::');
+      expect(output, 'a multi-line remedy must be %0A-encoded or GitHub drops it').toContain('%0A');
+
+      // AC4 — every verdict in the run summary, and the failing gate's full text under it.
+      const written = readFileSync(summary, 'utf8');
+      for (const gate of [
+        'spec-present',
+        'intervention-logged',
+        'author-identity',
+        'agents-drift',
+      ]) {
+        expect(written, `${gate} is missing from the run summary`).toContain(gate);
+      }
+      expect(written, 'the summary names the failure but not the remedy').toContain(
+        'No spec, no merge.',
+      );
+    } finally {
+      rmSync(scratch, { recursive: true, force: true });
+    }
+  });
+
+  it('judges .claude/agents against this repo, wherever it is run from', () => {
+    // `agents-drift` is about the repository the gate lives in, not the working directory git
+    // happens to be pointed at — otherwise running the suite from a scratch clone reports drift
+    // that does not exist.
+    const scratch = scratchRepo();
+    try {
+      const { output } = runAll(scratch, {
+        GITHUB_BASE_REF: 'main',
+        GITHUB_HEAD_REF: 'W9-T99-no-spec',
+      });
+      expect(output).toMatch(/agents-drift: ok/);
+    } finally {
+      rmSync(scratch, { recursive: true, force: true });
+    }
+  });
+
+  it('on a push to main, the PR gates say so and agents-drift still runs', () => {
+    // AC8. No base ref and no labels: three of the four have nothing to compare. They report that
+    // rather than disappearing — a skipped job is reported to branch protection as a satisfied one.
+    const { status, output } = runAll(root, {});
+    expect(status, 'a push to main must not fail the gates job').toBe(0);
+    expect(output).toContain('not a pull request');
+    expect(output, 'agents-drift needs no PR and must still run on main').toMatch(
+      /agents-drift: ok/,
+    );
+  });
+}, 120_000);

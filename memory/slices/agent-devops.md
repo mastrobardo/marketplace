@@ -272,3 +272,23 @@ Keep it to facts that changed how you would work. Task-specific detail stays in 
 - **evidence**: `W0-T28` run record §2.1–§2.2; `apps/web/tests/api-proxy.test.ts` AC7
 - **status**: active
 
+### The gates are one job, and a fifth gate is three edits
+- **id**: MEM-2026-09-17-1
+- **scope**: slice:S0
+- **fact**: since `W0-T29` the four agent-process gates run as one `gates` job.
+  `scripts/gates/run.ts --all` judges every gate in one process, writes a table to
+  `$GITHUB_STEP_SUMMARY`, emits an `::error title=gate: <name>::` annotation per failure and only
+  then decides the exit code (1 failed, 2 could not see its inputs). Adding a gate is: a pure
+  `check…()` in `scripts/gates/<name>.ts`, a code in `types.ts`, an arm in `run.ts`'s `GATES` and
+  `run()`. No workflow change, no new check name, no extra billed minute.
+- **why**: the four jobs were the same script with a different argument and each paid ~30s of
+  `checkout` + `setup-node` + `pnpm install` for ~2s of work — then billed a whole minute
+  (`MEM-2026-09-17-18`). What the job names bought was a red *name*; the annotation buys it back.
+- **apply**: run `pnpm gates` before pushing — it is the command CI runs. Locally the three
+  pull-request gates report "not a pull request" (no `GITHUB_BASE_REF`) and only `agents-drift`
+  actually judges anything; to rehearse a PR, set `GITHUB_BASE_REF=main`,
+  `GITHUB_HEAD_REF=<branch>` and `PR_LABELS='[]'`. `agents-drift` resolves this repository from
+  `import.meta.url`, not from the working directory — do not "fix" that to a relative path.
+- **evidence**: `scripts/gates/run.ts`; `tests/ci-gates.test.ts` AC3–AC6, AC8;
+  `docs/specs/S0/W0-T29-gate-consolidation.md`
+- **status**: active

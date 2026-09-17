@@ -366,11 +366,9 @@ describe('AC26 — a deploy is never a required check', () => {
         'typecheck',
         'unit',
         'workflows',
-        // W0-T12 added four; none of them is a deploy, which is what this criterion guards.
-        'spec-present',
-        'intervention-logged',
-        'author-identity',
-        'agents-drift',
+        // W0-T12 added four gate jobs; W0-T29 collapsed them into one. It is not a deploy either,
+        // which is what this criterion guards.
+        'gates',
         // W12-T15 added one more, and it is neither a deploy nor a gate: `perf` measures the
         // storefront and writes its scores into the run recap. It must never be a required check
         // — see `ci-workflow.test.ts`, which keeps gates and reporters in separate lists.

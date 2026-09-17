@@ -14,6 +14,22 @@ import { fail, pass, type GateResult } from './types.js';
 
 export const EXPECTED_EMAIL = 'mastrobardo@gmail.com';
 
+/**
+ * GitHub's own committer address.
+ *
+ * Every commit the platform makes on your behalf — a squash merge, the "Update branch" button, an
+ * edit through the web UI — is committed by `GitHub <noreply@github.com>` and leaves the *author*
+ * untouched. That trailer therefore says who ran the merge button, not who wrote the code, and it
+ * can never be the personal address no matter what anyone configures.
+ *
+ * This gate fired exactly once in this repo's history, on `03e8651` — the squash-merge commit
+ * GitHub created when #256 was merged — and reddened a pull request whose author had mis-signed
+ * nothing, with a remedy (`git commit --amend --reset-author`) that cannot be applied to a commit
+ * the platform wrote on a branch that is already merged (`MEM-2026-09-17-16`). So a platform
+ * commit is judged on its author, which is the trailer `docs/board/IDENTITY.md` is about.
+ */
+export const PLATFORM_COMMITTER = 'noreply@github.com';
+
 export interface Commit {
   readonly sha: string;
   readonly authorEmail: string;
@@ -38,7 +54,8 @@ export function checkAuthorIdentity(
     if (commit.authorEmail.trim().toLowerCase() !== want) {
       offences.push({ sha: commit.sha, role: 'author', email: commit.authorEmail });
     }
-    if (commit.committerEmail.trim().toLowerCase() !== want) {
+    const committer = commit.committerEmail.trim().toLowerCase();
+    if (committer !== want && committer !== PLATFORM_COMMITTER) {
       offences.push({ sha: commit.sha, role: 'committer', email: commit.committerEmail });
     }
   }

@@ -24,8 +24,10 @@ yourself, that is a `MANUAL_FIX` intervention and needs a ledger entry.
 All gates green. Required approvals present. Squash merge.
 Subject: `feat(quotes): submit quote [W4-T03]`.
 
-**Running today** (`W0-T12`): `spec-present` · `intervention-logged` · `author-identity` ·
-`agents-drift` · `typecheck` · `lint` · `unit` · `build` · `database` · `workflows`.
+**Running today**: `typecheck` · `lint` · `unit` · `build` · `database` · `workflows` · `gates`.
+The last one is `W0-T12`'s four — `spec-present` · `intervention-logged` · `author-identity` ·
+`agents-drift` — in a single job since `W0-T29`, each reported by name in the run summary and
+annotated on the check when it fails. Run them locally with `pnpm gates`.
 
 **Still to build**, and listed here so nobody assumes otherwise: `migrate diff` · `contract`
 (OpenAPI ⇄ impl) · `e2e smoke` · `secret scan` · `dep audit (high+)`. Each needs machinery this
