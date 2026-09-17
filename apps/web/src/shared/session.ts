@@ -74,12 +74,25 @@ export async function loadSession(
 }
 
 /**
- * What every write does afterwards — and the whole of React Query's job on a write.
+ * What a write does afterwards — and the whole of React Query's job on one.
  *
- * `invalidateQueries` rather than `setQueryData`: the action knows *that* the session changed, and
- * the server is what knows what it changed to. Writing the client's guess into the cache is how a
- * header ends up showing a user a sign-in the API refused.
+ * **Seed when the server has told us the answer; invalidate when it has not.** That distinction is
+ * the difference between one API call and two, and it is *not* the same as writing the client's
+ * guess into the cache: a sign-in response carries the authenticated user, and a successful
+ * sign-out means there is no session. Both are the server's own statements, parsed on the way in
+ * like every other response. What must never be seeded is something only the client believes.
+ *
+ * So sign-in seeds the user it was handed and sign-out seeds `null` — while anything that *failed*
+ * falls back to `invalidateSession`, because a call that failed has told us nothing and the honest
+ * answer to "what is the session now" is to ask.
  */
+export function seedSession(
+  context: Readonly<RouterContextProvider>,
+  user: SessionUser | null,
+): void {
+  context.get(routeContext).queryClient.setQueryData(queryKeys.session(), user);
+}
+
 export async function invalidateSession(context: Readonly<RouterContextProvider>): Promise<void> {
   await context.get(routeContext).queryClient.invalidateQueries({ queryKey: queryKeys.session() });
 }

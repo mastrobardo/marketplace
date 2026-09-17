@@ -63,6 +63,14 @@ export function profileFor(id: string, locale: string): ProviderProfile {
 
 export type { SessionUser };
 
+/** The user a stubbed sign-in returns. Tests that care about the session override `getSession`. */
+export const STUB_USER: SessionUser = {
+  id: '11111111-1111-4111-8111-111111111111',
+  name: 'Ana Pérez',
+  email: 'ana@example.com',
+  emailVerified: true,
+};
+
 /**
  * The auth defaults: a signed-out visitor whose every write succeeds.
  *
@@ -92,7 +100,7 @@ export function stubApi(overrides: Partial<ApiClient> = {}): ApiClient {
     },
     getSession: () => Promise.resolve(null),
     signUp: () => Promise.resolve(),
-    signIn: () => Promise.resolve(),
+    signIn: () => Promise.resolve(STUB_USER),
     signOut: () => Promise.resolve(),
     resendVerification: () => Promise.resolve(),
     requestPasswordReset: () => Promise.resolve(),

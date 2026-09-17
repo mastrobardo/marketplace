@@ -101,6 +101,22 @@ export function buildApp({ config, logDestination, auth }: BuildAppOptions): Fas
     );
   }
 
+  /**
+   * `W2-T10` §2.2. The same treatment, for the same reason: a setting whose effect is invisible.
+   *
+   * With this on, every account is created already verified — nobody has proven they can read the
+   * address they typed. That is a deliberate trade while `OPS-14` does not exist, and it is exactly
+   * the kind of trade that outlives the reason for it. A line in the boot log is what makes it
+   * visible to somebody who did not write the deploy.
+   */
+  if (config.NODE_ENV !== 'development' && config.AUTH_TRUST_EMAIL_ON_SIGNUP) {
+    app.log.warn(
+      { nodeEnv: config.NODE_ENV },
+      'AUTH_TRUST_EMAIL_ON_SIGNUP is on, so every new account is verified without anyone checking ' +
+        'the address; turn it off once a mail provider exists (OPS-14)',
+    );
+  }
+
   // One shape for "no such route" — never Fastify's default `{"message":"Route ... not found"}`.
   app.setNotFoundHandler((request, reply) => {
     const message = `Route ${request.method} ${request.url} not found`;

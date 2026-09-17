@@ -24,6 +24,7 @@ import {
   loader as legalLoader,
 } from '../routes/legal.js';
 import { Component as NotFound } from '../routes/not-found.js';
+import { Component as Account, loader as accountLoader } from '../routes/account.js';
 import { Component as SignUp, action as signUpAction } from '../routes/signup.js';
 import { Component as Login, action as loginAction } from '../routes/login.js';
 import { Component as VerifyEmail, action as verifyEmailAction } from '../routes/verify-email.js';
@@ -88,6 +89,9 @@ export const routes: RouteObject[] = [
       // `W2-T09` — the account pages. Untranslated segments, like every other route (Amendment 1):
       // `/es/signup`, never `/es/registro`.
       { path: 'signup', Component: SignUp, action: signUpAction },
+      // `W2-T10`: where the header's name goes. Its loader is the one guard in the storefront —
+      // no session, no page, so it redirects to the login form rather than rendering an empty one.
+      { path: 'account', Component: Account, loader: accountLoader },
       { path: 'login', Component: Login, action: loginAction },
       // Where better-auth's emailed link redirects back to, with `?error=<CODE>` when the token is
       // no longer good.

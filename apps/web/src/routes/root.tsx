@@ -12,14 +12,17 @@ import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
 import { SearchBar } from '@marketplace/ui';
 import { type CategorySummary } from '@marketplace/contracts';
-import { Form } from 'react-router';
-import { Button } from '@marketplace/ui';
 import { LanguageSwitcher } from '../shared/LanguageSwitcher.js';
 import { changeLanguage, isLocale, LOCALES } from '../i18n/index.js';
 import { loadCategories } from '../shared/categories.js';
 import { throwIfFaultRequested } from '../shared/fault.js';
 import { queryKeys } from '../shared/query.js';
-import { invalidateSession, loadSession, type SessionUser } from '../shared/session.js';
+import {
+  invalidateSession,
+  loadSession,
+  seedSession,
+  type SessionUser,
+} from '../shared/session.js';
 import { apiFrom } from '../features/auth/actions.js';
 import { searchSchema } from '../features/search/schema.js';
 import { useSearchSubmission } from '../features/search/navigation.js';
@@ -91,10 +94,13 @@ export async function action({ request, context }: ActionFunctionArgs): Promise<
 
   try {
     await apiFrom(context).signOut();
-  } finally {
-    // Even if the call failed. The cookie may well be gone already — a session the server has
-    // forgotten is not a session — and leaving a stale name in the header is the worse of the two
-    // wrong answers.
+    // The API has said the session is over, so there is nothing to go and ask: seeding `null` makes
+    // signing out one call too.
+    seedSession(context, null);
+  } catch {
+    // A sign-out that failed has told us nothing — the cookie may be gone already, or not — so the
+    // honest move is to ask rather than to assert either answer. Leaving a stale name in the header
+    // is the worse of the two wrong answers, and re-reading resolves it in one request.
     await invalidateSession(context);
   }
   return null;
@@ -158,19 +164,18 @@ export function Component(): ReactElement {
             {/* `W2-T09`: the door. `W2-T01` shipped the API and the header still had no way in, so
                 a visitor could only register with `curl`. Rendered from the loader's session rather
                 than from a fetch on mount, which is why it is right on first paint (R3). */}
+            {/* `W2-T10`: the header stops offering what you already have. Signed in, the two
+                doors are gone and the name is the way into the account area — where sign-out now
+                lives, because it is a deliberate, rare act rather than a piece of navigation. */}
             {session === null ? (
               <>
                 <Link to={`/${locale}/login`}>{t('nav.login')}</Link>
                 <Link to={`/${locale}/signup`}>{t('nav.signup')}</Link>
               </>
             ) : (
-              <>
-                <span className="mp-nav__account">{session.name}</span>
-                <Form method="post" action={`/${locale}`}>
-                  <input type="hidden" name="intent" value="signout" />
-                  <Button type="submit">{t('nav.logout')}</Button>
-                </Form>
-              </>
+              <Link className="mp-nav__account" to={`/${locale}/account`}>
+                {session.name}
+              </Link>
             )}
             <LanguageSwitcher locale={locale} />
           </nav>

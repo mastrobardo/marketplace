@@ -163,6 +163,13 @@ export const en = {
   'nav.logout': 'Log out',
   'nav.account': 'Your account',
 
+  'account.title': 'Your account',
+  'account.email.label': 'Email address',
+  'account.signOut': 'Log out',
+  'account.plan.title': 'Your plan',
+  'account.plan.body':
+    'Every account is free right now. When paid plans exist, this is where they are managed.',
+
   'auth.signup.title': 'Create your account',
   'auth.signup.intro': 'An account lets you request quotes and talk to professionals. It is free.',
   'auth.signup.submit': 'Create account',

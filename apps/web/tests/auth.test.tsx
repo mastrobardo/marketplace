@@ -18,7 +18,7 @@ import { changeLanguage, setupI18n } from '../src/i18n/index.js';
 import { es } from '../src/i18n/locales/es.js';
 import { en } from '../src/i18n/locales/en.js';
 import { ApiError } from '../src/shared/api.js';
-import { renderApp, stubApi, type SessionUser } from './app-harness.js';
+import { renderApp, stubApi, STUB_USER, type SessionUser } from './app-harness.js';
 
 beforeEach(async () => {
   await setupI18n();
@@ -29,12 +29,7 @@ afterEach(() => {
   cleanup();
 });
 
-const VERIFIED: SessionUser = {
-  id: '11111111-1111-4111-8111-111111111111',
-  name: 'Ana Pérez',
-  email: 'ana@example.com',
-  emailVerified: true,
-};
+const VERIFIED: SessionUser = STUB_USER;
 
 /** Fill a labelled text field. Every auth field is a `TextInput`, so one helper covers all of them. */
 async function fill(user: ReturnType<typeof userEvent.setup>, label: string, value: string) {
@@ -89,15 +84,27 @@ describe('AC4..AC7 — signup', () => {
     });
   });
 
-  it('AC5 — a duplicate address renders exactly the panel a new account renders', async () => {
-    // The API answers both with a `200`; `signUp` resolves either way because `api.ts` discards the
-    // body (see `auth-api.test.ts`, which is where that is asserted). So this test is about the
-    // *page*: two different addresses, one rendered outcome, and no branch to add a hint to.
+  it('AC5 — every reason a sign-up cannot sign you in renders the same panel', async () => {
+    /**
+     * **Changed by `W2-T10`, and the property it protects is unchanged.**
+     *
+     * `W2-T09` asserted that a duplicate address rendered the same panel as a new account, because
+     * both ended there. Now a sign-up chains a sign-in (`W2-T10` §2.3), so a *usable* account goes
+     * to the home page and only the ones that cannot sign in render the panel — an unverified new
+     * account (`403`) and a duplicate whose password is not the account's (`401`).
+     *
+     * Those two are what must stay indistinguishable: they are the pair that would otherwise
+     * answer "does this address already have an account". Asserted on the rendered text, with the
+     * address masked, because that is what a person and an attacker both actually see.
+     */
     const rendered: string[] = [];
 
-    for (const email of ['nueva@example.com', 'ya-registrada@example.com']) {
+    for (const [email, error] of [
+      ['nueva@example.com', new ApiError(403, 'EMAIL_NOT_VERIFIED')],
+      ['ya-registrada@example.com', new ApiError(401, 'INVALID_EMAIL_OR_PASSWORD')],
+    ] as const) {
       const user = userEvent.setup();
-      renderApp('/es/signup');
+      renderApp('/es/signup', stubApi({ signIn: () => Promise.reject(error) }));
       await screen.findByRole('banner');
 
       await fill(user, es['auth.field.name.label'], 'Ana Pérez');
@@ -106,7 +113,6 @@ describe('AC4..AC7 — signup', () => {
       await submit(user, es['auth.signup.submit']);
 
       const panel = await screen.findByTestId('inbox-panel');
-      // The address itself differs by construction; everything else must not.
       rendered.push(panel.textContent?.replace(email, '<address>') ?? '');
       cleanup();
     }
@@ -197,20 +203,14 @@ describe('AC8..AC10 — login', () => {
     expect(screen.queryByText(es['auth.login.refused'])).toBeNull();
   });
 
-  it('AC10 — a successful sign-in re-reads the session and lands on the home page', async () => {
+  it('AC10 — a successful sign-in lands on the home page, signed in', async () => {
     const user = userEvent.setup();
-    // Signed out until the sign-in succeeds. If the action does not invalidate the session query,
-    // React Query answers the shell's loader from its 60-second cache and the header stays wrong —
-    // which is the bug this assertion exists for.
-    let signedIn = false;
-    const api = stubApi({
-      getSession: () => Promise.resolve(signedIn ? VERIFIED : null),
-      signIn: () => {
-        signedIn = true;
-        return Promise.resolve();
-      },
-    });
-    renderApp('/es/login', api);
+    // `getSession` answers "signed out" *forever* here, deliberately. The header can only end up
+    // showing a name if the action seeded the cache from the sign-in response — a stub that started
+    // returning the user after sign-in would let either implementation pass.
+    const getSession = vi.fn().mockResolvedValue(null);
+    const signIn = vi.fn().mockResolvedValue(VERIFIED);
+    renderApp('/es/login', stubApi({ getSession, signIn }));
     await screen.findByRole('banner');
 
     await fill(user, es['auth.field.email.label'], 'ana@example.com');
@@ -220,6 +220,33 @@ describe('AC8..AC10 — login', () => {
     await screen.findByText(es['home.title']);
     const nav = screen.getByRole('navigation', { name: es['nav.primary'] });
     expect(within(nav).getByText(VERIFIED.name)).toBeDefined();
+  });
+
+  it('AC27 — signing in is one API call', async () => {
+    // Operator, 2026-09-14: *"the whole login flow should be 1 api call"*. It was three — the
+    // shell's session read on page load, the sign-in, and a second session read after the redirect
+    // because the action invalidated. The third is the one this assertion removes: the sign-in
+    // response already carries the user, so asking again asks for what we were just told.
+    const user = userEvent.setup();
+    const getSession = vi.fn().mockResolvedValue(null);
+    const signIn = vi.fn().mockResolvedValue(VERIFIED);
+    renderApp('/es/login', stubApi({ getSession, signIn }));
+    await screen.findByRole('banner');
+
+    // The one the page load costs, before anything is typed. Every page pays it: it is the header
+    // knowing who you are before it paints.
+    expect(getSession).toHaveBeenCalledTimes(1);
+
+    await fill(user, es['auth.field.email.label'], 'ana@example.com');
+    await fill(user, es['auth.field.password.label'], 'una-contraseña-larga');
+    await submit(user, es['auth.login.submit']);
+    await screen.findByText(es['home.title']);
+
+    expect(signIn).toHaveBeenCalledTimes(1);
+    expect(
+      getSession,
+      'the session was re-read after a response that already carried it',
+    ).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -368,25 +395,44 @@ describe('AC17..AC21 — the entry points', () => {
     expect(getSession).toHaveBeenCalledTimes(1);
   });
 
-  it('AC18 — signing out calls the API and the header goes back', async () => {
+  it('AC18 — signing out calls the API, once, and the header goes back', async () => {
     const user = userEvent.setup();
-    let signedIn = true;
-    const signOut = vi.fn().mockImplementation(() => {
-      signedIn = false;
-      return Promise.resolve();
-    });
-    renderApp(
-      '/es',
-      stubApi({ getSession: () => Promise.resolve(signedIn ? VERIFIED : null), signOut }),
-    );
+    // Same shape as AC27: `getSession` keeps insisting the user is signed in, so the header can
+    // only go back to the two links if the action seeded `null` from a successful sign-out.
+    const getSession = vi.fn().mockResolvedValue(VERIFIED);
+    const signOut = vi.fn().mockResolvedValue(undefined);
+    // From the account page: `W2-T10` moved the control off the header, and the header is still
+    // what this asserts about — it has to go back to offering the two doors.
+    renderApp('/es/account', stubApi({ getSession, signOut }));
     await screen.findByRole('banner');
-    await screen.findByText(VERIFIED.name);
+    await screen.findByText(VERIFIED.email);
 
-    await submit(user, es['nav.logout']);
+    await submit(user, es['account.signOut']);
 
     await waitFor(() => expect(signOut).toHaveBeenCalledTimes(1));
     const nav = screen.getByRole('navigation', { name: es['nav.primary'] });
     await within(nav).findByRole('link', { name: es['nav.login'] });
+    expect(getSession).toHaveBeenCalledTimes(1);
+  });
+
+  it('AC28 — a sign-out that fails asks rather than asserting', async () => {
+    // The asymmetry worth keeping: a call that *failed* has told us nothing, so seeding either
+    // answer would be the client inventing one. Here the re-read is the correct second request.
+    const user = userEvent.setup();
+    const getSession = vi.fn().mockResolvedValue(VERIFIED);
+    const signOut = vi.fn().mockRejectedValue(new ApiError(500, 'INTERNAL'));
+    renderApp('/es/account', stubApi({ getSession, signOut }));
+    await screen.findByRole('banner');
+    await screen.findByText(VERIFIED.email);
+
+    await submit(user, es['account.signOut']);
+
+    await waitFor(() => expect(getSession).toHaveBeenCalledTimes(2));
+    // Signing out navigates to the home page — the form posts to the layout route, and staying on
+    // a page whose loader requires a session would only bounce to the login form. So the assertion
+    // is the header: the sign-out failed, so the person is still signed in, and it still says so.
+    const nav = screen.getByRole('navigation', { name: es['nav.primary'] });
+    expect(await within(nav).findByRole('link', { name: VERIFIED.name })).toBeDefined();
   });
 
   it('AC19 — a session lookup that fails is signed out, not a broken site', async () => {
@@ -416,7 +462,7 @@ describe('AC17..AC21 — the entry points', () => {
 describe('AC26 — a password is never anywhere it can be read later', () => {
   it('keeps it out of the URL after a submit', async () => {
     const user = userEvent.setup();
-    renderApp('/es/login', stubApi({ signIn: () => Promise.resolve() }));
+    renderApp('/es/login', stubApi({ signIn: () => Promise.resolve(VERIFIED) }));
     await screen.findByRole('banner');
 
     await fill(user, es['auth.field.email.label'], 'ana@example.com');
@@ -425,5 +471,138 @@ describe('AC26 — a password is never anywhere it can be read later', () => {
 
     await waitFor(() => expect(window.location.search).not.toContain('contraseña'));
     expect(window.location.href).not.toContain('una-contrase');
+  });
+});
+
+/* ------------------------------------------------------------------------------------------- *
+ * `W2-T10` — sign-up that signs you in, and the header a signed-in visitor sees
+ * ------------------------------------------------------------------------------------------- */
+
+describe('AC8..AC10 — sign-up chains a sign-in, so the page needs to know nothing', () => {
+  it('AC8 — a usable account lands on the home page, signed in', async () => {
+    // What `AUTH_TRUST_EMAIL_ON_SIGNUP` produces on the server: the account is verified the moment
+    // it is created, so the sign-in the action chains succeeds. The page has no flag and no branch
+    // for it — it asks, and the answer decides.
+    const user = userEvent.setup();
+    const signUp = vi.fn().mockResolvedValue(undefined);
+    const signIn = vi.fn().mockResolvedValue(VERIFIED);
+    renderApp('/es/signup', stubApi({ signUp, signIn, getSession: () => Promise.resolve(null) }));
+    await screen.findByRole('banner');
+
+    await fill(user, es['auth.field.name.label'], 'Ana Pérez');
+    await fill(user, es['auth.field.email.label'], 'ana@example.com');
+    await fill(user, es['auth.field.password.label'], 'una-contraseña-larga');
+    await submit(user, es['auth.signup.submit']);
+
+    await screen.findByText(es['home.title']);
+    expect(signUp).toHaveBeenCalledTimes(1);
+    expect(signIn).toHaveBeenCalledWith({
+      email: 'ana@example.com',
+      password: 'una-contraseña-larga',
+    });
+    const nav = screen.getByRole('navigation', { name: es['nav.primary'] });
+    expect(within(nav).getByText(VERIFIED.name)).toBeDefined();
+  });
+
+  it('AC9 — an account that still needs verifying gets the inbox panel', async () => {
+    const user = userEvent.setup();
+    const signIn = vi.fn().mockRejectedValue(new ApiError(403, 'EMAIL_NOT_VERIFIED'));
+    renderApp('/es/signup', stubApi({ signIn }));
+    await screen.findByRole('banner');
+
+    await fill(user, es['auth.field.name.label'], 'Ana Pérez');
+    await fill(user, es['auth.field.email.label'], 'ana@example.com');
+    await fill(user, es['auth.field.password.label'], 'una-contraseña-larga');
+    await submit(user, es['auth.signup.submit']);
+
+    const panel = await screen.findByTestId('inbox-panel');
+    expect(within(panel).getByRole('button', { name: es['auth.inbox.resend'] })).toBeDefined();
+  });
+
+  it('AC10 — a duplicate address whose password is wrong gets the same panel, not an error', async () => {
+    // The uniform outcome matters: a page that showed something different here would be answering
+    // "does this address already have an account" — which is the question `W2-T01` §4.5 refuses.
+    const user = userEvent.setup();
+    const signIn = vi.fn().mockRejectedValue(new ApiError(401, 'INVALID_EMAIL_OR_PASSWORD'));
+    renderApp('/es/signup', stubApi({ signIn }));
+    await screen.findByRole('banner');
+
+    await fill(user, es['auth.field.name.label'], 'Ana Pérez');
+    await fill(user, es['auth.field.email.label'], 'ya-registrada@example.com');
+    await fill(user, es['auth.field.password.label'], 'una-contraseña-larga');
+    await submit(user, es['auth.signup.submit']);
+
+    expect(await screen.findByTestId('inbox-panel')).toBeDefined();
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+});
+
+describe('AC11..AC13 — the header stops offering what you already have', () => {
+  it('AC11/AC12 — signed in: the name links to the account page, and neither door is offered', async () => {
+    renderApp('/es', stubApi({ getSession: () => Promise.resolve(VERIFIED) }));
+    await screen.findByRole('banner');
+
+    const nav = screen.getByRole('navigation', { name: es['nav.primary'] });
+    const account = await within(nav).findByRole('link', { name: VERIFIED.name });
+    expect(account.getAttribute('href')).toBe('/es/account');
+    expect(within(nav).queryByRole('link', { name: es['nav.login'] })).toBeNull();
+    expect(within(nav).queryByRole('link', { name: es['nav.signup'] })).toBeNull();
+    // Sign-out moved to the account page: rarely used, reached deliberately.
+    expect(within(nav).queryByRole('button', { name: es['nav.logout'] })).toBeNull();
+  });
+
+  it('AC13 — signed out: both doors, and no account link', async () => {
+    renderApp('/es');
+    await screen.findByRole('banner');
+
+    const nav = screen.getByRole('navigation', { name: es['nav.primary'] });
+    expect(within(nav).getByRole('link', { name: es['nav.login'] })).toBeDefined();
+    expect(within(nav).getByRole('link', { name: es['nav.signup'] })).toBeDefined();
+    expect(within(nav).queryByRole('link', { name: es['nav.account'] })).toBeNull();
+  });
+});
+
+describe('AC14..AC17 — the account page', () => {
+  it('AC14 — shows who you are, from the session the shell already loaded', async () => {
+    const getSession = vi.fn().mockResolvedValue(VERIFIED);
+    renderApp('/es/account', stubApi({ getSession }));
+    await screen.findByRole('banner');
+
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toContain(VERIFIED.name);
+    expect(screen.getByText(VERIFIED.email)).toBeDefined();
+    // The shell loaded it; the page reads it. A second request here would be R3 broken on a page
+    // whose whole content is already in the cache.
+    expect(getSession).toHaveBeenCalledTimes(1);
+  });
+
+  it('AC15 — signing out from it returns the header to the signed-out state', async () => {
+    const user = userEvent.setup();
+    const signOut = vi.fn().mockResolvedValue(undefined);
+    renderApp('/es/account', stubApi({ getSession: () => Promise.resolve(VERIFIED), signOut }));
+    await screen.findByRole('banner');
+
+    await submit(user, es['account.signOut']);
+
+    await waitFor(() => expect(signOut).toHaveBeenCalledTimes(1));
+    const nav = screen.getByRole('navigation', { name: es['nav.primary'] });
+    await within(nav).findByRole('link', { name: es['nav.login'] });
+  });
+
+  it('AC16 — signed out, it sends you to the login page', async () => {
+    renderApp('/es/account');
+
+    await screen.findByRole('banner');
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe(es['auth.login.title']);
+  });
+
+  it('AC17 — the plan section is a boundary, not a control', async () => {
+    // `BD-16`/`BD-03` are undecided and `W5-T07`/`W5-T08` are both `[B]`: there is no tier in the
+    // schema, no price, and nothing an "upgrade" button could do. A sentence is the honest control.
+    renderApp('/es/account', stubApi({ getSession: () => Promise.resolve(VERIFIED) }));
+    await screen.findByRole('banner');
+
+    const plan = screen.getByRole('region', { name: es['account.plan.title'] });
+    expect(within(plan).queryByRole('button')).toBeNull();
+    expect(within(plan).queryByRole('link')).toBeNull();
   });
 });

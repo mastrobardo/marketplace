@@ -216,3 +216,48 @@ describe('W2-T01 §4.7 — one origin in development too', () => {
     expect(handlers).not.toContain('/auth');
   });
 });
+
+describe('W2-T10 §2.2 — trusting the address is opt-in, and off by default', () => {
+  it('AC1 — defaults to false when nothing is set', () => {
+    expect(loadConfig(VALID).AUTH_TRUST_EMAIL_ON_SIGNUP).toBe(false);
+  });
+
+  it('AC1 — reads the string a deploy actually sets', () => {
+    expect(
+      loadConfig({ ...VALID, AUTH_TRUST_EMAIL_ON_SIGNUP: 'true' }).AUTH_TRUST_EMAIL_ON_SIGNUP,
+    ).toBe(true);
+    expect(
+      loadConfig({ ...VALID, AUTH_TRUST_EMAIL_ON_SIGNUP: 'false' }).AUTH_TRUST_EMAIL_ON_SIGNUP,
+    ).toBe(false);
+  });
+
+  /**
+   * The default is the whole safety property: a mechanism that weakens address ownership must be
+   * something an environment *asks* for in a diff a reviewer can see, never something it inherits.
+   * A source assertion because a `.default(true)` would be a one-word change with no visible
+   * symptom — everything would keep working.
+   */
+  it('has no default of true — a source assertion, because the failure is silent', () => {
+    const source = read('src', 'config.ts');
+    const declaration = source.slice(
+      source.indexOf('AUTH_TRUST_EMAIL_ON_SIGNUP:'),
+      source.indexOf('AUTH_TRUST_EMAIL_ON_SIGNUP:') + 300,
+    );
+    expect(declaration).not.toContain('.default(true)');
+  });
+
+  /**
+   * §2.1 — the trap this ticket was one line away from walking into. better-auth derives the
+   * synthetic duplicate response from `requireEmailVerification`:
+   *
+   *     shouldReturnGenericDuplicateResponse = requireEmailVerification || autoSignIn === false
+   *
+   * so switching verification off to make accounts usable would silently delete the anti-enumeration
+   * answer `W2-T01` §4.5 exists for. The flag above marks the user verified instead; this asserts
+   * that nobody later takes the shortcut.
+   */
+  it('AC4 — keeps requireEmailVerification on, because it is what closes the enumeration oracle', () => {
+    const source = read('src', 'auth', 'auth.ts');
+    expect(source).toMatch(/requireEmailVerification:\s*true/);
+  });
+});

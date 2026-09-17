@@ -1,5 +1,5 @@
 import { type ReactElement } from 'react';
-import { Link, useActionData, useNavigation, useParams } from 'react-router';
+import { Link, redirect, useActionData, useNavigation, useParams } from 'react-router';
 import type { ActionFunctionArgs } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@marketplace/ui';
@@ -14,6 +14,8 @@ import {
   resendVerification,
   type ResendOutcome,
 } from '../features/auth/actions.js';
+import { ApiError } from '../shared/api.js';
+import { seedSession } from '../shared/session.js';
 import { type TranslationKey } from '../i18n/locales/es.js';
 
 /**
@@ -35,7 +37,7 @@ export async function action({
   request,
   params,
   context,
-}: ActionFunctionArgs): Promise<SignUpResult | ResendOutcome> {
+}: ActionFunctionArgs): Promise<SignUpResult | ResendOutcome | Response> {
   const form = await request.formData();
   const locale = localeOf(params);
 
@@ -46,14 +48,43 @@ export async function action({
   // it is a bad request rather than a user's mistake and it gets the generic sentence.
   if (!parsed.success) return { kind: 'failed', message: 'auth.error.failed' };
 
+  const api = apiFrom(context);
+
   try {
     // Relative, and in *this* language: the emailed link resolves against `BETTER_AUTH_URL` — which
     // is the web origin, not the API's — and lands the user back on the page in the language they
     // signed up in (`W2-T09` §4.4).
-    await apiFrom(context).signUp({ ...parsed.data, callbackURL: `/${locale}/verify-email` });
-    return { kind: 'sent', email: parsed.data.email };
+    await api.signUp({ ...parsed.data, callbackURL: `/${locale}/verify-email` });
   } catch (error) {
     return { kind: 'failed', message: failureMessage(error) };
+  }
+
+  /**
+   * **Then sign in — `W2-T10` §2.3, and it is how this page serves two modes without knowing which
+   * one it is in.**
+   *
+   * Whether a new account can be used depends on `AUTH_TRUST_EMAIL_ON_SIGNUP`, which is the
+   * server's business: with it on the account is verified at creation and this succeeds; with it
+   * off the API answers `403 EMAIL_NOT_VERIFIED` and the inbox panel below is exactly right. The
+   * page asks rather than being told, so no flag has to reach the browser and nothing here changes
+   * the day `OPS-14` lets us turn it off.
+   *
+   * A `401` lands here too — a duplicate sign-up whose password is not the account's — and gets the
+   * same panel. That uniformity is the point: a different outcome would answer "does this address
+   * already exist", which is the question `W2-T01` §4.5 refuses to answer.
+   */
+  try {
+    seedSession(
+      context,
+      await api.signIn({ email: parsed.data.email, password: parsed.data.password }),
+    );
+    return redirect(`/${locale}`);
+  } catch (error) {
+    // Only a refusal means "not usable yet". Anything else is a bug in this code or a service that
+    // is down, and swallowing it here would render "check your inbox" over a broken deploy — the
+    // same lie §4.6 of `W2-T09` refuses about mail.
+    if (!(error instanceof ApiError)) throw error;
+    return { kind: 'sent', email: parsed.data.email };
   }
 }
 

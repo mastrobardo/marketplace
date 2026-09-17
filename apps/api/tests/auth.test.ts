@@ -493,3 +493,102 @@ describeLive('W2-T01 §4.4 — the carve-out is exactly one prefix', () => {
     expect(body.message ?? body.code).toBeTruthy();
   });
 });
+
+/**
+ * `W2-T10` §2.2 — a second application, built with the flag on.
+ *
+ * Its own instance rather than a mutated config: the flag is read once when `buildAuth` composes
+ * the hooks, and a test that flipped it under a running app would be asserting against a
+ * configuration the server never saw.
+ */
+describeLive('W2-T10 — trusting the address at sign-up', () => {
+  let trusting: FastifyInstance;
+
+  beforeAll(async () => {
+    const config = loadConfig({
+      ...process.env,
+      BETTER_AUTH_SECRET: 'test-secret-at-least-thirty-two-chars',
+      BETTER_AUTH_URL: 'http://127.0.0.1:5173',
+      AUTH_TRUST_EMAIL_ON_SIGNUP: 'true',
+    });
+    trusting = buildApp({ config, auth: buildAuth({ config, prisma, mailer: stubMailer() }) });
+    await trusting.ready();
+  });
+
+  afterAll(async () => {
+    await trusting.close();
+  });
+
+  async function postTo(app: FastifyInstance, url: string, payload: unknown): Promise<Res> {
+    const response = await app.inject({
+      method: 'POST',
+      url,
+      payload: JSON.stringify(payload),
+      headers: { 'content-type': 'application/json' },
+    });
+    return {
+      status: response.statusCode,
+      body: response.body,
+      json: () => JSON.parse(response.body) as unknown,
+      cookies: ([] as string[]).concat(response.headers['set-cookie'] ?? []),
+    };
+  }
+
+  it('AC2 — leaves a user unverified when the flag is off', async () => {
+    const email = freshEmail('untrusted');
+    await post('/api/auth/sign-up/email', { email, password: PASSWORD, name: 'Test' });
+
+    const user = await prisma.user.findUnique({ where: { email } });
+    expect(user?.emailVerified).toBe(false);
+    expect(user?.emailVerifiedAt).toBeNull();
+  });
+
+  it('AC3 — marks the boolean and the audit timestamp together when it is on', async () => {
+    // The pair is `ADR-005`'s one redundant column, and it is only a cost while it agrees. The
+    // create hook that keeps them in step is the same one this flag rides on.
+    const email = freshEmail('trusted');
+    await postTo(trusting, '/api/auth/sign-up/email', { email, password: PASSWORD, name: 'Test' });
+
+    const user = await prisma.user.findUnique({ where: { email } });
+    expect(user?.emailVerified).toBe(true);
+    expect(user?.emailVerifiedAt, 'the boolean flipped without the audit fact').not.toBeNull();
+  });
+
+  it('AC5 — and the account can be signed into immediately', async () => {
+    const email = freshEmail('trusted-signin');
+    await postTo(trusting, '/api/auth/sign-up/email', { email, password: PASSWORD, name: 'Test' });
+
+    const signIn = await postTo(trusting, '/api/auth/sign-in/email', { email, password: PASSWORD });
+    expect(signIn.status, signIn.body).toBe(200);
+    expect(signIn.cookies.join(';')).toContain('better-auth.session_token');
+  });
+
+  it('AC4 — and a duplicate sign-up is still indistinguishable from a new one', async () => {
+    // The reason the flag marks the user verified instead of switching `requireEmailVerification`
+    // off: better-auth derives the synthetic duplicate response from that option, so the shortcut
+    // would have deleted the anti-enumeration answer as a side effect.
+    const email = freshEmail('trusted-dup');
+    const first = await postTo(trusting, '/api/auth/sign-up/email', {
+      email,
+      password: PASSWORD,
+      name: 'Test',
+    });
+    const second = await postTo(trusting, '/api/auth/sign-up/email', {
+      email,
+      password: 'a completely different password',
+      name: 'Someone Else',
+    });
+
+    expect(first.status).toBe(200);
+    expect(second.status).toBe(200);
+
+    const shape = (body: unknown): string[] => Object.keys(body as Record<string, unknown>).sort();
+    expect(shape(second.json())).toEqual(shape(first.json()));
+    expect((first.json() as { token: unknown }).token).toBeNull();
+    expect((second.json() as { token: unknown }).token).toBeNull();
+
+    // And no second row, nor a password anyone else chose.
+    const users = await prisma.user.findMany({ where: { email } });
+    expect(users).toHaveLength(1);
+  });
+});

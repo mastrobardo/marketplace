@@ -168,12 +168,33 @@ export function buildAuth({ config, prisma, mailer }: BuildAuthOptions) {
            * moment it drifts it is a lie, so both writes happen together rather than one being
            * left to a later ticket.
            */
-          before: async (user) => ({
-            data: {
-              ...user,
-              ...(user.emailVerified ? { emailVerifiedAt: new Date() } : {}),
-            },
-          }),
+          before: async (user) => {
+            /**
+             * `W2-T10` §2.2 — trust the address, while nothing can check it.
+             *
+             * Off by default and warned about at boot. It rides on this hook rather than on
+             * `requireEmailVerification: false`, and the difference is not stylistic: better-auth
+             * builds its synthetic duplicate-sign-up response from that option —
+             *
+             *     shouldReturnGenericDuplicateResponse = requireEmailVerification || autoSignIn === false
+             *
+             * — so switching it off would delete the enumeration defence `W2-T01` §4.5 exists for,
+             * silently, as a side effect of a convenience. Marking the user verified instead leaves
+             * every other behaviour exactly where it was: the duplicate response, the uniform
+             * `token: null`, the verification mail, the link, the reset flow.
+             */
+            const verified = config.AUTH_TRUST_EMAIL_ON_SIGNUP || user.emailVerified;
+
+            return {
+              data: {
+                ...user,
+                emailVerified: verified,
+                // The pair, still written together: `ADR-005` calls the redundant column a cost only
+                // while it agrees, and the moment it drifts it is a lie.
+                ...(verified ? { emailVerifiedAt: new Date() } : {}),
+              },
+            };
+          },
         },
         update: {
           before: async (user) => ({

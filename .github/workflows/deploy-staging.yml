@@ -158,12 +158,22 @@ jobs:
       # domains.
       #
       # Which is why the web app is deployed before this step rather than after it.
+      # `W2-T10` §2.2 — `AUTH_TRUST_EMAIL_ON_SIGNUP` below is temporary, and deliberately set here
+      # rather than defaulted in code. There is no mail provider in any deployed environment until
+      # `OPS-14`, so without it every sign-up creates an account nobody can use; with it, an address
+      # is trusted the moment somebody types it. The API warns about it at boot. Delete the line the
+      # day a real sender exists.
+      #
+      # It sits *inside* the folded `run: >` block, so it carries no comment of its own: `#` is not
+      # a comment character inside a folded scalar, and a note written there would be handed to
+      # `flyctl` as arguments.
       - name: Give the API its database and its auth secret
         run: >
           flyctl secrets set
           DATABASE_URL="$DATABASE_URL"
           BETTER_AUTH_SECRET="$BETTER_AUTH_SECRET"
           BETTER_AUTH_URL="$BETTER_AUTH_URL"
+          AUTH_TRUST_EMAIL_ON_SIGNUP="true"
           --app marketplace-api-staging --stage
         env:
           DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}

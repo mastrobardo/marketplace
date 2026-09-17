@@ -25,32 +25,15 @@ import {
 } from '@marketplace/contracts';
 import { type SearchQuery } from '@marketplace/ui';
 import axios, { type AxiosInstance } from 'axios';
-import { SessionSchema, type SessionUser } from './session.js';
+import { SessionSchema, SessionUserSchema, type SessionUser } from './session.js';
 
 /**
- * What a failed call looks like to a loader.
- *
- * The loader has to tell one failure apart from the rest — a 404 is a *page*, with a way out, while
- * everything else is the error boundary — and the alternative is a route module reaching into an
- * `AxiosError`'s `response.status`. That would make the transport visible to the page, so the day
- * the generated client replaces this file every loader would need editing. This module is the only
- * one that knows there is HTTP underneath; `status` is what it tells the rest of the app.
- *
- * `status` is `undefined` for a request that never got an answer — a network failure is not a 500,
- * and pretending it is would mean claiming to know what the server did.
+ * `ApiError` lives in its own module (`api-error.ts`) and is re-exported here so that every caller
+ * keeps one import. Moving it broke a runtime import cycle — see that file.
  */
-export class ApiError extends Error {
-  constructor(
-    readonly status: number | undefined,
-    message: string,
-    // `Error`'s own `cause`, not a second field of the same name — a `readonly cause` property here
-    // shadows the base class and TypeScript says so.
-    options?: { cause?: unknown },
-  ) {
-    super(message, options);
-    this.name = 'ApiError';
-  }
-}
+import { ApiError } from './api-error.js';
+
+export { ApiError } from './api-error.js';
 
 export interface ApiClient {
   getCategories: (locale: string) => Promise<CategorySummary[]>;
@@ -97,7 +80,14 @@ export interface ApiClient {
     /** Where the emailed link should land. Relative, so `trustedOrigins` needs no entry. */
     callbackURL: string;
   }) => Promise<void>;
-  signIn: (input: { email: string; password: string }) => Promise<void>;
+  /**
+   * Returns the user the API just authenticated — **the server's own answer, not a guess.**
+   *
+   * better-auth's sign-in response carries the whole user, so asking `get-session` immediately
+   * afterwards is a second request for something we were just told. The caller seeds the session
+   * cache with this, which is what makes signing in **one** API call.
+   */
+  signIn: (input: { email: string; password: string }) => Promise<SessionUser>;
   signOut: () => Promise<void>;
   /** `null` for a visitor with no session — better-auth answers `200` with a null body, not `401`. */
   getSession: () => Promise<SessionUser | null>;
@@ -201,7 +191,11 @@ export function createApiClient(
     },
 
     async signIn(input) {
-      await call(() => http.post<unknown>('api/auth/sign-in/email', input));
+      const response = await call(() => http.post<unknown>('api/auth/sign-in/email', input));
+      // Parsed on the way in like every other response: a client that trusts the wire is a second
+      // definition of the shape. `SessionUserSchema` takes the four fields the storefront uses and
+      // drops the rest — `roles` included, because `W2-T03` owns what a role may change.
+      return SessionUserSchema.parse((response.data as { user?: unknown }).user);
     },
 
     async signOut() {

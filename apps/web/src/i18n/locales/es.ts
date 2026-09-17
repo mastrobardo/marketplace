@@ -165,6 +165,13 @@ export const es = {
   'nav.logout': 'Salir',
   'nav.account': 'Tu cuenta',
 
+  'account.title': 'Tu cuenta',
+  'account.email.label': 'Correo electrónico',
+  'account.signOut': 'Cerrar sesión',
+  'account.plan.title': 'Tu plan',
+  'account.plan.body':
+    'Ahora mismo todas las cuentas son gratuitas. Cuando haya planes de pago, se gestionan desde aquí.',
+
   'auth.signup.title': 'Crea tu cuenta',
   'auth.signup.intro':
     'Con una cuenta puedes pedir presupuestos y hablar con profesionales. Es gratis.',
