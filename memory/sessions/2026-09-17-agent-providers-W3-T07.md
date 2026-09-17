@@ -47,6 +47,13 @@ its privacy exclusions, 400-before-404, locale-resolved category names, and the 
   `schema.prisma:214` and `packages/contracts/src/search.ts` both justify the coarse point with
   *"usually a home address"*. The privacy behaviour is right and does not change; the stated purpose
   is not. Both are `agent-contracts`' edits — raised as §5 Q1/Q2, not made here (L3, L10).
+- **After the operator merged `chore-memory-consolidation` (#257, squashed)** this branch was
+  rebased onto `main` with `git rebase --onto origin/main c033b1e` — a squash puts the *content* on
+  `main` without its commits, so the old ancestors stayed in the PR range and `author-identity`
+  failed on `03e8651`, a commit **GitHub** wrote. The rebase was verified content-neutral with
+  `git diff --stat bbb2e01 HEAD` (empty) before pushing. `MEM-2026-09-17-16`.
+- **CI's `lint` job runs `pnpm format:check` as well as ESLint**, and the root `pnpm lint` script
+  does not. Cost one round trip on a wrapped import. `MEM-2026-09-17-17`.
 - Merge of `origin/main` conflicted in three files, all foreseen by `MEM-2026-09-09-28`:
   `conventions.md` and `gotchas.md` were genuine additions (both sides kept); `TODO.md`'s NEXT block
   was a **modification** and `MEM-2026-09-09-13` applies — kept HEAD's block, dropped the stale one.
@@ -69,10 +76,19 @@ and is a missing variable. The local port is **5433**, not 5432:
 `STACK_LIVE=1 DATABASE_URL="postgres://marketplace:marketplace_local@127.0.0.1:5433/marketplace" \
   pnpm --filter @marketplace/api exec vitest run`
 
-**Next action:** `W3-T10` — the demo provider seeder, then retire `mocks/search.ts`,
-`mocks/provider.ts` and their two handlers, re-pointing `tests/mocks.test.ts` AC14–AC16 at the
-contract rather than at the handler. Both endpoints are now real and both mocks are deliberately
-still in place; `W3-T10` is the only thing standing between the storefront and real data.
+**Next action: `W0-T29`, then `W3-T10`** — reordered by the operator after this task's CI runs.
+
+`W0-T29` stopped being a review and became a decision: **`spec-present` is the gate worth its slot,
+`author-identity` is not, and the four gate jobs cost more in feedback latency than they return**
+(operator, 2026-09-17). The ticket's own "middle option" — one job, each gate reported in the
+summary — is what the steer points at, and `OPS-03` has not run, so the check names can still be
+chosen rather than inherited. `author-identity` fired exactly once in this repo's history and was
+wrong when it did (`MEM-2026-09-17-16`).
+
+Then `W3-T10`: the demo provider seeder, then retire `mocks/search.ts`, `mocks/provider.ts` and
+their two handlers, re-pointing `tests/mocks.test.ts` AC14–AC16 at the contract rather than at the
+handler. Both endpoints are now real and both mocks are deliberately still in place; `W3-T10` is the
+only thing standing between the storefront and real data.
 
 **Do not redo:**
 - The factory widening. `ProviderProfileInput` now has `baseAddressId` and nullable
