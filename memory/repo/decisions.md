@@ -74,3 +74,26 @@ this file records the *why* an agent would otherwise have to rediscover.
 - **evidence**: PR #161 and its revert; `docs/interventions/2026-09-09-W0-T23-01.md`
 - **status**: active
 
+### A provider's base address is their operating centre, and it is required
+
+- **id**: MEM-2026-09-17-15
+- **scope**: repo
+- **fact**: Every provider — manitas or pro — must have a base address, and it is **the centre of
+  the radius they work in, not where they live**. A provider may legitimately set it to a city
+  centre and cover 40 km from there. Operator's rule, 2026-09-17, taken while reviewing `W3-T07`'s
+  answer for a provider without one.
+- **why**: `base_address_id` is nullable today, and the null is not a benign "not set yet": such a
+  provider is excluded from search entirely (`W3-T05` AC6, `schema.prisma:213`) and cannot be
+  serialised by `ProviderProfileSchema` at all, which requires `city`, `province` and `point`. So
+  the state the schema permits is one the product cannot serve — `W3-T07` answers it `404`, for a
+  row that exists. Requiring the address deletes the state rather than handling it.
+- **apply**: `W3-T02` requires a base address at profile creation; making the column `NOT NULL` is a
+  migration for `agent-contracts` (`docs/specs/S3/W3-T07-provider-profile-api.md` §5 Q1). Until
+  both land, treat "no base address" as unlisted rather than as an error — and do not add a second
+  way of rendering a provider without one. Separately, **the privacy rule does not weaken**: a
+  provider may still enter their home, and no endpoint can tell which did, so the coarse point and
+  the `line1`/`line2` deny stand exactly as they are. What changes is the *stated purpose* of the
+  column — `schema.prisma:214` and `packages/contracts/src/search.ts` both justify coarsening with
+  "usually a home address", which is now the wrong reason for the right behaviour (§5 Q2).
+- **evidence**: `docs/specs/S3/W3-T07-provider-profile-api.md` §2.4; `TODO.md` `W3-T02`
+- **status**: active

@@ -11,8 +11,12 @@
  * `W1-T05` §8 states and this file could quietly break. It cannot: the schema is strict and the
  * point is refined, so a forgotten exclusion fails `tests/mocks.test.ts` rather than shipping.
  *
- * `W3-T07` (`agent-providers`) implements `GET /providers/:id` against the same schema. When it
- * lands, this file is deleted, not migrated.
+ * **`W3-T07` landed and this file outlived it**, which is not what the line here used to promise.
+ * `GET /api/providers/:id` is real, and nothing seeds a provider — `auth-demo-users` is the only
+ * seeder — so deleting this today would point `pnpm dev` at a correct endpoint over an empty table,
+ * and take `tests/mocks.test.ts`'s contract criteria with it. `W3-T10` owns the retirement, behind a
+ * demo seeder, on exactly the terms `W3-T05` settled for its own search handler. (Spelled in
+ * prose because the wildcard the handler matches on would close this comment.)
  */
 import { coarsenPoint, type ProviderProfile } from '@marketplace/contracts';
 import { buildCatalogue, type CatalogueProvider } from './catalogue.js';

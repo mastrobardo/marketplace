@@ -7,7 +7,7 @@ slice: S3
 revision: 1
 memory: memory/slices/agent-providers.md
 owns:
-  - apps/api/src/modules/professionals/**
+  - apps/api/src/modules/providers/**
   - apps/web/src/features/{provider-profile,portfolio,availability}/**
 forbidden:
   - packages/contracts/**
