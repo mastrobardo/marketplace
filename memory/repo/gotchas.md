@@ -159,6 +159,13 @@ come from real experience.
   case is `apps/web/src/i18n/locales/{es,en}.ts` — seven user-facing slices will all append keys to
   those two files, where a dropped key is a missing translation rather than a cosmetic duplicate.
 - **evidence**: PRs #150, #151, #152; issue #153
+- **update 2026-09-17**: `W0-T23` did land and was **reverted whole** (#161 → #162) — see
+  `decisions.md`, "Prefer a manual rebase over restructuring source files". So "until `W0-T23`
+  lands" never arrives: rebasing by hand is the standing policy, and the principle is open as #163.
+  The colliding pair has since moved to `apps/web/src/shared/api.ts` (every auth-adjacent task edits
+  it) and `TODO.md` (two tasks may edit the *same* line) — three rebases in the 2026-09-14 session,
+  all textual, one pass each. Allocate record ids (`MEM-<date>-<n>`, migration numbers) sequentially
+  across a whole multi-branch session: eleven ids merged with zero collisions that way.
 - **status**: active
 
 ### "Keep both sides" is wrong whenever a hunk is a modification
@@ -493,4 +500,43 @@ come from real experience.
   or the `OPS-19` GitHub App would remove the step; neither is worth it for baselines.
 - **evidence**: runs 35248674237 / 35248674485 on `W12-T20-design-system-stylesheet`;
   `docs/specs/S10/W12-T20-design-system-stylesheet.run.md` Finding 5
+- **status**: active
+
+### `git log A...B` is the symmetric difference, and it judged commits from the base
+- **id**: MEM-2026-09-17-7
+- **scope**: repo
+- **fact**: `scripts/gates/run.ts` built one range and gave it to two commands. `git diff A...B` is
+  "what changed on B since the merge base" — correct for the changed-files half. `git log A...B` is
+  the **symmetric difference**, so it also walks commits on the base. GitHub's squash-merges carry
+  committer `noreply@github.com` and are ordinary commits, so `--no-merges` does not filter them:
+  `author-identity` passed on `0c8c11e` at 09:26 and failed on **the same commit** at 09:30, because
+  #242 merged into `main` at 09:29:53. One merge would have reddened every open pull request, each
+  telling its author to rebase over a commit they did not write.
+- **why**: The gate's pure half had thorough two-directional tests. The bug was entirely in the
+  *range* it was fed, and nothing tested that.
+- **apply**: When a gate reads git history, test the **range**, not only the predicate. Suspect
+  `...` whenever a check passes and then fails on an unchanged commit — a red check right after
+  something merged into the base is a range bug until proven otherwise. Fixed by splitting by
+  purpose: `range('diff')` keeps `...`, `range('log')` uses `..`.
+- **evidence**: `scripts/gates/run.ts`; `docs/specs/S10/W12-T15-performance-budget.run.md`
+- **status**: active
+
+### A third-party image can be deleted from its registry, and the error says "login"
+- **id**: MEM-2026-09-17-8
+- **scope**: repo
+- **fact**: `minio/minio` and `minio/mc` were removed from Docker Hub — the **repositories**, not
+  just the pinned tags (`hub.docker.com/v2/repositories/minio/minio/` answers
+  `{"message":"object not found"}`). Every `pnpm stack:up` failed and the `database` job was red on
+  `main` and on every PR until #237 repointed both at `quay.io/minio/…`, MinIO's own registry, which
+  carries the identical tags for amd64 and arm64.
+- **why**: Docker's `pull access denied … repository does not exist or may require 'docker login'`
+  is **one message for two different things** — deleted, and unauthorised. It reads like a
+  credentials problem and usually is not. The local stack and a CI job depend on artefacts a third
+  party can delete without notice.
+- **apply**: Check the registry API before debugging auth. Pin every third-party image by **tag and
+  digest** (`image:TAG@sha256:…`) so a re-pointed tag fails loudly instead of quietly starting a
+  different build. `W0-T27` (#238) tracks mirroring into GHCR, deliberately not built into the fix.
+  Verify a stack change with `pnpm stack:up` plus the live suites locally; note `.env` uses
+  `POSTGRES_PORT=5433` here while CI uses 5432.
+- **evidence**: PR #237; `docker-compose.yml`
 - **status**: active

@@ -99,3 +99,36 @@ How we do things here, beyond what lint and CI enforce automatically.
   gate job — `tests/ci-workflow.test.ts` fails the build for both.
 - **evidence**: `docs/specs/S0/W0-T06-ci-pull-request-checks.md` §4; PR #155
 - **status**: active
+
+### Every pull request targets `main` — there is no stacked cadence
+- **id**: MEM-2026-09-17-5
+- **scope**: repo
+- **fact**: No PR is ever opened against another feature branch, for any reason — not for a queued
+  series, not for review order. Operator, 2026-09-11: *"There should never a stacked PR setup. this
+  already happened another time. All PRs goes against main. always."*
+- **why**: A PR merges into the branch named in its `base`. On 2026-09-11 three reviewed and
+  approved PRs (#220, #221, #222 — `W12-T03`/`T04`/`T06`) merged into branches `main` had already
+  moved past. GitHub showed **MERGED**, `main` had none of the code, and nothing warned — caught
+  only by reading `main`'s tree by hand. Recovery was a combined PR (#224). Stacking also imposes a
+  merge order on the operator, and a squash of any link strands every branch above it.
+- **apply**: When a task depends on an unmerged one, wait for the merge and branch from `main`, or
+  branch from `main` and accept the overlap — never chain, and never offer stacking as the fast
+  path. If a stack exists, land it as one PR against `main`
+  (`git rebase --onto origin/main <old-base> --update-refs`), do not retarget bases. Verify a
+  "merged" PR actually reached `main`: `git merge-base --is-ancestor <mergeCommit> origin/main`.
+- **evidence**: PRs #220, #221, #222, #224; `memory/slices/agent-devops.md`
+- **status**: active
+
+### A docs-only pull request carries `[skip ci]` — it is never a cancelled run
+- **id**: MEM-2026-09-17-6
+- **scope**: repo
+- **fact**: When a PR touches only docs, `TODO.md` or board scripts, `[skip ci]` goes in the commit
+  subject **and** in the squash-merge subject. Runs are not allowed to start and then be cancelled.
+- **why**: `deploy-preview.yml` fires on every `pull_request` and creates a **real Fly app and a
+  real Neon branch** before a `gh run cancel` could land. The merge-commit copy is what governs `CI`
+  and `Deploy staging` on the push to `main`, so skipping only the branch commit still fires both.
+- **apply**: `gh pr merge --squash --subject "… [skip ci]"` — the default squash subject comes from
+  the PR title and will not carry it. Run the gates locally instead and say so in the PR body.
+  Never use this to dodge a red gate on a code change.
+- **evidence**: PRs #169, #193 (zero runs on either); `.github/workflows/deploy-preview.yml`
+- **status**: active
