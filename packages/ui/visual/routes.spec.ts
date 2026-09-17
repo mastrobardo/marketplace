@@ -1,5 +1,8 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';
+import { compareFingerprint, decide } from './environment.js';
+import { actualFingerprint, isCI, referenceFingerprint } from './probe.js';
+import { baselineName, ROUTES, shotRoutes } from './routes.js';
 
 /**
  * Axe over the storefront's real routes — `W12-T16` AC11/AC12, and the older half of the ticket.
@@ -22,51 +25,6 @@ import { expect, test } from '@playwright/test';
  */
 
 const base = process.env['WEB_BASE_URL'];
-
-interface Route {
-  readonly path: string;
-  readonly why: string;
-  /** A selector that proves the intended page rendered, rather than a 200 with the wrong content. */
-  readonly proof: string;
-}
-
-const ROUTES: readonly Route[] = [
-  { path: '/es', why: 'the home page, ES — the primary locale', proof: 'main h1' },
-  {
-    path: '/en',
-    why: 'the home page, EN — different text lengths, same landmarks',
-    proof: 'main h1',
-  },
-  {
-    path: '/es/become-a-pro',
-    why: 'AuthWall composed into a page rather than a story',
-    proof: 'main h1',
-  },
-  {
-    path: '/es/legal/terms',
-    why: 'the pending-content slot, and a route with its own boundary',
-    proof: 'main',
-  },
-  {
-    path: '/es/legal/nonsense',
-    why: 'the route-level 404 — the header must survive it (MEM-2026-09-11-16)',
-    proof: '[data-testid="not-found"]',
-  },
-  {
-    path: '/nope',
-    why: 'the shell-level 404 — an unknown :lang (MEM-2026-09-11-17)',
-    proof: '[data-status="404"]',
-  },
-  {
-    // W12-T09 correctly made the 500 unreachable: the categories request degrades rather than
-    // throwing. So the one surface with no coverage of any kind also had no URL. Spec §10 Q1
-    // option A adds a fault trigger that is stripped from any build without the flag — the same
-    // resolve-time stripping W12-T08 uses for MSW, never an `import.meta.env` runtime guard.
-    path: '/es?__boom=1',
-    why: 'the 500 page — the only error surface with no coverage at all',
-    proof: '[data-status="500"]',
-  },
-];
 
 test.describe('W12-T16 AC11/AC12 — the real routes pass axe', () => {
   test.skip(base === undefined, 'WEB_BASE_URL is not set — the storefront is not being served.');
@@ -103,6 +61,59 @@ test.describe('W12-T16 AC11/AC12 — the real routes pass axe', () => {
       }));
 
       expect(readable, `axe violations on ${route.path}`).toEqual([]);
+    });
+  }
+});
+
+test.describe('W12-T20 — the storefront looks the way it looked', () => {
+  test.skip(base === undefined, 'WEB_BASE_URL is not set — the storefront is not being served.');
+
+  /**
+   * Why a page needs a picture when it already has axe.
+   *
+   * From `W12-T01` until `W2-T09`, `apps/web` imported the design system's tokens and never its
+   * component stylesheet, so every React Aria control in the product rendered as a raw browser
+   * widget. Seven page tickets shipped over it and five suites ran against it. The a11y tree was
+   * correct throughout — roles, names and landmarks do not depend on CSS — so the axe pass above
+   * was green on every one of these routes while the storefront looked unfinished.
+   *
+   * A screenshot is the only assertion in this repo that can see that class of defect, and the
+   * routes are where it has to be made: the stories were never affected, because Storybook's
+   * preview has always loaded the stylesheet.
+   */
+  test('the route list is not empty', () => {
+    expect(
+      shotRoutes().length,
+      'no route is being shot — this suite proves nothing',
+    ).toBeGreaterThan(0);
+    // Two routes slugging to one filename would leave one of them silently unwatched.
+    const names = shotRoutes().map(baselineName);
+    expect(new Set(names).size, `two routes share a baseline name: ${names.join(', ')}`).toBe(
+      names.length,
+    );
+  });
+
+  for (const route of shotRoutes()) {
+    test(`${baselineName(route)} — ${route.why}`, async ({ page }) => {
+      const reference = referenceFingerprint();
+      const mismatches = compareFingerprint(
+        reference,
+        actualFingerprint(page.context().browser()?.version() ?? ''),
+      );
+      const decision = decide(mismatches, { ci: isCI() }, reference);
+
+      // Same rule as the stories: baselines are container artefacts. In CI the fingerprint test
+      // has already failed the run; locally this is what stops a developer generating seven diffs
+      // that are all font smoothing.
+      if (decision.action === 'skip') test.skip(true, decision.reason);
+
+      await page.goto(`${base}${route.path}`);
+      await page.waitForSelector(route.proof, { state: 'visible', timeout: 15_000 });
+      await page.waitForFunction(() => document.fonts.status === 'loaded');
+
+      await expect(page.locator('body')).toHaveScreenshot(`${baselineName(route)}.png`, {
+        fullPage: true,
+      });
     });
   }
 });
