@@ -339,26 +339,32 @@ Promotion happens in the same PR as the work. A separate "memory PR" never gets 
 
 Task IDs are stable — use them as board card titles.
 
-> ### ▶ NEXT — `W3-T07`, then `W3-T10`
+> ### ▶ NEXT — `W0-T29`, then `W3-T10`
 >
-> `W3-T05` shipped: `GET /api/search` is real — PostGIS `ST_DWithin` against each provider's own
-> `service_radius_metres`, keyset paging over the rounded distance, facets over the matched set, one
-> statement per request. The storefront is still a facade over MSW for everything but auth and
-> search, and **search is only un-faked on paper** until something seeds providers — see `W3-T10`.
+> `W3-T07` shipped: `GET /api/providers/:id` is real, so **both endpoints the storefront fakes now
+> exist** — and both mocks are still in place, because nothing seeds a provider. The storefront is a
+> facade over MSW for everything but auth, and that is now one ticket away from being false.
 >
-> So: `W3-T07` (`GET /providers/:id`) next, on its own branch. Its contract is frozen
-> (`ProviderProfileSchema`, `W12-T12`), the page that consumes it exists, and `W3-T05` has already
-> laid the module pattern it should copy — `apps/api/src/modules/search/` splits the HTTP boundary
-> from the data layer so the first can be tested without a database. Mount it under `/api`
-> (`MEM-2026-09-14-3`).
+> **`W0-T29` first**, and it is a small ticket that the operator has now made a decision rather than
+> a review. The steer, 2026-09-17: **`spec-present` is the gate that earns its slot**; `author-identity`
+> is not worth much — it has fired exactly once, on `03e8651`, which was a commit *GitHub* authored
+> (see `MEM-2026-09-17-16`), and its remedy text cannot be followed for such a commit; and the four
+> gate jobs cost more in feedback latency than they return. So: collapse them, keep `spec-present`
+> legible as a failure, and treat `OPS-03`'s branch-protection names as a thing to choose *now*
+> rather than inherit. The middle option in the ticket — one job, each gate reported in the summary —
+> is the one the steer points at.
 >
-> **Two things `W3-T05` found, which `W3-T07` inherits:**
-> `packages/testing`'s `ProviderProfileInput` cannot express a null radius, a quote-only rate or a
-> `baseAddressId` at all, so a live test has to reach past the factories to Prisma — widening them is
-> `agent-qa`'s call and would be worth doing *before* `W3-T07` writes the same workaround again. And
-> the contract's `coarsenPoint`/`isCoarse` pair contradicted itself for ~1.63% of coordinates; that
-> is fixed, with a property test over Spain's bounding box, but it is the kind of thing a second
-> fixed-point fixture would have hidden again.
+> **Then `W3-T10`**: the demo provider seeder, and the retirement of `mocks/search.ts`,
+> `mocks/provider.ts` and their two handlers, re-pointing `tests/mocks.test.ts` AC14–AC16 at the
+> contract rather than at the handler they currently assert through. It either waits on `W3-T01`
+> (blocked on `BD-07`) or seeds a category or two of its own with `requiresLicence` false and a note.
+>
+> **Two things `W3-T07` leaves for `agent-contracts`,** neither blocking:
+> `ProviderProfile.baseAddressId` should be `NOT NULL` — the operator's rule is that every provider
+> has a base address and that it is *the centre of their operating radius, not where they live*
+> (`MEM-2026-09-17-15`), and until the column says so `GET /api/providers/:id` answers `404` for a
+> row that exists. And the *"usually a home address"* justification in `schema.prisma:214` and
+> `packages/contracts/src/search.ts` is now the wrong reason for the right behaviour.
 >
 > **A human blocker worth knowing about:** `OPS-14` (an email provider). `W2-T10` made sign-up
 > usable without it — `AUTH_TRUST_EMAIL_ON_SIGNUP` marks the user verified at creation, locally and
@@ -446,7 +452,7 @@ for data), so no feature is blocked waiting for an account that is not needed ye
 - `W0-T27` `[A]` **Mirror the stack's third-party images into GHCR.** `minio/minio` and `minio/mc` were deleted from Docker Hub — the repositories, not the tags — and `stack:up` failed on every PR and on `main` until they were repointed at `quay.io` (#237). GHCR needs no external account, so this is `[A]`: the built-in `GITHUB_TOKEN` pushes to a package this repo owns. Both `linux/amd64` (CI) and `linux/arm64` (every laptop) must survive the copy. Not urgent — #237 pins by **digest**, so a re-pointed tag now fails loudly — and load-bearing at the same moment `W0-T26` is: an agent treating "CI green" as its success signal cannot diagnose a build that will not start because someone else deleted a tag *(issue #238)*
 
 - `W0-T28` `[A]` ✅ **Route `/api/*` from Cloudflare to the Fly app so the browser sees one origin.** A Pages advanced-mode `_worker.js`, emitted by the web build with the API origin baked in — `wrangler pages deploy` cannot hand a variable to the deployment it creates, and a project-level one is a single value shared by every preview. `BETTER_AUTH_URL` becomes the **web** URL, which is two things at once: better-auth builds the emailed links from it *and* derives `trustedOrigins` from it, so pointed at Fly it produced both failures the operator hit on #247 — no `Access-Control-Allow-Origin` for the Pages host, and a `SameSite=Lax` cookie that would never have been sent anyway. The deploy is reordered for it (web, then the API's secrets, then the API) because the Pages URL is read back from wrangler and never constructed. **Three things found by running it:** `/api/health` is a 404 — the API serves `/health` at its root, so the deploy's new smoke check probes `/api/auth/get-session`, which proves the whole seam in one request; the storefront was calling `categories`/`search`/`providers/:id` at the **root**, which one origin would have answered with the SPA's own `index.html`, so every path now carries the `api/` prefix and **`W3-T01`/`W3-T05`/`W3-T07` must mount their routes under `/api`**; and `release-production.yml` deploys no web app at all, so production has no second origin to unify until `OPS-16`. Driven end to end through a real `wrangler pages dev` worker, including the cookie-carrying `POST` that answers `403 INVALID_ORIGIN` when the origins differ *(spec: `docs/specs/S0/W0-T28-one-origin.md`)*
-- `W0-T29` `[A]` **CI costs 50% more minutes than it computes, and four gates pay a setup tax to run two seconds of work.** Measured across all 273 runs (2026-09-09..17): **1,993 billed minutes against 1,328 of actual compute** — GitHub rounds every job up to a whole minute, so 11 jobs per CI run turn 14 minutes of work into 20 on the invoice. Four of those jobs — `spec-present`, `intervention-logged`, `author-identity`, `agents-drift` — are the *same* `scripts/gates/run.ts` with a different argument, and each spends ~30s on `checkout` + `setup-node` + `pnpm install --frozen-lockfile` to run ~2s of gate, then bills a full minute. Merging them into one job would have saved **345 minutes, 17% of every minute this repo has ever billed**, and cuts CI from 13.2 to ~10 min/run — which matters more for feedback latency than for money now that the repo is public and minutes are free. **The tension is real and is why this is a review, not a fix:** `ci.yml` splits one job per failure class deliberately, so a red PR names its gate without anyone opening a log, and the job *names* are the contract `W0-T13` requires in branch protection. Merging collapses four required check names into one. `OPS-03` has not run yet, so the names are not load-bearing *yet* — this is the cheapest moment to decide, and the decision is whether four named checks are worth ~3 min and three extra runner slots per push. A middle option exists: keep four jobs but drop `pnpm install` from the three that only need git and a script, or run all four as steps in one job that reports each gate's failure in its summary *(found while diagnosing the billing stop on 2026-09-17; numbers in the `W3-T05` thread)*
+- `W0-T29` `[A]` **CI costs 50% more minutes than it computes, and four gates pay a setup tax to run two seconds of work.** Measured across all 273 runs (2026-09-09..17): **1,993 billed minutes against 1,328 of actual compute** — GitHub rounds every job up to a whole minute, so 11 jobs per CI run turn 14 minutes of work into 20 on the invoice. Four of those jobs — `spec-present`, `intervention-logged`, `author-identity`, `agents-drift` — are the *same* `scripts/gates/run.ts` with a different argument, and each spends ~30s on `checkout` + `setup-node` + `pnpm install --frozen-lockfile` to run ~2s of gate, then bills a full minute. Merging them into one job would have saved **345 minutes, 17% of every minute this repo has ever billed**, and cuts CI from 13.2 to ~10 min/run — which matters more for feedback latency than for money now that the repo is public and minutes are free. **The tension is real and is why this is a review, not a fix:** `ci.yml` splits one job per failure class deliberately, so a red PR names its gate without anyone opening a log, and the job *names* are the contract `W0-T13` requires in branch protection. Merging collapses four required check names into one. `OPS-03` has not run yet, so the names are not load-bearing *yet* — this is the cheapest moment to decide, and the decision is whether four named checks are worth ~3 min and three extra runner slots per push. A middle option exists: keep four jobs but drop `pnpm install` from the three that only need git and a script, or run all four as steps in one job that reports each gate's failure in its summary **Operator's steer, 2026-09-17** (`W3-T07` thread): `spec-present` is the one that matters; `author-identity` is *not* very useful; the gates take time. That resolves the tension above in favour of collapsing them — with `spec-present`'s failure kept legible, and the check names chosen deliberately before `OPS-03` rather than inherited from `ci.yml`'s current shape. `author-identity` has fired exactly once, on a commit **GitHub** authored, which it cannot be right about (`MEM-2026-09-17-16`) — whether it survives the merge at all is part of this ticket *(found while diagnosing the billing stop on 2026-09-17; numbers in the `W3-T05` thread)*
 
 ### W1 — Contracts & domain foundation (`agent-contracts`)
 - `W1-T01` `[A]` ✅ Error envelope + error-code registry — frozen in `packages/contracts` as a zod schema, `details` typed per code, explicit HTTP status→code table *(issue #55)*

@@ -190,6 +190,11 @@ absence so a reviewer does not read the missing criterion as an oversight.
   a Storybook addon file out of `node_modules` — and then passed 255/255 in isolation and again on a
   second full run. Nothing in this branch touches `packages/ui` or anything it depends on. Recorded
   as a flake observation for `agent-qa`, not diagnosed here.
+- **Two CI findings that are not this ticket's to fix**, both promoted to `memory/repo/gotchas.md`:
+  `author-identity` fails on merge commits GitHub itself wrote, which is what a stacked branch
+  carries (`MEM-2026-09-17-16`); and CI's `lint` job runs `pnpm format:check` as well as ESLint
+  while the root `pnpm lint` script does not (`MEM-2026-09-17-17`). Both belong to `W0-T29` and
+  `agent-devops`.
 - **Running the live suites locally needs `DATABASE_URL` exported**, which `.env` does not carry.
   Without it `auth.test.ts` fails in `beforeAll` and then again in `afterAll`, which reads as a
   broken suite rather than a missing variable. The command is in the session file's handoff. Whether
@@ -198,7 +203,10 @@ absence so a reviewer does not read the missing criterion as an oversight.
 ## Human input received
 
 Four decisions, answered in one reply before any code was written (see Prompts §2), plus the product
-rule on base addresses that came with the answer to A. The rule is recorded as `MEM-2026-09-17-15`
+rule on base addresses that came with the answer to A, plus — after CI ran — a steer on the gates
+themselves: **`spec-present` is the one that matters, `author-identity` is not very useful, and the
+gates take time.** That resolves the tension `W0-T29` was filed to surface, so it is recorded on
+that ticket and the NEXT block now runs `W0-T29` before `W3-T10`. The rule is recorded as `MEM-2026-09-17-15`
 and carried into `W3-T02`'s backlog line; it is the reason §2.4's 404 is documented as transitional
 rather than as the design.
 
