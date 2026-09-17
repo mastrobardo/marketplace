@@ -339,16 +339,26 @@ Promotion happens in the same PR as the work. A separate "memory PR" never gets 
 
 Task IDs are stable — use them as board card titles.
 
-> ### ▶ NEXT — `W3-T05`, then `W3-T07`
+> ### ▶ NEXT — `W3-T07`, then `W3-T10`
 >
-> `W12-T20` shipped: the storefront loads the design system's stylesheet, so every page now renders
-> what `W12-T18` designed. What is left on the storefront is **data** — it is still a facade over
-> MSW everywhere except auth.
+> `W3-T05` shipped: `GET /api/search` is real — PostGIS `ST_DWithin` against each provider's own
+> `service_radius_metres`, keyset paging over the rounded distance, facets over the matched set, one
+> statement per request. The storefront is still a facade over MSW for everything but auth and
+> search, and **search is only un-faked on paper** until something seeds providers — see `W3-T10`.
 >
-> So: `W3-T05` (`GET /search`) and `W3-T07` (`GET /providers/:id`), in that order and one branch at
-> a time. Both contracts are already frozen — `SearchQuerySchema`/`SearchResponseSchema` by
-> `W12-T08`, `ProviderProfileSchema` by `W12-T12` — so these are implementations against a settled
-> seam, and the pages that consume them exist. Mount both under `/api` (`MEM-2026-09-14-3`).
+> So: `W3-T07` (`GET /providers/:id`) next, on its own branch. Its contract is frozen
+> (`ProviderProfileSchema`, `W12-T12`), the page that consumes it exists, and `W3-T05` has already
+> laid the module pattern it should copy — `apps/api/src/modules/search/` splits the HTTP boundary
+> from the data layer so the first can be tested without a database. Mount it under `/api`
+> (`MEM-2026-09-14-3`).
+>
+> **Two things `W3-T05` found, which `W3-T07` inherits:**
+> `packages/testing`'s `ProviderProfileInput` cannot express a null radius, a quote-only rate or a
+> `baseAddressId` at all, so a live test has to reach past the factories to Prisma — widening them is
+> `agent-qa`'s call and would be worth doing *before* `W3-T07` writes the same workaround again. And
+> the contract's `coarsenPoint`/`isCoarse` pair contradicted itself for ~1.63% of coordinates; that
+> is fixed, with a property test over Spain's bounding box, but it is the kind of thing a second
+> fixed-point fixture would have hidden again.
 >
 > **A human blocker worth knowing about:** `OPS-14` (an email provider). `W2-T10` made sign-up
 > usable without it — `AUTH_TRUST_EMAIL_ON_SIGNUP` marks the user verified at creation, locally and
@@ -465,11 +475,12 @@ for data), so no feature is blocked waiting for an account that is not needed ye
 - `W3-T02` `[A]` Provider profile: bio, categories, radius, rates, working hours
 - `W3-T03` `[M]` Portfolio: image upload (S3 presigned), ordering, per-item category *(human: bucket + CDN credentials)*
 - `W3-T04` `[A]` Listing CRUD with price model
-- `W3-T05` `[A]` Geo search API: radius + category + price + rating + availability, PostGIS `ST_DWithin`. **This is `GET /search`** — the endpoint `W12-T08` froze the contract for and `apps/web/mocks/` stands in for; ADR-011 §4's table names `W3-T04` and is wrong about the id *(`W12-T11` §10 Q1)*
+- `W3-T05` `[A]` ✅ **Geo search API — `GET /api/search`, against the contract `W12-T08` froze.** PostGIS `ST_DWithin` against **each provider's own `service_radius_metres`** — "who will travel to me", not "who is near me" — so a provider 60 km out covering 80 km is a result and one 5 km out covering 2 km is not, and a null radius or absent base address is unsearchable (`schema.prisma:127`). One statement per request: filters, distance, the page and both facet aggregates in a single CTE, **asserted by counting Prisma's query events**, not by reading the SQL. `where` resolves through **`resolvePlace`, a port with a compiled-in ES gazetteer** — the 52 provincial capitals plus every postal code through its province prefix — because `OPS-12` has not happened and the operator's constraint was that the database stay clean for a lookup that may end up frontend-driven; an unresolvable place is a `400` naming `where`, not an empty list. **Three things found by building it:** the contract's `coarsenPoint` produced points its own `SearchPointSchema` rejected for ~1.63% of coordinates (`Math.round(v*1000) === v*1000` is false for `40.764`), which at 20 results a page would have 500'd ~28% of searches — fixed, with a property test over Spain's bounding box, since the fixed fixture it had was exactly representable and hid it; `packages/testing` cannot express a null radius, a quote-only rate or a `baseAddressId`, so the live suite reaches past the factories to Prisma (`agent-qa`, before `W3-T07`); and the MSW handler counts facets over the *page* while the contract says the matched set, so the real rail shows larger, page-stable numbers. **The mock did not go with it** — nothing seeds providers, so `W3-T10` retires it *(spec: `docs/specs/S5/W3-T05-geo-search.md`)*
 - `W3-T06` `[M]` `GET /places/suggest` — the `where` field's autocomplete, plus the Maps account it needs. **The results UI is no longer here**: ADR-011 moved every storefront page into `W12`, and this ticket's old scope (*"Search results UI: list + map, clustering, mobile-first"*) shipped as `W12-T11`. What is left is the endpoint and the key — and `W12-T11` built the map's deferred boundary already, so the renderer drops in behind it *(human: Maps API key + billing + quota — `OPS-12`)*
 - `W3-T07` `[A]` Provider profile **API** — `GET /providers/:id`, against the `ProviderProfileSchema` `W12-T12` froze. **Not `:slug`**: no slug column exists and ADR-011 Amendment 3 settles the route on the uuid. **Not badges, portfolio or response time either** — `Badge`, `Certification` and `PortfolioItem` are in §3's sketch and in no migration, so each needs its own model before an endpoint can serve it (`W12-T12` §1). The *page* is `W12-T12`, for the same reason as `W3-T06`: ADR-011 §1 exists because UI work sitting as an unstated tail on an API ticket is how thirteen agents each invent their own button
 - `W3-T08` `[A]` Licence gating: `requiresLicence` categories only surface verified pros
 - `W3-T09` `[A]` Availability calendar (weekly hours + blocked dates)
+- `W3-T10` `[A]` **Demo provider seeder, and retire the search and profile mocks.** `W3-T05` and `W3-T07` made the endpoints real and the storefront still runs on `apps/web/mocks/`, because nothing seeds a provider: `auth-demo-users` is the only seeder, so deleting the handlers today points `pnpm dev` at a correct endpoint over an empty table. Seed providers with base addresses, service radii and rates across a few real Spanish postcodes — enough that a search from Madrid returns a page and a far provider proves the radius rule — then delete `mocks/search.ts`, `mocks/provider.ts` and their two handlers, and re-point `tests/mocks.test.ts` AC14–AC16 (which are `W12-T08`'s criteria *about the contract*, and must survive the handler they currently assert through). Needs a category or two, so it either waits on `W3-T01` or seeds its own with `requiresLicence` false and a note — a demo seeder must not be where `BD-07` gets decided by default. `mocks/catalogue.ts` and `searchCatalogue` stay until then: `tests/app-harness.tsx` stubs them for component tests
 
 ### W4 — Jobs & presupuestos (`agent-jobs`)
 - `W4-T01` `[A]` Job posting flow: category, description, photos, location, budget, urgency

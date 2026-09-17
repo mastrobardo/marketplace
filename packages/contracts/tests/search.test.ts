@@ -14,6 +14,7 @@ import {
   SEARCH_DEFAULT_SORT,
   SEARCH_SORTABLE,
   SearchFacetsSchema,
+  SearchPointSchema,
   SearchQuerySchema,
   SearchResponseSchema,
   SearchResultSchema,
@@ -214,6 +215,40 @@ describe('AC12 — the map pin is coarsened in the contract, not by each caller'
 
   it('rejects a result whose point was not coarsened', () => {
     expect(SearchResultSchema.safeParse(result({ point: SOL })).success).toBe(false);
+  });
+
+  /**
+   * `coarsenPoint` must satisfy `SearchPointSchema` for **every** coordinate, not for the one this
+   * file happens to use.
+   *
+   * The two assertions above passed throughout the period when the refinement rejected about 1.63%
+   * of what the helper produced, because `SOL` coarsens to 40.417 / −3.704 and both are exactly
+   * representable as doubles. `W3-T05` found it by parsing a real response. A fixed point cannot
+   * express "for all", so this one samples instead — deterministically, so a failure is reproducible
+   * rather than a flake somebody re-runs until it passes.
+   */
+  it('produces a point its own schema accepts, across Spain', () => {
+    // A small LCG: no dependency, and the same thousand coordinates on every machine and every run.
+    let seed = 20_260_917;
+    const next = (): number => {
+      seed = (seed * 1_103_515_245 + 12_345) % 2_147_483_648;
+      return seed / 2_147_483_648;
+    };
+
+    const rejected: { latitude: number; longitude: number }[] = [];
+
+    for (let index = 0; index < 1_000; index += 1) {
+      // Spain's bounding box, the only market this product has.
+      const stored = { latitude: 36 + next() * 8, longitude: -9 + next() * 13 };
+      const point = coarsenPoint(stored);
+      if (!SearchPointSchema.safeParse(point).success) rejected.push(point);
+    }
+
+    expect(
+      rejected,
+      `coarsenPoint produced ${String(rejected.length)} point(s) SearchPointSchema rejects, ` +
+        `e.g. ${JSON.stringify(rejected[0] ?? null)}`,
+    ).toEqual([]);
   });
 });
 

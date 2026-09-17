@@ -94,11 +94,22 @@ export type SearchQuery = z.infer<typeof SearchQuerySchema>;
  */
 export const POINT_DECIMALS = 3;
 
-const FACTOR = 10 ** POINT_DECIMALS;
-
-/** Whether a coordinate has already been through `coarsenPoint`. */
+/**
+ * Whether a coordinate has already been through `coarsenPoint`.
+ *
+ * **Asked as "does rounding change it?", not as "is `value * 1000` a whole number".** The second is
+ * the obvious spelling and it is wrong: scaling reintroduces the floating-point error that rounding
+ * just removed, so `40.764 * 1000` is `40763.99999999999` and the check rejects a value
+ * `coarsenPoint` itself produced. It held for roughly 1.63% of coordinates — Puerta del Sol, the
+ * fixture this file's own test uses, is exactly representable and hid it.
+ *
+ * Found by `W3-T05` when the first real `GET /api/search` parsed its own response: at twenty
+ * results a page, about 28% of pages carried at least one coordinate the contract refused, and each
+ * one was a 500. `apps/api/tests/search.test.ts` keeps the end-to-end regression; the property test
+ * below samples Spain's bounding box rather than trusting another fixed point.
+ */
 function isCoarse(value: number): boolean {
-  return Math.round(value * FACTOR) === value * FACTOR;
+  return Number(value.toFixed(POINT_DECIMALS)) === value;
 }
 
 const CoordinateSchema = (max: number) =>

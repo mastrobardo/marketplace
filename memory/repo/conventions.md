@@ -132,3 +132,22 @@ How we do things here, beyond what lint and CI enforce automatically.
   Never use this to dodge a red gate on a code change.
 - **evidence**: PRs #169, #193 (zero runs on either); `.github/workflows/deploy-preview.yml`
 - **status**: active
+
+### An endpoint parses the response it serves, not just the request it receives
+
+- **id**: MEM-2026-09-17-11
+- **scope**: repo
+- **fact**: `GET /api/search` ends with `SearchResponseSchema.parse(...)` before returning. The
+  outbound parse is what makes a `strictObject` projection and a refinement like the coarse-point
+  rule enforceable at runtime; types are erased, so a handler that spreads a database row into a
+  typed return value satisfies the compiler and ships the extra columns.
+- **why**: The exclusions in these schemas are doing security work — no `userId`, no
+  `baseAddressId`, and above all no `line1`/`line2`, because a provider's base address is usually
+  their home. "We return the right fields" is a convention until something fails on the wrong ones.
+  It paid for itself on the first ticket that used it, by turning a latent contract defect into a
+  failing test rather than a wrong map pin nobody would have noticed.
+- **apply**: Parse on the way out at every endpoint boundary, and be suspicious of a mock that does
+  not — `apps/web/mocks/handlers.ts` returns its search body unparsed, which is precisely why
+  `MEM-2026-09-17-9` survived four storefront tickets that were all "tested against the contract".
+- **evidence**: `apps/api/src/modules/search/routes.ts`; `docs/specs/S5/W3-T05-geo-search.md` §2.7
+- **status**: active
