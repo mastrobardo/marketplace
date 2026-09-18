@@ -172,3 +172,28 @@ How we do things here, beyond what lint and CI enforce automatically.
   toolchain (Docker, a container action, a browser) → its own job.
 - **evidence**: `.github/workflows/ci.yml`; `docs/specs/S0/W0-T29-gate-consolidation.md` §1
 - **status**: active
+
+### Remote branches are never deleted — a reverted ticket's spec lives nowhere else
+
+- **id**: MEM-2026-09-18-12
+- **scope**: repo
+- **fact**: `git push --delete` and the GitHub "Delete branch" button are off limits for this repo's
+  ticket branches, and `delete_branch_on_merge` is **false** so nothing prunes them automatically.
+  A local `git branch -d` after a merge is fine — it refuses unless the branch is merged and it
+  touches no shared ref. Operator, 2026-09-18.
+- **why**: a merged ticket's spec and run record are on `main` (82 files, one pair per ticket), so
+  for those the branch is a second copy. A **reverted** ticket's are not:
+  `docs/specs/S0/W0-T23-shared-file-collisions.md` existed only on
+  `origin/W0-T23-shared-file-collisions` until 2026-09-18, while
+  `agents/prompts/00-spec-authoring.md` cites that ticket as the cautionary example every spec
+  author is told to read. Deleting the branch would have broken a prompt's own reference, silently
+  and permanently — and the work most worth keeping the argument for is exactly the work that did
+  not survive review.
+- **apply**: never offer to delete a remote branch, and do not treat an open branch as clutter. If a
+  document matters beyond its branch, put it on `main` — that is the fix, not the deletion. When a
+  ticket is reverted, restore its spec and run record to `docs/specs/` with a header saying it was
+  reverted and pointing at the intervention, so `main` carries the reasoning and the branch stops
+  being load-bearing.
+- **evidence**: `docs/specs/S0/W0-T23-shared-file-collisions.md` (restored);
+  `docs/interventions/2026-09-09-W0-T23-01.md`; `gh repo view --json deleteBranchOnMerge` → false
+- **status**: active
