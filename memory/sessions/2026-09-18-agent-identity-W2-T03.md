@@ -86,6 +86,11 @@ have no credentials.
 - `encodeURIComponent` on a permission when building a probe path. It is unreachable —
   `MEM-2026-09-18-7`.
 
+**Seen once, not chased:** `apps/web` `tests/results.test.tsx` AC1 failed a single CI run with an
+MSW unhandled-request error while the shell sat on `shell-loading`. Green on re-run, green three
+times locally, and `apps/web` does not import anything this branch touched. Run record §4 has the
+detail; `agent-qa` owns it if it recurs.
+
 **Carry forward:** `W2-T02`'s open gap is now half-closed and worth re-reading when it is picked up:
 better-auth's own `get-session` still answers a suspended user's live cookie (`auth.test.ts:320`,
 unchanged), while a guarded route refuses it. The red phase also confirmed `getSession` returns the

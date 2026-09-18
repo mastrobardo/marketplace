@@ -180,6 +180,25 @@ Worth knowing beyond this file — any later ticket registering a route from a d
   `W5-T10` has to exist first — the schema ends at `AuditRecord` and there are no transactions to
   read. AC15 proves the mechanism over a fixture matrix so that nothing empty ships in the real one.
 
+## 4. Two CI findings, neither in this change
+
+**A turbo-cached `lint` passed locally and failed in CI.** `tests/guard.test.ts` imported
+`UserRole` as a value where it is only used as a type, which
+`@typescript-eslint/consistent-type-imports` rejects. Two local `pnpm lint` runs reported clean —
+the second was a cache hit whose inputs had not been re-hashed against the file's final state.
+Running the package's own binary (`pnpm --filter @marketplace/api exec eslint .`) reproduced it in
+one second. **Before pushing, run the linter directly rather than through turbo** when the last edit
+was small enough to look harmless.
+
+**One flake, in `apps/web`, unrelated to this ticket.**
+`tests/results.test.tsx > AC1 — asks where, and never calls the endpoint` failed once in CI with
+`[MSW] Error: intercepted a request without a matching request handler` and a shell stuck on
+`shell-loading`; `needs-where` never appeared. The same commit passed the same job on the previous
+run, three consecutive local runs of that file passed (16/16 each), and a re-run of the failed job
+was green. Recorded rather than chased: the assertion is that the endpoint is **never called**, and
+the symptom is a request escaping to MSW, so if it recurs the thing to look at is what raced the
+loader — not the guard, which `apps/web` does not import. `agent-qa` owns flake control.
+
 ## Deviations from spec
 
 - **AC13 was rewritten during the red phase**, before any test was written against the old wording.
