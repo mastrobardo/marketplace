@@ -69,3 +69,26 @@ Keep it to facts that changed how you would work. Task-specific detail stays in 
 - **evidence**: `docs/specs/S3/W3-T07-provider-profile-api.md` §2.1, §5 Q3
 - **status**: active
 
+
+### The demo world is in Postgres, and it is not a fixture
+- **id**: MEM-2026-09-18-1
+- **scope**: slice:S3
+- **fact**: `pnpm db:seed` runs `providers.demo-world`
+  (`apps/api/prisma/seed/demo-providers.ts`): four categories and five Madrid providers with fixed
+  uuids — categories `aaaa…0001`-`0004`, users `bbbb…`, addresses `cccc…`, profiles `dddd…`. Every
+  provider has a base address and a radius, so none of them is the `404` of `W3-T07` §2.4 or the
+  unsearchable row of `W3-T05` AC6. `Clima Costa` sits 29.8 km from Sol with a 50 km radius; the
+  other four cover 15 km. Since `W3-T10` the storefront's MSW answers `GET /categories` and nothing
+  else.
+- **why**: `W3-T05` and `W3-T07` both shipped real endpoints and left their mocks in place, because
+  a correct endpoint over an empty table is worse than a mock. This is what unblocked both
+  deletions, and it is the data every later S3 ticket will develop against.
+- **apply**: build against these rows rather than adding a fixture — `pnpm db:reset` then
+  `pnpm db:seed` rebuilds the same world, so a uuid in a screenshot still resolves. The seeder is
+  **not** `localOnly` (no credential, no personal data), so it may run in preview; anything with a
+  password or a licence number that joins it must be a separate, `localOnly` seeder. The categories
+  say `requiresLicence: false` and name `BD-07` — do not read that as an answer, and do not copy the
+  pattern of encoding a legal flag in demo data.
+- **evidence**: `docs/specs/S3/W3-T10-demo-provider-seeder.md` §2;
+  `apps/api/tests/seed-live.test.ts`
+- **status**: active
