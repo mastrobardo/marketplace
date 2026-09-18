@@ -95,3 +95,40 @@ Keep it to facts that changed how you would work. Task-specific detail stays in 
 - **evidence**: `W2-T10` run record §3
 - **status**: active
 
+
+### How a route is guarded, and where a permission goes
+
+- **id**: MEM-2026-09-18-5
+- **scope**: slice:S2
+- **fact**: `apps/api/src/modules/auth/` holds the whole authenticated boundary:
+  `permissions.ts` (the matrix + `can()`) and `guard.ts` (`buildGuards` → `requireSession` /
+  `requirePermission`, `buildSessionResolver`, `principalOf`). Guards take a `ResolveSession` port,
+  so every 401/403 is assertable with a stub and no database (`guard.test.ts`); the adapter is
+  asserted live (`guard-live.test.ts`). A route reads `principalOf(request)` —
+  `{ userId, roles, sessionId }` and nothing else.
+- **why**: the alternative was a guard per domain module, and the fifth copy is the one that reads
+  `roles[0]`, or answers `404` where it meant `403`, or trusts a payload a suspended user still
+  holds. `ADR-005` assigned the matrix to this slice for the same reason.
+- **apply**: to guard a route, add the operation to `PERMISSIONS` **in the PR that adds the route**
+  and pass `guards.requirePermission('…')` as its `preHandler`. Never call `can()` outside a
+  `preHandler`. `ADMIN` has no bypass — an admin capability is a row somebody adds deliberately, and
+  a money one comes with its own role (`MEM-2026-09-18-2`). Ownership is not the guard's job:
+  prefer `/me` addressing so it is structural (`W2-T03` §3.6).
+- **evidence**: `docs/specs/S2/W2-T03-route-guards.md` §3; `apps/api/src/modules/auth/guard.ts`
+- **status**: active
+
+### `principalOf` throws rather than answering 401, on purpose
+
+- **id**: MEM-2026-09-18-6
+- **scope**: slice:S2
+- **fact**: `principalOf(request)` on a route with **no** guard throws a plain `Error` — a `500`
+  through `app.ts`'s "anything else is a bug" branch — instead of returning `undefined` or being
+  treated as unauthenticated.
+- **why**: a missing `preHandler` is a programming error, and answering `401` would hide it behind a
+  refusal that looks entirely plausible in a log. The route would appear to work, for everyone,
+  until somebody signed in.
+- **apply**: do not "handle" it. If a handler needs an optional principal (a page that renders
+  differently when signed in), resolve the session explicitly rather than making the guard's
+  contract optional.
+- **evidence**: `apps/api/src/modules/auth/guard.ts`; `W2-T03` run record §"Self-assessment"
+- **status**: active

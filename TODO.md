@@ -342,28 +342,40 @@ Promotion happens in the same PR as the work. A separate "memory PR" never gets 
 
 Task IDs are stable — use them as board card titles.
 
-> ### ▶ NEXT — `W3-T02`, and two things waiting on you
+> ### ▶ NEXT — `W3-T02`, now that it has a guard to mount on
 >
-> **The storefront is no longer a facade.** `W3-T10` shipped: `pnpm db:seed` puts four trades and
-> five Madrid providers in Postgres, the search and provider MSW handlers are deleted, and `pnpm
-> dev` reads both from the real API. What is left of `apps/web/mocks/` is `GET /categories` — and
-> `mocks/search.ts` / `mocks/provider.ts`, which lost their handlers and kept their second caller,
-> the component-test stub in `tests/app-harness.tsx`.
+> **`W2-T03` shipped, and it was the thing standing under `W3-T02`.** `apps/api` can now answer
+> "who is asking": `guards.requirePermission('…')` as a `preHandler`, `principalOf(request)` in the
+> handler, and one matrix in `apps/api/src/modules/auth/permissions.ts` that every slice reads.
+> Nothing in production is guarded yet — `W3-T02` is the first route to use it, and it adds its own
+> row to the matrix in the same PR.
 >
-> **`W3-T02` next**, and `W3-T10` sharpened it: every seeded provider has a base address because
-> the endpoints are unusable without one. `W3-T02` is what stops new nulls arriving — the operator's
-> rule of 2026-09-17 is that a base address is *required* and is the centre of the operating radius,
-> not where the provider lives. Making the column `NOT NULL` is a migration and stays
-> `agent-contracts`' edit (`docs/specs/S3/W3-T07-provider-profile-api.md` §5 Q1).
+> **`W3-T02` next**, and it needs two things before the route: a **write contract** (the profile
+> write body — `packages/contracts/**` is `agent-contracts`', and only the read schema exists
+> today), and a decision its own spec has to make — `PUT /api/providers/me` on a user with **no
+> `provider_profile` row**. That is not hypothetical: `auth-demo-users` seeds a signed-in-able
+> `['CLIENT','PROVIDER']` user with no profile, while `demo-providers`' five profiles have no
+> credentials, so *nobody can currently sign in and own a profile*. Upsert, or `404` until `W2-T05`
+> builds the pro fork. Everything else is unchanged: a base address is **required** and is the
+> centre of the operating radius (operator, 2026-09-17), and making the column `NOT NULL` stays
+> `agent-contracts`' migration (`docs/specs/S3/W3-T07-provider-profile-api.md` §5 Q1).
+>
+> **Prefer `/me` addressing for own-scoped writes.** `W2-T03` §3.6: the guard cannot check
+> ownership — it runs before any repository — so a route that resolves the row *from the principal*
+> makes ownership structural instead of checked. A route that must take an id owes `403` where the
+> resource's existence is already public and `404` where it is not.
 >
 > **Two decisions still open, neither blocking:**
 > `author-identity` survived `W0-T29`'s collapse and the steer said it was not very useful — spec
 > §6 Q1, one line to retire. And `OPS-03` is yours whenever you want it: the seven required check
 > names are in `docs/specs/S0/W0-T29-gate-consolidation.md` §4, and `perf` must never be among them.
 >
-> **Still for `agent-contracts`,** from `W3-T07`: `ProviderProfile.baseAddressId` should be
-> `NOT NULL`, and the *"usually a home address"* justification in `schema.prisma:214` and
-> `packages/contracts/src/search.ts` is the wrong reason for the right behaviour.
+> **Still for `agent-contracts`,** now three: `ProviderProfile.baseAddressId` should be `NOT NULL`;
+> the *"usually a home address"* justification in `schema.prisma:214` and
+> `packages/contracts/src/search.ts` is the wrong reason for the right behaviour (both from
+> `W3-T07`); and **§3's domain model sketch lists `role(s) CLIENT | MANITAS | PRO | ADMIN`**, which
+> no migration implemented — `UserRole` is `CLIENT | PROVIDER | ADMIN` and the type is
+> `ProviderProfile.kind` (`W2-T03` §3.5.2).
 >
 > **A human blocker worth knowing about:** `OPS-14` (an email provider). `W2-T10` made sign-up
 > usable without it — `AUTH_TRUST_EMAIL_ON_SIGNUP` marks the user verified at creation, locally and
@@ -467,7 +479,7 @@ for data), so no feature is blocked waiting for an account that is not needed ye
 ### W2 — Identity & access (`agent-identity`)
 - `W2-T01` `[A]` ✅ Signup/login (email+password), email verification, password reset — **mount `better-auth` on Fastify and map it onto `app_user`** (`ADR-005`): `modelName`, `generateId: false`, `roles`/`status`/`locale`/`deletedAt` as `additionalFields`. **Drops `app_user.passwordHash`** — credentials are `account` rows, which is also how Google arrives later without a migration — and **adds `name` and `email_verified`**, the latter because `emailVerified` is a boolean and `emailVerifiedAt` is a timestamp and field mapping renames columns without converting types. Soft-deleted users must not be able to authenticate: better-auth has no `deletedAt`, so that guard is ours and needs a test *(needs `OPS-14` to ship, not to build — Mailpit covers verification and reset locally)*. **Shipped with three corrections to `ADR-005`, all in the run record**: rule 1's `modelName: "app_user"` is a layer too low — the Prisma adapter speaks Prisma, so it is `modelName: 'user'` and `@@map` does the table mapping; the `session`/`account`/`verification` migration **moved here from `W2-T02`**, because credentials *are* `account` rows and a login *is* a `session` row and no subset of this ticket runs without them; and `W1-T05`'s functional `lower(email)` index is replaced by a plain `UNIQUE` plus `CHECK (email = lower(email))` — better-auth issues the equality predicate the old migration's own comment warned about, so every sign-in was a sequential scan. Operator decisions (2026-09-12): `SUSPENDED` cannot sign in, and verification is required before sign-in. A soft-deleted or suspended user is refused **byte-identically to a wrong password** — a distinct answer is an enumeration oracle. *(spec: `docs/specs/S2/W2-T01-auth-signup-login.md`)*
 - `W2-T02` `[A]` Sessions — **the migration landed in `W2-T01`** (§4.1: a login *is* a `session` row, so the tables could not wait); what is left here is session *policy*: **database rows, not access tokens** — one opaque session token in an httpOnly/`Secure`/`SameSite=Lax` cookie, looked up per request; the `session`/`account`/`verification` migration; sliding expiry as rotation; revoke as a delete. **`ADR-005` rule 3 rewrote this line**: the old one said *"httpOnly refresh cookie + short-lived access token, rotation, revoke"*, and a short-lived access token makes revoke eventually-consistent — a suspended provider (`UserStatus.SUSPENDED`) and support impersonation (`BD-11`) both need it to mean *now*. Cookie caching stays **off** for the same reason. Session lifetime is an open choice, not better-auth's 7-day default (`ADR-005` Q3) *(`W0-T28` is done, so a preview login now works — one origin, and the cookie is first-party)*. **Also inherits a gap `W2-T01` left open and asserted**: the session hook refuses a suspended user a *new* session and does not touch the cookie they already hold, so "suspension means now" is currently half true. `apps/api/tests/auth.test.ts` carries a test written as what happens rather than what should, which flips when revoke-as-a-delete lands. ~~`BETTER_AUTH_URL` points at the API's own origin until this ticket makes one origin real~~ — **wrong, and `W2-T09` measured why**: it is the *web* origin (`.env.example` already sets `http://127.0.0.1:5173`). The emailed verification and reset links resolve against it, so pointing it at the API produces mail that bypasses the app; and `trustedOrigins` defaults to its origin, so every cookie-carrying `POST` from the dev server would answer `403 INVALID_ORIGIN`. What this ticket still owns is making one origin real in *preview* (`W0-T28`)
-- `W2-T03` `[A]` Roles & permissions matrix + route guards + tests for every 403
+- `W2-T03` `[A]` ✅ **Roles, permissions and route guards — the first authenticated boundary in `apps/api`.** Two files in `modules/auth/`: `permissions.ts` (the matrix, keyed on `UserRole`) and `guard.ts` (`requireSession` / `requirePermission` over a **`ResolveSession` port**, so every 401/403 is asserted with a stub and no database, and the better-auth adapter is asserted live — the split `W3-T05` laid down, applied to the third boundary). **Three operator rules shaped it (2026-09-18).** *A suspended, blocked or deleted user returns no data — not even `deletedAt`*: liveness is a `where` clause (`status: 'ACTIVE', deletedAt: null`) rather than a field, so account state never becomes a value, `Principal` is `{ userId, roles, sessionId }` and can never gain one, and such a request is `401` byte-identically to one with no cookie — which also makes "suspension means now" true on guarded routes without touching `W2-T02`, and drops the dependency on whether better-auth returns `additionalFields` on its read path. *`ADMIN` has no implicit bypass* — no superuser branch anywhere, and **the role that reads money is deliberately not the one `W9-T04` gives to moderators** (`MEM-2026-09-18-2`): the transactions view arrives with its own role when `W5-T10` gives it something to read, never by widening `ADMIN`. And *`MANITAS`/`PRO` is a kind, a trade is a category, neither is a role* — the matrix is typed `Record<string, readonly UserRole[]>` so a `'MANITAS'` cell fails `typecheck` (**`TODO.md` §3's sketch is wrong on this** and is `agent-contracts`' to correct). **The matrix ships with one row**, `provider-profile:update-own`, because one row has a consumer; the deliverable is the growth rule — a permission enters in the same PR as the route that guards with it. **One thing found by building it:** a route path built with `encodeURIComponent` from an identifier containing `:` is unreachable — find-my-way decodes before matching, and `:` is a parameter — which cost seven red tests against a correct implementation (`MEM-2026-09-18-7`). No product route is guarded: `W3-T02` is the first consumer *(spec: `docs/specs/S2/W2-T03-route-guards.md`)*
 - `W2-T04` `[A]` Client profile CRUD, addresses, saved locations
 - `W2-T05` `[A]` Provider signup flow (MANITAS vs PRO, different required fields)
 - `W2-T06` `[M]` Phone verification (SMS), required for providers *(human: SMS provider account + credentials)*

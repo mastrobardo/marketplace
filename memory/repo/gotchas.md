@@ -683,3 +683,22 @@ come from real experience.
 - **evidence**: `apps/api/prisma/seed/demo-providers.ts`; `apps/api/tests/seed-live.test.ts`;
   `apps/api/tests/demo-providers.test.ts` ("gives every row an id…")
 - **status**: active
+
+### A route path built from a domain identifier must pass through one transformation, not two
+
+- **id**: MEM-2026-09-18-7
+- **scope**: repo
+- **fact**: Registering `/api/probe/permission/${encodeURIComponent('provider-profile:update-own')}`
+  and requesting the same string produces a `404`. Two separate reasons, either one fatal: a `:` in
+  a Fastify path declares a **parameter**, and find-my-way **decodes** the incoming path before
+  matching — so the percent-encoded spelling registers a route nothing can reach. Cost seven
+  red tests against a correct implementation in `W2-T03`.
+- **why**: the route and the request look identical in the source, so the failure reads as "the
+  handler is not being called" and points at the guard, the plugin registration, or the prefix —
+  everything except the string.
+- **apply**: when a test (or a route module) builds both a path and a request from the same domain
+  value, put the value through **one** named function both sides call, and slug it to
+  `[a-z0-9-]` rather than percent-encoding it. Applies to anything that turns an identifier into a
+  path — portfolio keys (`W3-T03`), webhook paths (`W5-T03`).
+- **evidence**: `apps/api/tests/guard.test.ts` (`permissionUrl`); `W2-T03` run record §2
+- **status**: active

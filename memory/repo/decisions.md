@@ -97,3 +97,69 @@ this file records the *why* an agent would otherwise have to rediscover.
   "usually a home address", which is now the wrong reason for the right behaviour (§5 Q2).
 - **evidence**: `docs/specs/S3/W3-T07-provider-profile-api.md` §2.4; `TODO.md` `W3-T02`
 - **status**: active
+
+### There is no superuser, and the role that sees money is not the role that moderates
+
+- **id**: MEM-2026-09-18-2
+- **scope**: repo
+- **fact**: `ADMIN` gets no implicit bypass in the permissions matrix — it is allowed exactly the
+  operations that list it, and today that is none. The operator's condition on that (2026-09-18):
+  *"either a super admin or a way to actually have money permissions is required: someone should be
+  able to look into transactions."* So the capability is not optional; what is decided is **how it
+  arrives** — as an explicit grant to a role of its own, added with the first route that reads
+  money, never by widening `ADMIN`.
+- **why**: `W9-T04` hands `ADMIN` to content moderators while `W9-T03` and `W9-T05` read refunds,
+  payouts and GMV. One role for both means one grant is every power, and `W9-T01`'s audit trail
+  cannot then tell a moderator from a treasurer. A blanket admin branch in the guard is the version
+  of this that nobody ever reviews, because it never appears in a diff.
+- **apply**: adding a permission to `apps/api/src/modules/auth/permissions.ts` happens in the same
+  PR as the route that guards with it — a cell no route enforces is the same empty promise as a
+  column nothing writes to. For a money operation, add the role too (an additive `UserRole` enum
+  member, `agent-contracts`' migration) rather than a cell under `ADMIN`. `W5-T10` must exist first:
+  there are no transactions to read while the schema ends at `AuditRecord`.
+- **evidence**: `docs/specs/S2/W2-T03-route-guards.md` §3.5, §3.5.1, AC7/AC15
+- **status**: active
+
+### A suspended, blocked or deleted user resolves to nothing at all
+
+- **id**: MEM-2026-09-18-3
+- **scope**: repo
+- **fact**: Operator's rule, 2026-09-18: *"a suspended/blocked/deleted user should return no data.
+  Not even `deletedAt`."* The guard establishes liveness with a `where: { status: 'ACTIVE',
+  deletedAt: null }` on the user read — the state is in the predicate, so it never becomes a value —
+  and the principal on the request is `{ userId, roles, sessionId }` and may never gain an
+  account-state field. Such a request is `401`, byte-identical to one carrying no cookie.
+- **why**: a flag on the principal is a flag some later route branches on, and the first branch that
+  says something different for a suspended user than for a signed-out one is a state oracle on every
+  endpoint — in the slice whose non-negotiable is that "unknown email" and "wrong password" are
+  indistinguishable. Filtering instead of reporting also removes a dependency on whether
+  better-auth's read path returns `additionalFields`, which is a property of the version we are on.
+- **apply**: never carry `status` or `deletedAt` past the session adapter, and never answer
+  `403 ACCOUNT_SUSPENDED`. Anything that needs to *tell* a person their account is suspended is a
+  deliberate, separate surface (`W2-T08`/`W9`), not a code on an ordinary route.
+- **evidence**: `docs/specs/S2/W2-T03-route-guards.md` §3.3, AC4/AC8/AC9/AC16
+- **status**: active
+
+### `MANITAS`/`PRO` is a kind and a trade is a category — neither is ever a role
+
+- **id**: MEM-2026-09-18-4
+- **scope**: repo
+- **fact**: Providers come in two main types, *manitas* and *profesionales*, and trade subtypes
+  (electricista, fontanero, …) are coming. Operator, 2026-09-18. None of them is a `UserRole`:
+  `UserRole` is `CLIENT | PROVIDER | ADMIN` (`schema.prisma:41`), the type is
+  `ProviderProfile.kind` (`ProviderKind`, `schema.prisma:58`), and a trade is a row in the
+  `Category` tree reached through `ProviderCategory`. "May work a gated category" is a third thing
+  again — an approved `Certification` plus `Category.requiresLicence` (`W3-T08`, `BD-07`).
+- **why**: roles answer *who is asking* and are resolved from the session before any repository
+  runs; kind and categories are properties of a **row**. A permission keyed on either would force
+  the guard to read data on every request, and a role per trade would put a legal claim
+  (`requiresLicence`) into a cookie where `agent-trust`'s verification cannot see it.
+- **apply**: `apps/api/src/modules/auth/permissions.ts` is typed
+  `Record<string, readonly UserRole[]>`, so a `'MANITAS'` cell is a compile error — asserted with
+  `@ts-expect-error` in `permissions.test.ts` (AC17). A rule that depends on kind, category or
+  certification belongs in the route **after** the row is read, like ownership. **`TODO.md` §3's
+  domain sketch is wrong on this** — it lists `role(s) CLIENT | MANITAS | PRO | ADMIN` on `User`,
+  which no migration ever implemented; the schema is the artefact in force and the sketch is
+  `agent-contracts`' to correct.
+- **evidence**: `docs/specs/S2/W2-T03-route-guards.md` §3.5.2; `memory/repo/glossary.md`
+- **status**: active
