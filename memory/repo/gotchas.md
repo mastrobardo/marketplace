@@ -702,3 +702,23 @@ come from real experience.
   path — portfolio keys (`W3-T03`), webhook paths (`W5-T03`).
 - **evidence**: `apps/api/tests/guard.test.ts` (`permissionUrl`); `W2-T03` run record §2
 - **status**: active
+
+### A live suite that uses the factories needs its own database
+
+- **id**: MEM-2026-09-18-10
+- **scope**: repo
+- **fact**: `packages/testing` generates ids and emails from one **deterministic** sequence, so two
+  `STACK_LIVE=1` suites running in parallel against the same database collide inside `createUser`
+  on `app_user.email`. `provider-write-live.test.ts` passed alone and failed in the full run, with
+  a Prisma unique violation pointing at `persist.ts` rather than at anything the suite was testing.
+- **why**: determinism is the point of the factories (`MEM-2026-09-07-06`) and vitest runs files in
+  parallel, so the two defaults are in direct conflict. The symptom names the factory, not the
+  concurrency.
+- **apply**: a live suite that writes rows through `packages/testing` migrates its own scratch
+  database — `provider-live.test.ts` and `search-live.test.ts` have the helper, roughly 20 lines of
+  `DROP DATABASE`/`CREATE DATABASE`/`prisma migrate deploy`. Copy it rather than sharing
+  `marketplace`. Separately: after editing a workspace package, **build it** before running a live
+  suite in another package — `apps/api` imports `dist`, and a stale one fails with an error about
+  the change you just made.
+- **evidence**: `apps/api/tests/provider-write-live.test.ts` (`migrated()`); `W3-T02` run record §3
+- **status**: active

@@ -107,7 +107,7 @@ describe.runIf(live)('live — geo search against PostGIS', () => {
   async function provider(
     key: string,
     options: {
-      readonly metres: number | null;
+      readonly metres: number;
       readonly radius: number | null;
       readonly hourlyRateCents?: number | null;
       readonly categoryId?: string;
@@ -115,20 +115,16 @@ describe.runIf(live)('live — geo search against PostGIS', () => {
     },
   ): Promise<void> {
     const user = await createUser(client);
-    const address =
-      options.metres === null
-        ? undefined
-        : await createAddress(client, { userId: user.id, ...northOf(options.metres) });
+    const address = await createAddress(client, { userId: user.id, ...northOf(options.metres) });
 
     /**
      * The builder supplies the defaults; Prisma applies the nullable fields.
      *
-     * Not a preference — `ProviderProfileInput` types `serviceRadiusMetres` and `hourlyRateCents`
-     * as non-nullable `number` and has no `baseAddressId` at all, while the schema makes all three
-     * nullable/optional. So the factories cannot currently express a provider with no radius, a
-     * quote-only provider, or a provider with a base address — which is every case this suite
-     * exists to distinguish. Widening `packages/testing` is `agent-qa`'s call, not a change to
-     * smuggle in here; noted in the session file.
+     * `W3-T07` widened `ProviderProfileInput` so the first two are expressible; a **null radius**
+     * is still the one state only Prisma can set here, and it is the one this suite exists to
+     * distinguish. The third case this comment used to describe — a provider with no base address —
+     * is gone: `W3-T02`'s migration made the column `NOT NULL`, so it is not a row anybody can
+     * write.
      */
     const profile = await prisma.providerProfile.create({
       data: {
@@ -139,7 +135,7 @@ describe.runIf(live)('live — geo search against PostGIS', () => {
         }),
         serviceRadiusMetres: options.radius,
         hourlyRateCents: options.hourlyRateCents === undefined ? 3_500 : options.hourlyRateCents,
-        baseAddressId: address?.id ?? null,
+        baseAddressId: address.id,
       },
     });
 
@@ -183,8 +179,6 @@ describe.runIf(live)('live — geo search against PostGIS', () => {
     await provider('near-refuses', { metres: 5_000, radius: 2_000, categoryId: fontaneria });
     // "Not set" is neither zero nor infinite.
     await provider('no-radius', { metres: 1_000, radius: null, categoryId: fontaneria });
-    // No base address at all — `schema.prisma:127` says not searchable.
-    await provider('no-address', { metres: null, radius: 15_000, categoryId: fontaneria });
     // Quote-only: nothing to book against.
     await provider('quote-only', {
       metres: 2_000,
@@ -215,11 +209,19 @@ describe.runIf(live)('live — geo search against PostGIS', () => {
     expect(names(rows)).not.toContain('near-refuses');
   });
 
-  it('AC6 — a null radius and a missing base address are both unsearchable', async () => {
+  /**
+   * AC6 had two halves and one of them stopped being a runtime question.
+   *
+   * A provider with **no base address** is no longer unsearchable — it is unwritable:
+   * `W3-T02`'s migration made `base_address_id` `NOT NULL`, so the row this used to seed cannot
+   * exist. The assertion moved to `core-schema.test.ts`, where a column constraint belongs
+   * (`W3-T02` §8.5). A **null radius** is still perfectly legal and still means "not set", so that
+   * half stays exactly as it was.
+   */
+  it('AC6 — a null radius is unsearchable, and is neither zero nor infinite', async () => {
     const { rows } = await createSearchRepository(prisma)(criteria());
 
     expect(names(rows)).not.toContain('no-radius');
-    expect(names(rows)).not.toContain('no-address');
   });
 
   it('AC7 — `what` filters by category slug', async () => {

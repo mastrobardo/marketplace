@@ -219,10 +219,9 @@ describe('AC3..AC7 — a builder produces a complete, distinct, ordered row', ()
   });
 
   it('AC17 — the provider builder can express every nullable column the schema has', () => {
-    // `MEM-2026-09-17-10`: typed non-nullable, these three could not be expressed at all, and both
+    // `MEM-2026-09-17-10`: typed non-nullable, these could not be expressed at all, and both
     // `W3-T05` and `W3-T07` reached past the factories to Prisma to build the rows they turn on.
-    // A null radius is *unsearchable*, a null rate is quote-only, and a set `baseAddressId` is the
-    // join the geo search runs through — none of them edge cases.
+    // A null radius is *unsearchable* and a null rate is quote-only — neither an edge case.
     const unsearchable = buildProviderProfile({ serviceRadiusMetres: null });
     const quoteOnly = buildProviderProfile({ hourlyRateCents: null });
     const based = buildProviderProfile({ baseAddressId: '3f2504e0-4f89-41d3-9a0c-0305e82c3301' });
@@ -230,8 +229,11 @@ describe('AC3..AC7 — a builder produces a complete, distinct, ordered row', ()
     expect(unsearchable.serviceRadiusMetres).toBeNull();
     expect(quoteOnly.hourlyRateCents).toBeNull();
     expect(based.baseAddressId).toBe('3f2504e0-4f89-41d3-9a0c-0305e82c3301');
-    // The default is the state a provider is actually in before they set one.
-    expect(buildProviderProfile().baseAddressId).toBeNull();
+
+    // `baseAddressId` used to default to null — "the state a provider is actually in before they
+    // set one". `W3-T02`'s migration made the column `NOT NULL`, so that is no longer a state: the
+    // builder supplies an id and `createProviderProfile` makes it a real row (AC12).
+    expect(buildProviderProfile().baseAddressId).toEqual(expect.any(String));
   });
 
   it('AC4 — overrides replace defaults and leave everything else alone', () => {
@@ -405,20 +407,35 @@ describe('AC11..AC13 — the factories write what the builders built', () => {
     expect(created.email).toBe('ana@example.test');
   });
 
-  it('AC12 — createProviderProfile with no userId creates the user it needs', async () => {
+  it('AC12 — createProviderProfile creates the user *and* the address it needs', async () => {
     const client = fakeClient();
     const profile = await createProviderProfile(client);
-    expect(client.calls.map((c) => c.model)).toEqual(['user', 'providerProfile']);
+
+    // The address joined this list in `W3-T02`: `base_address_id` is `NOT NULL`, so a profile is
+    // not a row that can be written on its own.
+    expect(client.calls.map((c) => c.model)).toEqual(['user', 'address', 'providerProfile']);
     const user = client.calls[0]?.data as { id: string };
+    const address = client.calls[1]?.data as { id: string; userId: string };
     expect(profile.userId, 'the profile did not point at the user it created').toBe(user.id);
+    expect(address.userId, 'the address belongs to somebody else').toBe(user.id);
+    expect(profile.baseAddressId, 'the profile did not point at the address it created').toBe(
+      address.id,
+    );
   });
 
-  it('AC13 — createProviderProfile with a userId creates no user', async () => {
+  it('AC13 — createProviderProfile with a userId creates no user, and with an address no address', async () => {
     const client = fakeClient();
     const userId = buildUser().id;
-    const profile = await createProviderProfile(client, { userId });
-    expect(client.calls.map((c) => c.model)).toEqual(['providerProfile']);
-    expect(profile.userId).toBe(userId);
+
+    const composed = await createProviderProfile(client, { userId });
+    expect(client.calls.map((c) => c.model)).toEqual(['address', 'providerProfile']);
+    expect(composed.userId).toBe(userId);
+
+    const given = fakeClient();
+    const baseAddressId = '3f2504e0-4f89-41d3-9a0c-0305e82c3301';
+    const profile = await createProviderProfile(given, { userId, baseAddressId });
+    expect(given.calls.map((c) => c.model)).toEqual(['providerProfile']);
+    expect(profile.baseAddressId).toBe(baseAddressId);
   });
 
   it('AC12 — createAddress and createClientProfile create their user too', async () => {

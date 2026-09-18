@@ -15,6 +15,11 @@ import { searchRoutes } from './modules/search/routes.js';
 import { type SearchRepository } from './modules/search/repository.js';
 import { providerRoutes } from './modules/providers/routes.js';
 import { type ProviderRepository } from './modules/providers/repository.js';
+import {
+  type ProviderOwnRepository,
+  type ProviderWriter,
+} from './modules/providers/write-repository.js';
+import { buildGuards, buildSessionResolver } from './modules/auth/guard.js';
 
 export interface BuildAppOptions {
   config: Config;
@@ -44,7 +49,24 @@ export interface BuildAppOptions {
    * with neither simply has no `/api/providers/:id`.
    */
   providers?: ProviderRepository;
+  /**
+   * The provider's **own** profile, read and written (`W3-T02`).
+   *
+   * Optional like the rest, and with one extra condition: the private routes are registered only
+   * when `auth` is present as well, because a guard cannot be built without it. A build missing
+   * either has no `/api/providers/me` at all rather than an unguarded one (`W2-T03` §3.7).
+   */
+  providerOwn?: ProviderOwnRepository;
+  providerWriter?: ProviderWriter;
+  /** The Prisma client the session guard reads liveness from — `W2-T03` §3.3. */
+  prisma?: ProviderLivenessClient;
 }
+
+/**
+ * What the guard's adapter needs of Prisma, and nothing more: the composition root should not have
+ * to hand the whole client to a module that reads one row.
+ */
+type ProviderLivenessClient = Parameters<typeof buildSessionResolver>[0]['prisma'];
 
 /**
  * Defence in depth. Fastify's default serialisers do not log headers, but a slice agent debugging
@@ -76,6 +98,9 @@ export function buildApp({
   auth,
   search,
   providers,
+  providerOwn,
+  providerWriter,
+  prisma,
 }: BuildAppOptions): FastifyInstance {
   const app = Fastify({
     logger: {
@@ -119,9 +144,34 @@ export function buildApp({
     app.register(searchRoutes({ repository: search }), { prefix: '/api' });
   }
 
-  /** `W3-T07`, under the same prefix and for the same reason. */
+  /**
+   * `W3-T07`'s public route, and `W3-T02`'s two private ones under the same prefix.
+   *
+   * The private pair arrives only with everything it needs — better-auth, a Prisma client for the
+   * liveness read, and both halves of the data layer. Anything missing and `providerRoutes`
+   * registers the public route alone: fail-closed is structural here, because a guard that
+   * degrades to "no guard" is the outage that looks like a successful deploy (`W2-T03` §3.7).
+   */
   if (providers !== undefined) {
-    app.register(providerRoutes({ repository: providers }), { prefix: '/api' });
+    const guarded =
+      auth !== undefined &&
+      prisma !== undefined &&
+      providerOwn !== undefined &&
+      providerWriter !== undefined;
+
+    app.register(
+      providerRoutes({
+        repository: providers,
+        ...(guarded
+          ? {
+              guards: buildGuards({ resolveSession: buildSessionResolver({ auth, prisma }) }),
+              own: providerOwn,
+              writer: providerWriter,
+            }
+          : {}),
+      }),
+      { prefix: '/api' },
+    );
   }
 
   /**

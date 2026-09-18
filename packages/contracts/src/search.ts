@@ -87,10 +87,14 @@ export type SearchQuery = z.infer<typeof SearchQuerySchema>;
 /**
  * Three decimals is roughly 110 m at this latitude: the right block, not the right doorstep.
  *
- * A provider's base address is usually their home (`schema.prisma:129`), and `W12-T11` needs a pin.
- * Returning the stored coordinate would honour the letter of the `line1` rule while publishing the
- * doorstep. The spec's Q2 escalates the number itself — it is a product question wearing an
- * engineering costume — and this constant is the one line that changes when it is answered.
+ * A provider's base address is **the centre of the radius they work in, not where they live**
+ * (operator's rule, 2026-09-17; `W3-T02`) — but nothing can tell the two apart, because a great
+ * many providers will enter their home and the column looks identical either way. That is the whole
+ * argument for coarsening: not that the address *is* private, but that it **may** be, and `W12-T11`
+ * needs a pin regardless. Returning the stored coordinate would honour the letter of the `line1`
+ * rule while publishing the doorstep. The spec's Q2 escalates the number itself — a product
+ * question wearing an engineering costume — and this constant is the one line that changes when it
+ * is answered.
  */
 export const POINT_DECIMALS = 3;
 
