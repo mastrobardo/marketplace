@@ -8,7 +8,7 @@
 
 /** Machine-readable failures. The code is the first token of the message, so logs are greppable. */
 export type GateCode =
-  'SPEC_MISSING' | 'SPEC_UNPAIRED' | 'INTERVENTION_UNLOGGED' | 'AUTHOR_IDENTITY';
+  'SPEC_MISSING' | 'SPEC_UNPAIRED' | 'INTERVENTION_UNLOGGED' | 'AUTHOR_IDENTITY' | 'AGENTS_DRIFT';
 
 export interface GateResult {
   /** True when the gate passes. A gate that does not apply also passes — see `skipped`. */

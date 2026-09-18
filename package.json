@@ -37,6 +37,7 @@
     "typecheck": "turbo run typecheck && tsc --noEmit",
     "lint": "turbo run lint && eslint .",
     "test": "turbo run test && vitest run",
+    "gates": "tsx scripts/gates/run.ts --all",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "verify": "pnpm typecheck && pnpm lint && pnpm format:check && pnpm test && pnpm build"

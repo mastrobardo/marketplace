@@ -13,11 +13,13 @@ This repository is **personal**. It must never carry a work identity.
   The machine's global config is a work address and is deliberately overridden here, not changed.
 - **Pre-commit hook** (`.githooks/pre-commit`, enabled via `core.hooksPath`): blocks any commit whose
   `user.email` is not the personal address, and blocks a work-looking `origin`.
-- **CI gate `author-identity`** (`W0-T21`, live since `W0-T12`): fails a PR if any commit author or
-  committer email is not `mastrobardo@gmail.com`. Both trailers are checked — `git commit --author`
-  sets only the author. Merge commits are skipped (`--no-merges`), so GitHub's "Update branch"
-  button cannot fail a branch the author never mis-signed. Unlike the hook below, it cannot be
-  bypassed.
+- **CI gate `author-identity`** (`W0-T21`, live since `W0-T12`; a step of the `gates` job since
+  `W0-T29`): fails a PR if any commit author email is not `mastrobardo@gmail.com`. The committer is
+  checked too — `git commit --author` sets only the author — **except when the committer is
+  `noreply@github.com`**, which is GitHub itself: a squash merge, the "Update branch" button and a
+  web-UI edit are all committed by the platform and leave the author untouched, so that trailer is
+  not evidence about anybody's identity. Merge commits are skipped (`--no-merges`). Unlike the hook
+  above, it cannot be bypassed.
 
 ## Known trap on this machine
 Both the `gh` CLI and the SSH key at `~/.ssh/id_ed25519` currently authenticate as

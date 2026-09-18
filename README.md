@@ -231,8 +231,8 @@ Your page owns its own single `<h1>`; the layout has none.
 
 ## CI
 
-Every pull request runs ten checks. They are separate jobs on purpose: a red PR should say *which*
-class of thing broke without anyone opening a log.
+Every pull request runs seven checks. They are separate jobs on purpose: a red PR should say
+*which* class of thing broke without anyone opening a log.
 
 | Check | Runs | |
 |---|---|---|
@@ -242,18 +242,34 @@ class of thing broke without anyone opening a log.
 | `build` | `pnpm build` | |
 | `database` | `pnpm stack:up`, migrations, then every `STACK_LIVE=1` suite | the only job needing Docker |
 | `workflows` | `actionlint` | CI that cannot lint itself is CI nobody can change safely |
+| `gates` | the four agent-process gates below, in one job | `pnpm gates` runs them locally |
+
+The `gates` job is `W0-T12`, re-shaped by `W0-T29`. Each of its four had been described as
+enforced — in `AGENTS.md`, `TODO.md` §5.5 and `IDENTITY.md` — for as long as it did not exist,
+which is the worst state for a gate to be in: reviewers stop checking a thing themselves precisely
+because CI is believed to be checking it.
+
+| Gate inside `gates` | Asserts | |
+|---|---|---|
 | `spec-present` | the branch changes its spec **and** its run record | skips a branch with no task ID |
 | `intervention-logged` | an `intervention:*` label needs an entry in `docs/interventions/` | `TODO.md` §5.6 |
-| `author-identity` | every commit author *and* committer is the personal address | `docs/board/IDENTITY.md` |
+| `author-identity` | every commit author is the personal address | `docs/board/IDENTITY.md` |
 | `agents-drift` | `.claude/agents/` still matches `agents/roles/` | generated files, never hand-edited |
 
-The last four are `W0-T12`. Each had been described as enforced — in `AGENTS.md`, `TODO.md` §5.5
-and `IDENTITY.md` — for as long as it did not exist, which is the worst state for a gate to be in:
-reviewers stop checking a thing themselves precisely because CI is believed to be checking it.
+They were four jobs until `W0-T29`. Four jobs running the same script with a different argument
+paid four × (`checkout` + `setup-node` + `pnpm install`) — about thirty seconds each — to run about
+two seconds of gate, and GitHub then billed four whole minutes, because it rounds every job up. A
+job earns its own name by having its own *setup*, not merely its own failure class.
 
-None of them carries an `if:`. A conditional job reports "skipped", and GitHub counts a skipped
-required check as satisfied, so a gate that can vanish is not a gate. On a push to `main` they run
-and report "not a pull request" instead of disappearing.
+What four names bought was legibility, and one job buys it back: every verdict goes into the run
+summary as a table, and each failure also becomes a GitHub error annotation titled with its gate,
+so a red check still names the gate on the Checks tab. One invocation judges **all four**, so a
+branch that breaks two learns both in one round trip rather than two.
+
+The job carries no `if:`. A conditional job reports "skipped", and GitHub counts a skipped required
+check as satisfied, so a gate that can vanish is not a gate. On a push to `main` the three
+pull-request gates report "not a pull request" instead of disappearing, and `agents-drift`, which
+needs no pull request, still runs.
 
 ### One job that is not a gate
 
@@ -270,9 +286,11 @@ merge gate in the MVP phase, and the script exits 0 on a shortfall by constructi
 gate through a repository setting rather than a reviewed change — and no code in this repo can
 prevent that, which is why it is written here as well as in the workflow.
 
-**These ten names are the contract.** `W0-T13` requires them in branch protection, GitHub matches
+**These seven names are the contract.** `W0-T13` requires them in branch protection, GitHub matches
 required checks *by name*, and a check that simply never arrives is reported as nothing at all —
 so renaming a job silently unblocks merges. Rename one, update branch protection in the same change.
+`OPS-03` has not run yet, which is the only reason `W0-T29` could choose these names rather than
+inherit them.
 
 Each gate runs the same `pnpm` script you run locally. A CI-only variant command is how "green on
 my laptop" and "green in CI" become two different things to satisfy, and then two things to debug.
