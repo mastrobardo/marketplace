@@ -722,3 +722,25 @@ come from real experience.
   the change you just made.
 - **evidence**: `apps/api/tests/provider-write-live.test.ts` (`migrated()`); `W3-T02` run record §3
 - **status**: active
+
+### The web suite runs close to two default timeouts, and CI is where that shows
+
+- **id**: MEM-2026-09-18-11
+- **scope**: repo
+- **fact**: `apps/web`'s page tests failed on CI three times across two pull requests that did not
+  touch `apps/web`, always within ~300 ms of a **default**: `results.test.tsx` AC1 at 1323/1285/1253
+  ms against Testing Library's 1000 ms `findBy*` wait, and `auth.test.tsx` AC5 at 5116 ms against
+  vitest's 5 s `testTimeout`. Both were raised in `W3-T02` — `configure({ asyncUtilTimeout: 5000 })`
+  in `apps/web/tests/setup.ts`, `testTimeout: 20_000` in `apps/web/vitest.config.ts`.
+- **why**: the failing test is always the **first** in its file — the one paying for i18n setup, the
+  first React render and the lazy route chunk — and a 2-core CI runner is several times slower than
+  a laptop. It reads as a flake in unrelated work, and the first instinct (re-run) wastes a full CI
+  cycle and still fails about half the time.
+- **apply**: a red `unit` job naming an `apps/web` test in a PR that changed no web code is this,
+  not your change — check the reported duration against 1000 ms and 5000 ms before investigating.
+  Raising a wait never makes a broken page pass; it fails later, for its own reason. Separately:
+  `[MSW] Error: intercepted a request without a matching request handler: GET .../search` in that
+  output is **expected** — `mocks.test.ts` asserts the handler `W3-T10` deleted is really gone, and
+  it prints alongside whatever else is running.
+- **evidence**: PR #263 and PR #264 CI runs; `apps/web/tests/setup.ts`
+- **status**: active
