@@ -766,7 +766,7 @@ rule: build the mechanism, read the value from config, ship nothing with an inve
 | `BD-04` | Cancellation & refund policy tiers | `W5-T05` | Time-based bands, who bears the fee |
 | `BD-05` | Emergency pricing — call-out fee + hourly, or a premium multiplier? | `W7-T01` | Affects the whole urgency flow's UX |
 | `BD-06` | Do **manitas** need verification (ID check), or only licensed pros? | `W8` scope, `W2-T05` | Trust vs. supply-side friction; affects cold start |
-| `BD-07` | Which categories legally require a licence in Spain? | `W3-T01`, `W3-T08` | Legal boundary, not a UI hint |
+| ~~`BD-07`~~ ✅ | Which categories legally require a licence in Spain? | `W3-T01`, `W3-T08` | **Answered 2026-09-18: five trades** — `electricidad`, `gas`, `climatizacion`, `telecomunicaciones`, `placas-solares`. And a rule worth more than the list: **a licence attaches to the trade performed, not to the umbrella above it** — `reforma-integral` is *not* gated, because tiling and wall work need nothing and rewiring is gated as `electricidad`. `W3-T08` inherits the evasion that permits, stated in `docs/specs/S3/W3-T01-category-tree.md` §3.5.1/§10.3. `desatascos` is `false` **provisionally** — the operator is checking with the gremio |
 | `BD-08` | How aggressive is anti-disintermediation? | `W4-T08` | Too strict harms UX, too loose leaks revenue |
 | `BD-09` | Auction defaults: sealed vs open, anti-sniping window, bid caps per tier | `W6-T04`, `W6-T07` | |
 | `BD-10` | Badge qualifying rules + minimum reviews before an average is shown | `W8-T04`, `W8-T06` | |

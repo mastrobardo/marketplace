@@ -9,9 +9,10 @@
   shape (`CategoryListSchema`).
 - **Blocks**: `W3-T08` (licence gating reads `requiresLicence`), and a provider picking a real trade
   instead of one of four demo slugs.
-- **Operator decisions, 2026-09-18**: the wire contract **stays flat and unchanged** (§3.2); the
-  `BD-07` licence column is answered from §10's table, not invented here (§3.5).
-- **`[M]` `[B]`** — `BD-07` is the human half. §3.5 is the mechanism; §10.1 is the question.
+- **Operator decisions, 2026-09-18**: the wire contract **stays flat and unchanged** (§3.2);
+  **`BD-07` is answered** — five gated trades, and the rule that a licence attaches to the trade
+  performed rather than to the umbrella above it (§3.5.1, §10.1).
+- **`[M]` `[B]` — the human half has landed.** §8.3's column is filled and AC20 names the set.
 
 ---
 
@@ -168,6 +169,33 @@ not a UI hint."* `W3-T08` will read this column as fact. A guess here becomes a 
 electrician's competitor being surfaced without a licence, and nothing downstream can tell it was a
 guess.
 
+#### 3.5.1 A licence attaches to the trade performed, not to the umbrella above it
+
+**Operator, 2026-09-18**, ruling on `reforma-integral`:
+
+> *"Reforma integral doesn't need it, depending on the reforma itself: just building stuff — tiles,
+> changes in the walls, fixing things — doesn't need any licence. If a reforma integral touches
+> anything like plumbing or electricity, yes. But reforma integral is a wide category, I would not
+> put any hard blocker there."*
+
+This is the rule, and it is why `reforma-integral` is `false` despite being the largest thing on the
+list. **A wide category is gated through its parts.** A provider who rewires a flat during a
+renovation needs the electrical authorisation because the *work* is `electricidad`, not because the
+job was filed under `reforma-integral`. Marking the umbrella `true` would demand a licence from a
+tiler and teach the column to mean "this job might involve something regulated" — which is not a
+legal boundary, it is a guess about scope.
+
+It also vindicates `W1-T05`'s no-inheritance comment from the other direction. The flag does not
+propagate **down** (a gated parent must not gate its children), and §3.4's arbitrary parent
+assignment is safe for the same reason — a trade's legal status is its own, never its family's.
+
+**The hole this leaves is real and belongs to `W3-T08`.** `requiresLicence` gates a *category*, so a
+provider listing only `reforma-integral` can be surfaced for work that touches a gated trade without
+ever holding the certification, simply by not claiming `electricidad`. Nothing in this ticket can
+close that — the taxonomy cannot know what a job turns out to involve. The operator has said
+explicitly not to put a hard blocker on the umbrella, so this spec does not; it records the gap so
+that `W3-T08` finds it stated rather than discovering it, and §10.3 carries it forward.
+
 ### 3.6 The four demo slugs are adopted, not replaced
 
 `demo-providers.ts` creates its four categories with fixed uuids (`aaaa…0001`–`0004`) and five
@@ -318,13 +346,17 @@ repository except where marked **live**.
     `PUT /api/providers/me`, **then** each is accepted — the write path's slug resolution and this
     table agree (§8.5).
 20. **Given** the seeded taxonomy, **when** `SELECT slug FROM category WHERE requires_licence` runs,
-    **then** the result is exactly the set §10.1 settles, and no row was defaulted into it.
+    **then** the result is exactly `{electricidad, gas, climatizacion, telecomunicaciones,
+    placas-solares}` — five rows, no more and no fewer (§8.3).
+21. **Given** the seeded taxonomy, **when** `reforma-integral` is read, **then** `requiresLicence`
+    is `false`, and **no** root or parent row carries `true` — the flag never gates an umbrella
+    (§3.5.1).
 
 **Storefront.**
 
-21. **Given** `apps/web` with no MSW handlers, **when** `tests/mocks.test.ts` runs, **then** the
+22. **Given** `apps/web` with no MSW handlers, **when** `tests/mocks.test.ts` runs, **then** the
     suite reflects an empty handler list rather than asserting the deleted `GET /categories`.
-22. **Given** the mock directory moved to `tests/fixtures/`, **when** `pnpm typecheck` runs, **then**
+23. **Given** the mock directory moved to `tests/fixtures/`, **when** `pnpm typecheck` runs, **then**
     every importer — `tests/app-harness.tsx` above all — resolves (§8.6).
 
 ---
@@ -351,39 +383,48 @@ slice, and likewise needs nothing.
 
 ### 8.3 The taxonomy
 
-Two roots, twenty leaves. `position` is per sibling set. The `requiresLicence` column is **left
-unresolved here on purpose** — it is filled from §10.1 and this table is what the operator is ruling
-on.
+Two roots, twenty leaves. `position` is per sibling set. The `requiresLicence` column carries the
+operator's ruling of 2026-09-18 (§10.1): **five `true`, fifteen `false`**, every one declared
+explicitly on the row, none defaulted.
 
 **Root `reformas`** — *Reformas* / *Renovations* (§3.1)
 
-| slug | nameEs | nameEn | pos | licence? |
+| slug | nameEs | nameEn | pos | `requiresLicence` |
 |---|---|---|---|---|
-| `reforma-integral` | Reforma integral | Full renovation | 1 | §10.1 |
-| `albanileria` | Albañilería | Masonry | 2 | §10.1 |
-| `alicatado-solados` | Alicatado y solados | Tiling & flooring | 3 | §10.1 |
-| `pintura` | Pintura | Painting | 4 | §10.1 |
-| `carpinteria` | Carpintería | Carpentry | 5 | §10.1 |
-| `escayola-pladur` | Escayola y pladur | Plasterboard | 6 | §10.1 |
-| `ventanas-cerramientos` | Ventanas y cerramientos | Windows & glazing | 7 | §10.1 |
-| `aislamiento` | Aislamiento | Insulation | 8 | §10.1 |
+| `reforma-integral` | Reforma integral | Full renovation | 1 | `false` — §3.5.1 |
+| `albanileria` | Albañilería | Masonry | 2 | `false` |
+| `alicatado-solados` | Alicatado y solados | Tiling & flooring | 3 | `false` |
+| `pintura` | Pintura | Painting | 4 | `false` |
+| `carpinteria` | Carpintería | Carpentry | 5 | `false` |
+| `escayola-pladur` | Escayola y pladur | Plasterboard | 6 | `false` |
+| `ventanas-cerramientos` | Ventanas y cerramientos | Windows & glazing | 7 | `false` |
+| `aislamiento` | Aislamiento | Insulation | 8 | `false` |
+
+Every row in this family is `false`, which is the shape §3.5.1 predicts: *reformas* is where the
+wide, unregulated build work lives, and the regulated parts of a renovation are gated through
+`mantenimiento`'s trades when the provider claims them.
 
 **Root `mantenimiento`** — *Mantenimiento* / *Maintenance*
 
-| slug | nameEs | nameEn | pos | licence? | note |
+| slug | nameEs | nameEn | pos | `requiresLicence` | note |
 |---|---|---|---|---|---|
-| `fontaneria` | Fontanería | Plumbing | 1 | §10.1 | **adopted** — uuid `aaaa…0001` |
-| `electricidad` | Electricidad | Electrical | 2 | §10.1 | **adopted** — uuid `aaaa…0002` |
-| `cerrajeria` | Cerrajería | Locksmith | 3 | §10.1 | **adopted** — uuid `aaaa…0003` |
-| `climatizacion` | Climatización | Heating & cooling | 4 | §10.1 | **adopted** — uuid `aaaa…0004` |
-| `gas` | Instalaciones de gas | Gas installations | 5 | §10.1 | |
-| `electrodomesticos` | Electrodomésticos | Appliance repair | 6 | §10.1 | |
-| `telecomunicaciones` | Telecomunicaciones y antenas | Telecoms & aerials | 7 | §10.1 | |
-| `placas-solares` | Placas solares | Solar panels | 8 | §10.1 | |
-| `desatascos` | Desatascos | Drain unblocking | 9 | §10.1 | |
-| `limpieza` | Limpieza | Cleaning | 10 | §10.1 | |
-| `jardineria` | Jardinería | Gardening | 11 | §10.1 | |
-| `mudanzas` | Mudanzas y montaje | Removals & assembly | 12 | §10.1 | |
+| `fontaneria` | Fontanería | Plumbing | 1 | `false` | **adopted** — uuid `aaaa…0001` |
+| `electricidad` | Electricidad | Electrical | 2 | **`true`** | **adopted** — uuid `aaaa…0002` |
+| `cerrajeria` | Cerrajería | Locksmith | 3 | `false` | **adopted** — uuid `aaaa…0003` |
+| `climatizacion` | Climatización | Heating & cooling | 4 | **`true`** | **adopted** — uuid `aaaa…0004` |
+| `gas` | Instalaciones de gas | Gas installations | 5 | **`true`** | |
+| `electrodomesticos` | Electrodomésticos | Appliance repair | 6 | `false` | |
+| `telecomunicaciones` | Telecomunicaciones y antenas | Telecoms & aerials | 7 | **`true`** | |
+| `placas-solares` | Placas solares | Solar panels | 8 | **`true`** | |
+| `desatascos` | Desatascos | Drain unblocking | 9 | `false` | **provisional** — §10.1 |
+| `limpieza` | Limpieza | Cleaning | 10 | `false` | |
+| `jardineria` | Jardinería | Gardening | 11 | `false` | |
+| `mudanzas` | Mudanzas y montaje | Removals & assembly | 12 | `false` | |
+
+**`fontaneria` is `false` and sits beside three `true` rows, which is worth reading twice.** Plumbing
+as a trade carries no national authorisation; the moment the work touches a gas appliance it is
+`gas`, which does. The pair is the clearest instance of §3.5.1 in the taxonomy, and a reviewer who
+expects plumbing to be regulated should find the reason here rather than filing a bug.
 
 Every slug matches `CATEGORY_SLUG` (`^[a-z0-9]+(?:-[a-z0-9]+)*$`) — note `albanileria` and
 `carpinteria` are unaccented in the slug and accented in `nameEs`, which is the split the column
@@ -457,44 +498,32 @@ storefront's licence badge exercised in component tests regardless of what §10.
 
 ## 10. Open questions
 
-### 10.1 `BD-07` — the licence column *(blocking §8.3, and the reason this ticket is `[B]`)*
+### 10.1 `BD-07` — the licence column ✅ *resolved by the operator, 2026-09-18*
 
-```
-ESCALATION
-Task:      W3-T01
-Question:  Which of the twenty leaf categories in §8.3 legally require a licence,
-           registration or certification to perform for hire in Spain?
-Options:   A) Rule on the table below, cell by cell.
-           B) Ship the tree with the flag deferred the way W3-T10 deferred it —
-              names and structure land now, the legal column later.
-Recommend: A. The tree is most of this ticket's value either way, but B leaves
-           W3-T08 with the same empty left-hand side it has today, and a second
-           ticket has to revisit twenty rows.
-Blocked:   §8.3's licence column; AC20.
-Not blocked: everything else — the endpoint, the module, the seeder mechanism,
-           the demo decoupling, the mocks move, and AC1–AC19, AC21, AC22.
-```
+**Answer: five gated trades** — `electricidad`, `gas`, `climatizacion`, `telecomunicaciones`,
+`placas-solares`. The candidate list's "likely true" set was confirmed whole; both "unsure" rows came
+back `false`; the remaining thirteen stay `false`. §8.3 carries the column and AC20 pins the set.
 
-**Candidates, with the reason to suspect regulation.** This is a prompt for your decision, not
-legal research — an agent must not be the source of a legal boundary (charter; `policies/
-human-boundaries.md`).
+**`reforma-integral` is `false`, with a rule attached.** The operator's reasoning became §3.5.1 —
+a licence attaches to the trade actually performed, not to the umbrella above it — and is the more
+valuable half of this answer, because it tells `W3-T08` how to read every future wide category
+rather than just this one. *"I would not put any hard blocker there"* is the instruction, and the
+spec follows it; the evasion it permits is named in §3.5.1 and carried to §10.3 rather than
+quietly closed here.
 
-| slug | Why it might be gated | My read |
-|---|---|---|
-| `electricidad` | Instalador eléctrico autorizado under the REBT | likely **true** |
-| `gas` | Instalador de gas, categories A/B/C | likely **true** |
-| `climatizacion` | RITE, plus F-gas handling for refrigerants | likely **true** |
-| `telecomunicaciones` | Registro de instaladores de telecomunicación | likely **true** |
-| `placas-solares` | Usually performed under the electrical authorisation | likely **true** |
-| `reforma-integral` | Project/visado obligations at some scopes; the *trade* may not be gated | **unsure — your call** |
-| `desatascos` | Waste handling rules in some CCAA | **unsure — your call** |
-| the remaining thirteen | No trade-level authorisation known | likely **false** |
+**`desatascos` is `false` and provisional.** The operator's words: *"no they don't need it, but I
+still need to check with the gremio — although some friends working in the field told me not."*
+Recorded as provisional rather than settled because the direction of the risk is asymmetric: `false`
+is the permissive answer, so being wrong here surfaces an unlicensed provider, while being wrong the
+other way only asks for a certificate nobody needed. It is one seeder edit and one AC20 line if the
+gremio says otherwise — **and it is the operator's to chase, not an agent's.**
 
-Two things worth your attention while ruling: **whether the answer varies by comunidad autónoma**,
-because the column is national and has no region dimension — if it varies, the honest column is the
-strictest reading and §9 gains a note; and **whether "licence" here means the provider's
-authorisation or the specific job's permit**, because `Certification` models the former and
-`W3-T08` gates on it.
+**The two sub-questions were not answered, and neither blocks.** Whether the flag varies by comunidad
+autónoma, and whether "licence" means the provider's authorisation or the job's permit. All five
+`true` rows are national installer authorisations held by the *provider*, which is what
+`Certification` models and what `W3-T08` gates on, so the column is coherent under either reading.
+If a regional divergence turns up, §9 gains a note and the column stays the strictest reading —
+there is no region dimension on `Category` and this ticket does not add one.
 
 ### 10.2 `urgencias` *(non-blocking — §3.1)*
 
@@ -511,14 +540,28 @@ Recommend: A, and correct TODO.md §6's line in this PR.
 Blocked:   Nothing. A is built; B is an additive seeder edit if reaffirmed.
 ```
 
-### 10.3 The single parent *(non-blocking — §3.4)*
+### 10.3 The umbrella gap *(carried to `W3-T08`, by operator instruction — §3.5.1)*
+
+`requiresLicence` gates a category, and `reforma-integral` is deliberately not gated. So a provider
+who lists only `reforma-integral` can be surfaced for a renovation that turns out to need rewiring,
+without ever holding the electrical authorisation, simply by never claiming `electricidad`.
+
+This is not a defect in the taxonomy and no taxonomy can fix it: the table cannot know what a job
+turns out to involve. The operator has ruled that the umbrella carries no hard blocker, and this
+spec implements that. Naming it here is so `W3-T08` inherits a stated constraint rather than
+rediscovering it — and the places it could actually be addressed are all downstream: the job's
+category at posting time (`W4-T01`), the quote (`W4-T03`), or a prompt when a provider adds
+`reforma-integral` without any gated trade beside it.
+
+### 10.4 The single parent *(non-blocking — §3.4)*
 
 Recorded, not asked. `fontaneria` under `mantenimiento` is an arbitrary assignment that no client
-can observe (§3.2). If `W12-T13` ever renders the grouping, it is the ticket that discovers whether
-one parent per trade survives contact with a real navigation design — and by then the change is a
-seeder edit plus whatever contract change that page needs anyway.
+can observe (§3.2). §3.5.1 makes it safer than it looked when §3.4 was written: since the legal flag
+is never inherited in either direction, a trade in the "wrong" family carries no legal consequence
+at all. If `W12-T13` ever renders the grouping, that is the ticket that discovers whether one parent
+per trade survives a real navigation design.
 
-### 10.4 Retired categories and existing providers *(recorded — §3.8)*
+### 10.5 Retired categories and existing providers *(recorded — §3.8)*
 
 A provider sitting in a retired category keeps it until their next profile save, which will reject
 it. Nothing cleans this up, and nothing should until someone retires a category in anger. If it

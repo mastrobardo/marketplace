@@ -57,39 +57,52 @@ ticket is the vocabulary a provider picks from, and the legal column `W3-T08` wi
 - §3.4 records a modelling limit rather than hiding it: `fontaneria` belongs to both families and
   `parentId` is one column. Chose one-parent-by-usual-home because §3.2 makes the choice
   unobservable — a wrong guess costs a seeder edit and no migration.
+- **Operator answered `BD-07`, 2026-09-18.** The "likely true" set confirmed whole —
+  `electricidad`, `gas`, `climatizacion`, `telecomunicaciones`, `placas-solares` — and both "unsure"
+  rows came back `false`. Five `true`, fifteen `false`.
+- **The reforma-integral answer was worth more than the cell**, and became spec §3.5.1: *a licence
+  attaches to the trade performed, not to the umbrella above it*. Tiling and wall work need nothing;
+  rewiring during a renovation is gated as `electricidad` because the **work** is electrical, not
+  because the job was filed under `reforma-integral`. Marking the umbrella `true` would demand a
+  licence from a tiler and teach the column to mean "this job might involve something regulated" —
+  a guess about scope, not a legal boundary.
+  - It also vindicates `W1-T05`'s no-inheritance comment from the other direction: the flag must not
+    propagate **down** either, which retroactively makes §3.4's arbitrary parent assignment safe —
+    a trade's legal status is its own, never its family's.
+  - The gap it leaves is real and **the operator chose it knowingly** (*"I would not put any hard
+    blocker there"*): a provider listing only `reforma-integral` can be surfaced for work needing a
+    gated trade by simply never claiming it. No taxonomy can close that — the table cannot know what
+    a job turns out to involve. Stated in §3.5.1 and carried to §10.3 so `W3-T08` inherits it.
+- `fontaneria` is `false` beside three `true` rows, and §8.3 says why out loud: plumbing carries no
+  national authorisation, and the moment the work touches a gas appliance it is `gas`, which does.
+  A reviewer expecting plumbing to be regulated should find the reason rather than file a bug.
 
 ## Blocked / escalations
 
-`BD-07` is the `[B]` half and it is open. Verbatim block in spec §10.1; the short form:
+**None. `BD-07` was answered by the operator on 2026-09-18** — see the Log. `TODO.md` §10.1's row is
+struck through and carries the answer, so `W3-T08` does not have to find it in a spec.
 
-```
-ESCALATION
-Task:      W3-T01
-Question:  Which of the twenty leaf categories in §8.3 legally require a licence,
-           registration or certification to perform for hire in Spain?
-Options:   A) Rule on the table, cell by cell.
-           B) Ship the tree with the flag deferred the way W3-T10 deferred it.
-Recommend: A. B leaves W3-T08 with the same empty left-hand side it has today,
-           and a second ticket has to revisit twenty rows.
-Blocked:   §8.3's licence column; AC20.
-Not blocked: the endpoint, the module, the seeder mechanism, the demo decoupling,
-           the mocks move, and AC1–AC19, AC21, AC22.
-```
-
-Two sub-questions put to the operator with it: whether the answer varies by comunidad autónoma (the
-column is national and has no region dimension), and whether "licence" means the provider's
-authorisation or the job's permit — `Certification` models the former and `W3-T08` gates on it.
+One item is **provisional rather than settled**: `desatascos` is `false`, and the operator is
+checking with the gremio. Recorded as provisional because the risk is asymmetric — `false` is the
+permissive answer, so being wrong surfaces an unlicensed provider, while being wrong the other way
+only asks for a certificate nobody needed. **It is the operator's to chase, not an agent's**; the fix
+if it flips is one seeder row and one AC20 line.
 
 ## Handoff
 
-**The spec is done and awaiting operator review.** Nothing is implemented.
+**The spec is done, `BD-07` is answered, and nothing is implemented.**
 
-**Next action**: operator reviews `docs/specs/S3/W3-T01-category-tree.md`, rules on §10.1's licence
-table and confirms §10.2. Then `02-tdd-red.md` against §7's twenty-two criteria, in this order —
+**Next action**: `02-tdd-red.md` against §7's **twenty-three** criteria, in this order —
 `modules/categories/` (routes + repository, the `W3-T05` split), then
 `apps/api/prisma/seed/categories.ts`, then `demo-providers.ts`'s decoupling, then the mocks move.
+§10.2 (`urgencias`) is the one thing still unconfirmed; it is non-blocking and the spec builds
+option A (two roots), which is an additive seeder edit to reverse.
 
 **Do not redo:**
+- Re-asking `BD-07`, or defaulting any row's flag. Five `true`, fifteen `false`, every one explicit
+  on the row (§8.3). `desatascos` is the only provisional cell and the operator owns the re-check.
+- Gating a parent or a wide category. §3.5.1 is an operator rule, and AC21 fails if any root or
+  parent row carries `true`.
 - Looking for a migration or a contract change. Neither is needed and §8.1/§8.2 say why. Both paths
   are `forbidden:` for this slice, so finding that they need no edit is the finding.
 - Proposing a nested `CategorySummarySchema`. Operator settled it flat on 2026-09-18 (§3.2).
@@ -107,5 +120,5 @@ not a validation one.
 
 **Skills used so far**: `spec-driven-development` (the deliverable), `api-and-interface-design`
 (§3.2's flat-wire rule and §4's unreachable `400`/`404`), `security-and-hardening` (§3.5 — why a
-guessed `requiresLicence` is worse than an absent one, and §9's refusal to add an admin CRUD that
-would make a legal boundary runtime-editable).
+guessed `requiresLicence` is worse than an absent one, §3.5.1's evasion, and §9's refusal to add an
+admin CRUD that would make a legal boundary runtime-editable).
