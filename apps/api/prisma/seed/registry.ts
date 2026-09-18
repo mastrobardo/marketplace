@@ -1,4 +1,5 @@
 import { authDemoUsers } from './auth-demo-users.js';
+import { demoProviders } from './demo-providers.js';
 import { type Seeder } from './types.js';
 
 /**
@@ -10,4 +11,4 @@ import { type Seeder } from './types.js';
  * Order matters and is the array's order — a seeder that needs categories goes after the one that
  * creates them. Ids are permanent: renaming one makes it run again on every existing database.
  */
-export const seeders: readonly Seeder[] = [authDemoUsers];
+export const seeders: readonly Seeder[] = [authDemoUsers, demoProviders];

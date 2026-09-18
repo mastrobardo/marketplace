@@ -342,38 +342,34 @@ Promotion happens in the same PR as the work. A separate "memory PR" never gets 
 
 Task IDs are stable — use them as board card titles.
 
-> ### ▶ NEXT — `W3-T10`, and `OPS-03` whenever you want it
+> ### ▶ NEXT — `W3-T02`, and two things waiting on you
 >
-> `W0-T29` shipped: CI is **eight jobs and seven required check names**, and the four agent-process
-> gates are one `gates` job that annotates whichever of them failed. `pnpm gates` runs them locally.
-> Nothing about branch protection changed, because `OPS-03` is `[H]` and has not run — when you do
-> run it, the seven names are listed in `docs/specs/S0/W0-T29-gate-consolidation.md` §4, and `perf`
-> must never be among them.
+> **The storefront is no longer a facade.** `W3-T10` shipped: `pnpm db:seed` puts four trades and
+> five Madrid providers in Postgres, the search and provider MSW handlers are deleted, and `pnpm
+> dev` reads both from the real API. What is left of `apps/web/mocks/` is `GET /categories` — and
+> `mocks/search.ts` / `mocks/provider.ts`, which lost their handlers and kept their second caller,
+> the component-test stub in `tests/app-harness.tsx`.
 >
-> **`W3-T10` next**: the demo provider seeder, and the retirement of `mocks/search.ts`,
-> `mocks/provider.ts` and their two handlers, re-pointing `tests/mocks.test.ts` AC14–AC16 at the
-> contract rather than at the handler they currently assert through. Both endpoints the storefront
-> fakes are real now (`W3-T05`, `W3-T07`) and both mocks are still in place, because nothing seeds a
-> provider — this is the one ticket between the storefront and real data. It either waits on
-> `W3-T01` (blocked on `BD-07`) or seeds a category or two of its own with `requiresLicence` false
-> and a note.
+> **`W3-T02` next**, and `W3-T10` sharpened it: every seeded provider has a base address because
+> the endpoints are unusable without one. `W3-T02` is what stops new nulls arriving — the operator's
+> rule of 2026-09-17 is that a base address is *required* and is the centre of the operating radius,
+> not where the provider lives. Making the column `NOT NULL` is a migration and stays
+> `agent-contracts`' edit (`docs/specs/S3/W3-T07-provider-profile-api.md` §5 Q1).
 >
-> **One question left open by `W0-T29`**, and it costs a line to answer either way: `author-identity`
-> survived the collapse (spec §6 Q1). The steer said it is not very useful; it is now free to run
-> and two documents promise it. Say the word and it goes.
+> **Two decisions still open, neither blocking:**
+> `author-identity` survived `W0-T29`'s collapse and the steer said it was not very useful — spec
+> §6 Q1, one line to retire. And `OPS-03` is yours whenever you want it: the seven required check
+> names are in `docs/specs/S0/W0-T29-gate-consolidation.md` §4, and `perf` must never be among them.
 >
-> **Two things `W3-T07` leaves for `agent-contracts`,** neither blocking:
-> `ProviderProfile.baseAddressId` should be `NOT NULL` — the operator's rule is that every provider
-> has a base address and that it is *the centre of their operating radius, not where they live*
-> (`MEM-2026-09-17-15`), and until the column says so `GET /api/providers/:id` answers `404` for a
-> row that exists. And the *"usually a home address"* justification in `schema.prisma:214` and
-> `packages/contracts/src/search.ts` is now the wrong reason for the right behaviour.
+> **Still for `agent-contracts`,** from `W3-T07`: `ProviderProfile.baseAddressId` should be
+> `NOT NULL`, and the *"usually a home address"* justification in `schema.prisma:214` and
+> `packages/contracts/src/search.ts` is the wrong reason for the right behaviour.
 >
 > **A human blocker worth knowing about:** `OPS-14` (an email provider). `W2-T10` made sign-up
 > usable without it — `AUTH_TRUST_EMAIL_ON_SIGNUP` marks the user verified at creation, locally and
 > in preview/staging only — so this now blocks *shipping* identity rather than developing it.
 > **And a decision:** `BD-07` (which categories legally require a licence in Spain) blocks `W3-T01`
-> and `W3-T08`, which is the slice immediately after this one.
+> and `W3-T08`. Until it lands, the seeded categories say `requiresLicence: false` and say why.
 
 **Execution labels**
 
@@ -490,7 +486,7 @@ for data), so no feature is blocked waiting for an account that is not needed ye
 - `W3-T07` `[A]` ✅ **Provider profile API — `GET /api/providers/:id`, against the `ProviderProfileSchema` `W12-T12` froze.** `:id`, not `:slug` — no slug column exists and ADR-011 Amendment 3 settles it on the uuid. `routes.ts` + `repository.ts`, the split `W3-T05` laid down, so the whole HTTP boundary is asserted without a database. **Prisma's typed client rather than raw SQL**, and the difference from search is the point: search is one hand-written statement because `ST_DWithin` runs against a generated `geography` column over a radius scan; this is one row by primary key, so `select` — where the columns *not* named are the projection — buys compile-time safety on exclusions that are doing security work. **Three things found by building it:** a provider with no base address cannot be serialised at all (`city`, `province` and `point` are non-null in the contract while `base_address_id` is nullable), so it answers `404` — a *transitional* answer, and the operator's rule that removes it is now on `W3-T02`; both `Decimal` columns (`rating_avg`, and the address coordinates) serialise to JSON as objects rather than numbers, so the outbound parse catches a column that would otherwise reach the wire malformed; and `packages/testing`'s `ProviderProfileInput` is **widened** here rather than worked around a third time — `serviceRadiusMetres`, `hourlyRateCents` and a new `baseAddressId` now match `schema.prisma`, closing `MEM-2026-09-17-10`. **The mock did not go with it**, for the same reason `W3-T05`'s did not: `W3-T10` retires both behind a seeder *(spec: `docs/specs/S3/W3-T07-provider-profile-api.md`)*
 - `W3-T08` `[A]` Licence gating: `requiresLicence` categories only surface verified pros
 - `W3-T09` `[A]` Availability calendar (weekly hours + blocked dates)
-- `W3-T10` `[A]` **Demo provider seeder, and retire the search and profile mocks.** `W3-T05` and `W3-T07` made the endpoints real and the storefront still runs on `apps/web/mocks/`, because nothing seeds a provider: `auth-demo-users` is the only seeder, so deleting the handlers today points `pnpm dev` at a correct endpoint over an empty table. Seed providers with base addresses, service radii and rates across a few real Spanish postcodes — enough that a search from Madrid returns a page and a far provider proves the radius rule — then delete `mocks/search.ts`, `mocks/provider.ts` and their two handlers, and re-point `tests/mocks.test.ts` AC14–AC16 (which are `W12-T08`'s criteria *about the contract*, and must survive the handler they currently assert through). Needs a category or two, so it either waits on `W3-T01` or seeds its own with `requiresLicence` false and a note — a demo seeder must not be where `BD-07` gets decided by default. `mocks/catalogue.ts` and `searchCatalogue` stay until then: `tests/app-harness.tsx` stubs them for component tests
+- `W3-T10` `[A]` ✅ **Demo provider seeder — the storefront reads its providers from Postgres now, not from MSW.** `apps/api/prisma/seed/demo-providers.ts` persists the world `apps/web/mocks/catalogue.ts` invented: four trades and five Madrid providers with base addresses, radii and rates, including the three rows the storefront has branches for — the quote-only provider `?mode=booking` excludes, the unrated cold-start card, and a far provider whose **own 50 km radius reaches Madrid from 29.8 km out** while every other seeded provider covers 15 km, which is `W3-T05`'s headline rule visible in the demo data. **Not `localOnly`**, deliberately: no credential, no phone number, no real person — `auth.demo-users` carries that flag because its rows have a published password, and nothing here does, so a preview database may hold this world and demo a working storefront (wiring a deploy to seed is `W0-T24`'s, nothing seeds on deploy today). Which is also why it **creates its own users**: in every environment where the local-only seeder correctly refuses, its rows are absent. Categories carry `requiresLicence: false` with `BD-07` named in the file — a demo seeder is not where a legal boundary gets decided by default. Then the two MSW handlers went. **`mocks/search.ts` and `mocks/provider.ts` did not**, and the ticket's own text is why: it said to delete them *and* said `searchCatalogue` stays because `tests/app-harness.tsx` stubs it for component tests — `W12-T11` split those modules out precisely so the handler and the stub could not disagree, and deleting them puts that second definition back in the harness (operator's call, 2026-09-18). **Eight handler-asserted criteria were re-homed rather than dropped** — `W12-T08`'s AC14–AC16 and `W12-T12`'s AC10–AC13, with a mapping table in the spec §3.1; two needed writing and both are in `seed-live.test.ts`, including **AC11, the only one that ever checked the two endpoints against each other** (every id search returns must resolve, or a visitor gets a working list of links to nothing). **One thing found by running it:** `provider_category` is keyed by its pair and has no `id` column, which a recording fake cannot know and Prisma rejects outright — `MEM-2026-09-18-1` *(spec: `docs/specs/S3/W3-T10-demo-provider-seeder.md`)*
 
 ### W4 — Jobs & presupuestos (`agent-jobs`)
 - `W4-T01` `[A]` Job posting flow: category, description, photos, location, budget, urgency

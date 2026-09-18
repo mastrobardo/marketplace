@@ -663,3 +663,23 @@ come from real experience.
 - **evidence**: `scripts/gates/author-identity.ts` `PLATFORM_COMMITTER`; `tests/ci-gates.test.ts`
   AC4; PR #257's failure on `03e8651`
 - **status**: active
+
+### A structural fake proves a writer's intent, never its shape
+
+- **id**: MEM-2026-09-18-1
+- **scope**: repo
+- **fact**: `W3-T10`'s seeder was fully asserted against a recording client — counts, fixed ids, no
+  credentials, `requiresLicence: false` — and all thirteen tests passed while it wrote an `id` to
+  `provider_category`, which has no such column: the table is keyed by
+  `@@id([providerProfileId, categoryId])`, explicitly rather than as an implicit Prisma m-n, because
+  `W3-T05` joins it from raw SQL. Prisma rejects the argument outright. Only the live suite saw it.
+- **why**: a fake satisfies the *interface* — `create({ data })` — and an interface says nothing
+  about which columns exist. This is the same trade `packages/testing`'s `FactoryClient` makes
+  deliberately (spec §4.3 Decision D), and the same reason it carries a live criterion to close it.
+- **apply**: anything that writes rows gets **one** assertion that actually writes them, however
+  thorough the DB-free suite is. Put the shape claims in the fake-driven test, where they are fast,
+  and at least one end-to-end write behind `STACK_LIVE=1`. A seeder with no live test is a seeder
+  whose first real run is on someone's laptop.
+- **evidence**: `apps/api/prisma/seed/demo-providers.ts`; `apps/api/tests/seed-live.test.ts`;
+  `apps/api/tests/demo-providers.test.ts` ("gives every row an id…")
+- **status**: active

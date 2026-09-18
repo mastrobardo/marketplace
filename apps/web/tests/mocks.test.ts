@@ -12,11 +12,10 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ID_PREFIXES } from '@marketplace/testing';
-import { ProviderProfileSchema, SearchResponseSchema } from '@marketplace/contracts';
+import { CategoryListSchema } from '@marketplace/contracts';
 import { setupServer } from 'msw/node';
 import { buildCatalogue } from '../mocks/catalogue.js';
 import { handlers } from '../mocks/handlers.js';
-import { seededProviderIds } from '../mocks/provider.js';
 
 const webRoot = fileURLToPath(new URL('..', import.meta.url));
 
@@ -31,13 +30,10 @@ afterAll(() => {
   server.close();
 });
 
-const search = async (query: string) => {
-  const response = await fetch(`http://api.test/search?${query}`);
-  return { status: response.status, body: (await response.json()) as unknown };
-};
-
-const provider = async (id: string) => {
-  const response = await fetch(`http://api.test/providers/${id}`);
+const categories = async (locale = 'es') => {
+  const response = await fetch('http://api.test/categories', {
+    headers: { 'accept-language': locale },
+  });
   return { status: response.status, body: (await response.json()) as unknown };
 };
 
@@ -71,63 +67,55 @@ describe('AC13 — every row came from a factory', () => {
   });
 });
 
-describe('AC14..AC16 — the handler answers the contract', () => {
-  it('AC14 — a search body satisfies SearchResponseSchema', async () => {
-    const { status, body } = await search('where=28013');
+/**
+ * `W3-T10` deleted the search and provider handlers: `GET /api/search` and `GET /api/providers/:id`
+ * are real, and a demo seeder now fills the database they read. What is left of `handlers.ts` is
+ * `GET /categories`, which `W3-T01` owns and which `BD-07` blocks.
+ *
+ * AC14–AC16 were `W12-T08`'s criteria *about the contract*, asserted through the handler that went.
+ * They are not dropped — they are re-homed on the real endpoints, and
+ * `docs/specs/S3/W3-T10-demo-provider-seeder.md` §3.1 is the mapping:
+ *
+ *   AC14  a search body satisfies SearchResponseSchema  → apps/api/tests/seed-live.test.ts
+ *   AC15  a rejected query is a 400 envelope            → apps/api/tests/search.test.ts
+ *   AC16  `what` filters, facets count the matched set  → apps/api/tests/search-live.test.ts
+ *   AC16  `mode=booking` excludes the quote-only one    → apps/api/tests/{search,seed}-live.test.ts
+ *
+ * `W12-T12`'s AC10–AC13, asserted through the provider handler, go the same way:
+ *
+ *   AC10  a seeded id parses as the contract, no leaks   → apps/api/tests/provider{,-live}.test.ts
+ *   AC11  every search result id resolves, so no 404     → apps/api/tests/seed-live.test.ts
+ *   AC12  an unseeded uuid is a NOT_FOUND envelope       → apps/api/tests/provider{,-live}.test.ts
+ *   AC13  a malformed id is VALIDATION_FAILED, not 404   → apps/api/tests/provider.test.ts
+ *
+ * AC11 is the one that was worth having — it checks that the two endpoints agree with each other,
+ * which is the failure that reaches a visitor as a working list of links to nothing. It is now
+ * asserted over the seeded world, where the two endpoints are the real ones.
+ */
+describe('the one handler left answers the contract', () => {
+  it('serves a category list the contract accepts', async () => {
+    const { status, body } = await categories();
     expect(status).toBe(200);
-    const parsed = SearchResponseSchema.safeParse(body);
+
+    const parsed = CategoryListSchema.safeParse(body);
     expect(
       parsed.success ? [] : parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`),
     ).toEqual([]);
   });
 
-  it('AC15 — a rejected query is a 400 envelope, not a 200 with an empty list', async () => {
-    const { status, body } = await search('what=FONTANERIA');
-    expect(status).toBe(400);
-    expect(body).toMatchObject({ error: { code: 'VALIDATION_FAILED' } });
+  it('answers in the language the request asked for', async () => {
+    const es = CategoryListSchema.parse((await categories('es')).body);
+    const en = CategoryListSchema.parse((await categories('en')).body);
+
+    expect(es.items.map((item) => item.slug)).toEqual(en.items.map((item) => item.slug));
+    expect(es.items.map((item) => item.name)).not.toEqual(en.items.map((item) => item.name));
   });
 
-  it('AC15 — a missing `where` is rejected the same way', async () => {
-    const { status } = await search('what=fontaneria');
-    expect(status).toBe(400);
-  });
-
-  it('AC16 — `what` filters, and the facet counts describe the returned set', async () => {
-    const { body } = await search('where=28013&what=fontaneria');
-    const page = SearchResponseSchema.parse(body);
-
-    expect(page.items.length).toBeGreaterThan(0);
-    for (const item of page.items) {
-      expect(item.categories.map((c) => c.slug)).toContain('fontaneria');
-    }
-
-    const counted = page.facets.categories.find((facet) => facet.slug === 'fontaneria');
-    expect(counted?.count).toBe(page.items.length);
-    const kinds = page.facets.kinds.reduce((sum, facet) => sum + facet.count, 0);
-    expect(kinds, 'the kind facet counts a different set than it returned').toBe(page.items.length);
-  });
-
-  it('AC16 — `mode=booking` excludes the quote-only provider', async () => {
-    const all = SearchResponseSchema.parse((await search('where=28013')).body);
-    const booking = SearchResponseSchema.parse((await search('where=28013&mode=booking')).body);
-
-    expect(all.items.some((item) => item.hourlyRateCents === null)).toBe(true);
-    expect(booking.items.every((item) => item.hourlyRateCents !== null)).toBe(true);
-    expect(booking.items.length).toBeLessThan(all.items.length);
-  });
-
-  it('orders by distance, nearest first', async () => {
-    const page = SearchResponseSchema.parse((await search('where=28013')).body);
-    const distances = page.items.map((item) => item.distanceMetres);
-    expect(distances).toEqual([...distances].sort((a, b) => a - b));
-  });
-
-  it('never returns an address line or an account id', async () => {
-    const { body } = await search('where=28013');
-    const serialised = JSON.stringify(body);
-    for (const leak of ['line1', 'line2', 'userId', 'baseAddressId', 'Calle Mayor']) {
-      expect(serialised, `a public search result carried ${leak}`).not.toContain(leak);
-    }
+  it('is the only handler, now that search and providers are real', async () => {
+    // `onUnhandledRequest: 'error'` in this file's server: a request no handler claims throws
+    // rather than falling through, so this asserts the deletion rather than trusting it.
+    expect(handlers).toHaveLength(1);
+    await expect(fetch('http://api.test/search?where=28013')).rejects.toThrow();
   });
 });
 
@@ -277,65 +265,5 @@ describe('AC17..AC18 — none of this ships, and all of it is typechecked', () =
       sources.some((source) => source.includes('__boom')),
       'the nightly build has no fault trigger, so the 500 page is uncovered again',
     ).toBe(true);
-  });
-});
-
-/**
- * `W12-T12` AC10..AC13 — `GET /providers/:id`.
- *
- * AC11 is the one worth having. Every other assertion here checks that the endpoint answers
- * correctly; AC11 checks that the *two* endpoints agree with each other, which is the failure that
- * would reach a visitor as a working list of links to nothing.
- */
-describe('AC10..AC13 — the provider endpoint', () => {
-  it('AC10 — answers a seeded id with a row that parses as the contract', async () => {
-    const [id] = seededProviderIds();
-    const { status, body } = await provider(id ?? '');
-
-    expect(status).toBe(200);
-    const parsed = ProviderProfileSchema.safeParse(body);
-    expect(parsed.success, JSON.stringify(parsed.error?.issues)).toBe(true);
-  });
-
-  it('AC10 — publishes no account id, no address line and no stored coordinate', async () => {
-    const [id] = seededProviderIds();
-    const { body } = await provider(id ?? '');
-    const wire = JSON.stringify(body);
-
-    // The strict schema already refuses these; this asserts it against the wire rather than the
-    // object, because "the handler forgot to strip it" and "the schema let it through" are two
-    // different bugs and only one of them is caught upstream.
-    for (const forbidden of ['userId', 'baseAddressId', 'line1', 'line2', 'email']) {
-      expect(wire, `${forbidden} reached the wire`).not.toContain(forbidden);
-    }
-    expect(wire, 'a stored-precision coordinate reached the wire').not.toContain('40.416775');
-  });
-
-  it('AC11 — every id the search returns resolves, so no result row links to a 404', async () => {
-    const { body } = await search('where=28013');
-    const results = SearchResponseSchema.parse(body);
-    expect(results.items.length).toBeGreaterThan(0);
-
-    const statuses = await Promise.all(
-      results.items.map(async (item) => [item.id, (await provider(item.id)).status] as const),
-    );
-    expect(statuses.filter(([, status]) => status !== 200)).toEqual([]);
-  });
-
-  it('AC12 — a well-formed id nobody seeded is a NOT_FOUND envelope', async () => {
-    const { status, body } = await provider('00000000-0000-4000-8000-00000000dead');
-
-    expect(status).toBe(404);
-    expect(body).toMatchObject({ error: { code: 'NOT_FOUND' } });
-    expect((body as { error: { requestId?: string } }).error.requestId).toBeTruthy();
-  });
-
-  it('AC13 — a malformed id is VALIDATION_FAILED, not NOT_FOUND', async () => {
-    const { status, body } = await provider('not-a-uuid');
-
-    // A request nobody should have sent and a provider who is gone are different answers. Collapsing
-    // them would put "no longer listed" in front of a visitor who followed a corrupted link.
-    expect(status).toBe(400);
-    expect(body).toMatchObject({ error: { code: 'VALIDATION_FAILED' } });
   });
 });
