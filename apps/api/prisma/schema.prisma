@@ -210,9 +210,13 @@ model ProviderProfile {
   kind                ProviderKind
   displayName         String       @map("display_name")
   bio                 String?
-  /// Where they work from. Null until set, and a provider with no base is not searchable.
-  /// Usually a home address — no response may ever return its line1/line2 (spec §8).
-  baseAddressId       String?      @map("base_address_id") @db.Uuid
+  /// Where they work from — **the centre of their service radius, not where they live**. A
+  /// provider may legitimately set it to a city square and cover 40 km from there (operator's
+  /// rule, 2026-09-17; W3-T02). Required: a row without one is excluded from search (W3-T05 AC6)
+  /// and cannot be serialised at all (W3-T07 §2.4), so the state is unserviceable rather than
+  /// merely unset. They may still enter their home and nothing can tell, which is why no response
+  /// may ever return its line1/line2 and why the published point is coarsened (spec §8).
+  baseAddressId       String       @map("base_address_id") @db.Uuid
   /// Metres, because ST_DWithin on geography takes metres. CHECK (> 0 AND <= 200000).
   serviceRadiusMetres Int?         @map("service_radius_metres")
   /// Integer cents (W1-T06). CHECK (>= 0). Null = quote-only.
@@ -224,7 +228,9 @@ model ProviderProfile {
   updatedAt           DateTime     @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   user        User               @relation(fields: [userId], references: [id], onDelete: Cascade)
-  baseAddress Address?           @relation("ProviderBaseAddress", fields: [baseAddressId], references: [id], onDelete: SetNull)
+  /// RESTRICT, not SetNull: with the column NOT NULL, "unlist them" is no longer an outcome the
+  /// database can produce, and it was never one anybody wanted (W3-T02 §8.1).
+  baseAddress Address            @relation("ProviderBaseAddress", fields: [baseAddressId], references: [id], onDelete: Restrict)
   categories  ProviderCategory[]
 
   @@index([baseAddressId], map: "provider_profile_base_address_idx")

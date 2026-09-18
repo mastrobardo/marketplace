@@ -342,46 +342,38 @@ Promotion happens in the same PR as the work. A separate "memory PR" never gets 
 
 Task IDs are stable — use them as board card titles.
 
-> ### ▶ NEXT — `W3-T02`, now that it has a guard to mount on
+> ### ▶ NEXT — `W3-T01`, and a storefront that can now be written to
 >
-> **`W2-T03` shipped, and it was the thing standing under `W3-T02`.** `apps/api` can now answer
-> "who is asking": `guards.requirePermission('…')` as a `preHandler`, `principalOf(request)` in the
-> handler, and one matrix in `apps/api/src/modules/auth/permissions.ts` that every slice reads.
-> Nothing in production is guarded yet — `W3-T02` is the first route to use it, and it adds its own
-> row to the matrix in the same PR.
+> **A provider can describe themselves.** `W3-T02` shipped: `PUT /api/providers/me` upserts the
+> profile, the address and the category set in one transaction, `GET /api/providers/me` reads it
+> back with the address lines the owner typed, and `base_address_id` is `NOT NULL` — so the
+> transitional `404` in `W3-T07`, the "unsearchable" row in `W3-T05` and the factory default that
+> produced them are all gone.
 >
-> **`W3-T02` next**, and it needs two things before the route: a **write contract** (the profile
-> write body — `packages/contracts/**` is `agent-contracts`', and only the read schema exists
-> today), and a decision its own spec has to make — `PUT /api/providers/me` on a user with **no
-> `provider_profile` row**. That is not hypothetical: `auth-demo-users` seeds a signed-in-able
-> `['CLIENT','PROVIDER']` user with no profile, while `demo-providers`' five profiles have no
-> credentials, so *nobody can currently sign in and own a profile*. Upsert, or `404` until `W2-T05`
-> builds the pro fork. Everything else is unchanged: a base address is **required** and is the
-> centre of the operating radius (operator, 2026-09-17), and making the column `NOT NULL` stays
-> `agent-contracts`' migration (`docs/specs/S3/W3-T07-provider-profile-api.md` §5 Q1).
+> **What is missing is the categories themselves.** The write path validates slugs against
+> `category`, and the only rows in that table are the four `W3-T10` seeded for the demo world, all
+> carrying `requiresLicence: false` with `BD-07` named beside them. `W3-T01` is the real tree —
+> reformas, mantenimiento, urgencias — and it is `[M]` `[B]`: **`BD-07` is yours**, and it is the
+> one decision now standing between the write path and a provider who can pick a real trade.
 >
-> **Prefer `/me` addressing for own-scoped writes.** `W2-T03` §3.6: the guard cannot check
-> ownership — it runs before any repository — so a route that resolves the row *from the principal*
-> makes ownership structural instead of checked. A route that must take an id owes `403` where the
-> resource's existence is already public and `404` where it is not.
+> **Then `W3-T03` (portfolio) or `W3-T09` (availability)**, both unblocked and neither urgent, or
+> the storefront half — nothing in `apps/web` can yet call either new endpoint, and the editor page
+> is `W12`'s to build (ADR-011). `W2-T05`'s pro signup fork is the other way in: it owns the role
+> grant and the kind-specific fields, and `W3-T02` deliberately left both alone.
 >
 > **Two decisions still open, neither blocking:**
 > `author-identity` survived `W0-T29`'s collapse and the steer said it was not very useful — spec
 > §6 Q1, one line to retire. And `OPS-03` is yours whenever you want it: the seven required check
 > names are in `docs/specs/S0/W0-T29-gate-consolidation.md` §4, and `perf` must never be among them.
 >
-> **Still for `agent-contracts`,** now three: `ProviderProfile.baseAddressId` should be `NOT NULL`;
-> the *"usually a home address"* justification in `schema.prisma:214` and
-> `packages/contracts/src/search.ts` is the wrong reason for the right behaviour (both from
-> `W3-T07`); and **§3's domain model sketch lists `role(s) CLIENT | MANITAS | PRO | ADMIN`**, which
-> no migration implemented — `UserRole` is `CLIENT | PROVIDER | ADMIN` and the type is
-> `ProviderProfile.kind` (`W2-T03` §3.5.2).
+> **For `agent-contracts`:** §3's domain model sketch still lists `role(s) CLIENT | MANITAS | PRO |
+> ADMIN`, which no migration implemented — `UserRole` is `CLIENT | PROVIDER | ADMIN` and the type is
+> `ProviderProfile.kind` (`W2-T03` §3.5.2). The other two from `W3-T07` are **done**: the column is
+> `NOT NULL`, and the *"usually a home address"* justification is corrected in both files.
 >
 > **A human blocker worth knowing about:** `OPS-14` (an email provider). `W2-T10` made sign-up
 > usable without it — `AUTH_TRUST_EMAIL_ON_SIGNUP` marks the user verified at creation, locally and
 > in preview/staging only — so this now blocks *shipping* identity rather than developing it.
-> **And a decision:** `BD-07` (which categories legally require a licence in Spain) blocks `W3-T01`
-> and `W3-T08`. Until it lands, the seeded categories say `requiresLicence: false` and say why.
 
 **Execution labels**
 
@@ -490,7 +482,7 @@ for data), so no feature is blocked waiting for an account that is not needed ye
 
 ### W3 — Providers & discovery (`agent-providers`, `agent-discovery`)
 - `W3-T01` `[M]` `[B]` Category tree + seed data for reformas/mantenimiento/urgencias, `requiresLicence` flag *(human: which categories legally require a licence in ES)*
-- `W3-T02` `[A]` Provider profile: bio, categories, radius, rates, working hours. **A base address is required**, not optional: it is the centre of the provider's operating radius, not where they live — a provider may legitimately set it to a city centre and cover 40 km from there. Operator's rule, 2026-09-17. Today `base_address_id` is nullable, and that state is unserviceable rather than merely unusual: a provider without one is excluded from search by `W3-T05` AC6 and answered `404` by `W3-T07`, because `ProviderProfileSchema` requires `city`, `province` and `point`. This ticket stops new nulls arriving; making the column `NOT NULL` is a migration and `agent-contracts`' edit (`docs/specs/S3/W3-T07-provider-profile-api.md` §5 Q1)
+- `W3-T02` `[A]` ✅ **The provider profile write path — `GET`/`PUT /api/providers/me`, and the migration that deletes the state `W3-T07` answered `404` for.** The first guarded route in the API: `requirePermission('provider-profile:update-own')`, the one row `W2-T03` shipped with no consumer. **`/me`, never `/:id`** — the row is resolved from the principal, so ownership is structural and the `403`-vs-`404` question never arises. **`PUT` is the whole document**, because a partial update of a *set* has no agreed meaning (`{"categories":["gas"]}` is either "add" or "only"), and **the first write creates the profile** (operator, 2026-09-18) — without that the endpoint is unreachable by anyone who can sign in, since `auth-demo-users`' user has no profile and `demo-providers`' five profiles have no credentials. Profile, address and the category set move in **one transaction**, slugs resolve *before* any write, and a changed address is a **new `address` row** rather than an `UPDATE`: the old one may be where they live and `client_profile` may point at it. An identical address is reused, so repeated saves leak nothing. The answer is the **public** projection — what you saved is what a visitor sees — while `GET /me` adds the lines the owner typed. **`0009` makes `base_address_id` `NOT NULL`**, and three things came with it: the foreign key had to become `RESTRICT` (with the column required, `SET NULL` is not an outcome Postgres can produce), `packages/testing` now composes an address for every provider profile, and two live assertions describing a now-impossible row moved into `core-schema.test.ts` — where `AC-9` **inverted**, from *"deleting a base address leaves the provider, no longer searchable"* to a refused delete. **One thing found by building it:** `/me` and `/:id` share a path space, so an unguarded build answers `GET /me` as a malformed id — the fail-closed property is *never `200`*, not *always `404`* *(spec: `docs/specs/S3/W3-T02-provider-profile-write.md`)*
 - `W3-T03` `[M]` Portfolio: image upload (S3 presigned), ordering, per-item category *(human: bucket + CDN credentials)*
 - `W3-T04` `[A]` Listing CRUD with price model
 - `W3-T05` `[A]` ✅ **Geo search API — `GET /api/search`, against the contract `W12-T08` froze.** PostGIS `ST_DWithin` against **each provider's own `service_radius_metres`** — "who will travel to me", not "who is near me" — so a provider 60 km out covering 80 km is a result and one 5 km out covering 2 km is not, and a null radius or absent base address is unsearchable (`schema.prisma:127`). One statement per request: filters, distance, the page and both facet aggregates in a single CTE, **asserted by counting Prisma's query events**, not by reading the SQL. `where` resolves through **`resolvePlace`, a port with a compiled-in ES gazetteer** — the 52 provincial capitals plus every postal code through its province prefix — because `OPS-12` has not happened and the operator's constraint was that the database stay clean for a lookup that may end up frontend-driven; an unresolvable place is a `400` naming `where`, not an empty list. **Three things found by building it:** the contract's `coarsenPoint` produced points its own `SearchPointSchema` rejected for ~1.63% of coordinates (`Math.round(v*1000) === v*1000` is false for `40.764`), which at 20 results a page would have 500'd ~28% of searches — fixed, with a property test over Spain's bounding box, since the fixed fixture it had was exactly representable and hid it; `packages/testing` cannot express a null radius, a quote-only rate or a `baseAddressId`, so the live suite reaches past the factories to Prisma (`agent-qa`, before `W3-T07`); and the MSW handler counts facets over the *page* while the contract says the matched set, so the real rail shows larger, page-stable numbers. **The mock did not go with it** — nothing seeds providers, so `W3-T10` retires it *(spec: `docs/specs/S5/W3-T05-geo-search.md`)*

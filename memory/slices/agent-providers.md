@@ -92,3 +92,45 @@ Keep it to facts that changed how you would work. Task-specific detail stays in 
 - **evidence**: `docs/specs/S3/W3-T10-demo-provider-seeder.md` §2;
   `apps/api/tests/seed-live.test.ts`
 - **status**: active
+
+### The write path is `/me`, one transaction, and it answers the public projection
+
+- **id**: MEM-2026-09-18-8
+- **scope**: slice:S3
+- **fact**: `PUT /api/providers/me` (`modules/providers/write-repository.ts`) upserts profile,
+  address and the category set in **one** `prisma.$transaction`, resolves slugs *before* any write,
+  and answers `ProviderProfileSchema` — the same projection `GET /api/providers/:id` serves.
+  `GET /me` answers `ProviderProfileOwnSchema`: the public row plus the address the owner typed,
+  with the coarse `point` dropped. Both projections are built from `PROVIDER_PUBLIC_SELECT` in
+  `repository.ts`.
+- **why**: `/me` resolves the row from the principal, so ownership is structural and the
+  `403`-vs-`404` question never arises (`W2-T03` §3.6). Answering with the public projection makes a
+  save tell you what a visitor will see. One `select` for both means a column added to the table
+  cannot appear on the wire by accident in either.
+- **apply**: add a column to `PROVIDER_PUBLIC_SELECT` for a public field, to `OWN_SELECT` only for
+  a private one. A changed base address is a **new `address` row**, never an `UPDATE`: the old row
+  may be where they live and `client_profile.default_address_id` may point at it. An identical
+  address is reused, which is what keeps repeated saves from leaking rows.
+- **evidence**: `docs/specs/S3/W3-T02-provider-profile-write.md` §3.4–§3.8;
+  `apps/api/tests/provider-write-live.test.ts` (AC7/AC8/AC9)
+- **status**: active
+
+### `base_address_id` is `NOT NULL`, and the state `W3-T07` answered 404 for is gone
+
+- **id**: MEM-2026-09-18-9
+- **scope**: slice:S3
+- **fact**: Migration `0009_provider_base_address_required` made the column `NOT NULL` and changed
+  its foreign key from `ON DELETE SET NULL` to `RESTRICT`. `repository.ts`'s branch for a row with
+  no base address is deleted; `provider-live`'s "nothing to serve" test and `search-live` AC6's
+  address half moved into `core-schema.test.ts` as `23502`; `core-schema`'s own `AC-9` inverted —
+  deleting a base address is now **refused** (`23503`) rather than absorbed.
+- **why**: the nullable column permitted a row the product could not serve — unsearchable and
+  unserialisable at once. Making it required deletes the state instead of handling it, which is why
+  the code that handled it went with it (operator's rule, 2026-09-17).
+- **apply**: a provider profile cannot be written without an address — in a test either.
+  `createProviderProfile` composes one; supply `baseAddressId` only when the test is about a
+  specific address. Never reintroduce a "provider without a base" fixture: it is a row Postgres
+  refuses, not a case to cover.
+- **evidence**: `apps/api/prisma/migrations/0009_provider_base_address_required/`;
+  `docs/specs/S3/W3-T02-provider-profile-write.md` §8.1, §8.5
+- **status**: active

@@ -90,7 +90,6 @@ describe.runIf(live)('live — provider profile against Postgres', () => {
   async function provider(
     key: string,
     options: {
-      readonly withAddress?: boolean;
       readonly serviceRadiusMetres?: number | null;
       readonly hourlyRateCents?: number | null;
       readonly categoryIds?: readonly string[];
@@ -99,26 +98,23 @@ describe.runIf(live)('live — provider profile against Postgres', () => {
     } = {},
   ): Promise<void> {
     const user = await createUser(client);
-    const address =
-      options.withAddress === false
-        ? undefined
-        : await createAddress(client, {
-            userId: user.id,
-            line1: 'Calle Secreta 7',
-            // No `line2`: `AddressInput` has no such field, while the column is `line2 String?` —
-            // the same factory gap `MEM-2026-09-17-10` names, in a second builder. Widening it is
-            // not this ticket's (`agent-qa` owns shared fixtures), and `line1` is the column
-            // `W1-T05` §8 names first; the key-for-key assertion below excludes `line2` anyway.
-            city: 'Madrid',
-            province: 'Madrid',
-            ...SOL,
-          });
+    const address = await createAddress(client, {
+      userId: user.id,
+      line1: 'Calle Secreta 7',
+      // No `line2`: `AddressInput` has no such field, while the column is `line2 String?` —
+      // the same factory gap `MEM-2026-09-17-10` names, in a second builder. Widening it is
+      // not this ticket's (`agent-qa` owns shared fixtures), and `line1` is the column
+      // `W1-T05` §8 names first; the key-for-key assertion below excludes `line2` anyway.
+      city: 'Madrid',
+      province: 'Madrid',
+      ...SOL,
+    });
 
     const profile = await createProviderProfile(client, {
       userId: user.id,
       displayName: key,
       kind: options.kind ?? 'MANITAS',
-      baseAddressId: address?.id ?? null,
+      baseAddressId: address.id,
       serviceRadiusMetres:
         options.serviceRadiusMetres === undefined ? 15_000 : options.serviceRadiusMetres,
       hourlyRateCents: options.hourlyRateCents === undefined ? 3_500 : options.hourlyRateCents,
@@ -179,7 +175,6 @@ describe.runIf(live)('live — provider profile against Postgres', () => {
     });
     await provider('no-radius', { serviceRadiusMetres: null });
     await provider('quote-only', { hourlyRateCents: null });
-    await provider('no-address', { withAddress: false });
   }, 120_000);
 
   // ── AC3 — a uuid nobody has ───────────────────────────────────────────────────────────────
@@ -193,16 +188,14 @@ describe.runIf(live)('live — provider profile against Postgres', () => {
     expect(answer).toBeUndefined();
   });
 
-  // ── AC4 — the transitional 404 (§2.4) ─────────────────────────────────────────────────────
-
-  it('has nothing to serve for a provider with no base address', async () => {
-    // Not a 500: `city`, `province` and `point` are non-null in the contract, and such a provider
-    // is already unsearchable (`schema.prisma:213`). The product rule that removes this state is
-    // `W3-T02`; until then the endpoint must not fall over on it.
-    const answer = await repository({ id: seeded['no-address'] ?? '', locale: 'es' });
-
-    expect(answer).toBeUndefined();
-  });
+  // ── AC4 — the transitional 404 that stopped being a state (§2.4) ──────────────────────────
+  //
+  // This suite used to seed a provider with no base address and assert `undefined`: a row that
+  // existed and could not be serialised, because `city`, `province` and `point` are non-null in
+  // the contract. `W3-T02`'s migration made `base_address_id` `NOT NULL`, so the row cannot be
+  // written and the repository's branch for it is gone. What is left of the assertion lives in
+  // `core-schema.test.ts` — a column constraint, which is where a claim about impossible rows
+  // belongs (`W3-T02` §8.5).
 
   // ── AC5, AC6 — a profile is not a search hit ──────────────────────────────────────────────
 

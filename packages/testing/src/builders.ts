@@ -32,21 +32,23 @@ export interface ClientProfileInput {
 }
 
 /**
- * Three of these are nullable, and the nullability is the interesting part (`MEM-2026-09-17-10`).
+ * Two of these are nullable, and the nullability is the interesting part (`MEM-2026-09-17-10`).
  *
- * `schema.prisma` makes `service_radius_metres`, `hourly_rate_cents` and `base_address_id` all
- * optional, and each null is a distinct state the discovery and provider slices are built on: a
- * null radius means *unsearchable* (neither zero nor infinite), a null rate is what `mode=booking`
- * filters on, and `baseAddressId` is the join the whole geo search runs through. Typed
- * non-nullable, these factories could not build any of those rows — `W3-T05` and `W3-T07` both
+ * `schema.prisma` makes `service_radius_metres` and `hourly_rate_cents` optional, and each null is
+ * a distinct state the discovery and provider slices are built on: a null radius means
+ * *unsearchable* (neither zero nor infinite), and a null rate is what `mode=booking` filters on.
+ * Typed non-nullable, these factories could not build either row — `W3-T05` and `W3-T07` both
  * reached past them to Prisma before this was widened.
+ *
+ * **`baseAddressId` is no longer among them.** `W3-T02`'s migration made the column `NOT NULL`, so
+ * a profile without one is not a state a test can set up — it is a row the database refuses.
  */
 export interface ProviderProfileInput {
   id: string;
   userId: string;
   kind: ProviderKind;
   displayName: string;
-  baseAddressId: string | null;
+  baseAddressId: string;
   serviceRadiusMetres: number | null;
   hourlyRateCents: number | null;
   ratingCount: number;
@@ -137,10 +139,10 @@ export function buildProviderProfile(
     // missing licence check fails the test rather than passing it.
     kind: 'MANITAS',
     displayName: `Proveedor ${String(n)}`,
-    // Null until set. A provider with no base is not searchable at all (`schema.prisma:213`), so
-    // the default is the state a new provider is actually in; a test that needs a searchable
-    // provider says so, and `W3-T02` is what stops the state existing in the product.
-    baseAddressId: null,
+    // A dangling id, like `userId` above: this builder is pure, and `createProviderProfile`
+    // replaces it with a real `address` row belonging to the same user. Required since `W3-T02` —
+    // a provider with no base address is a row the database refuses, not a state to default to.
+    baseAddressId: nextId('Address'),
     // CHECK (service_radius_metres > 0 AND <= 200000); CHECK (hourly_rate_cents >= 0). Both
     // default to a set value: the *defaults* describe an ordinary bookable provider, and a test
     // that wants "not set" or "quote-only" passes null explicitly.

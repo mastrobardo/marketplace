@@ -702,3 +702,45 @@ come from real experience.
   path — portfolio keys (`W3-T03`), webhook paths (`W5-T03`).
 - **evidence**: `apps/api/tests/guard.test.ts` (`permissionUrl`); `W2-T03` run record §2
 - **status**: active
+
+### A live suite that uses the factories needs its own database
+
+- **id**: MEM-2026-09-18-10
+- **scope**: repo
+- **fact**: `packages/testing` generates ids and emails from one **deterministic** sequence, so two
+  `STACK_LIVE=1` suites running in parallel against the same database collide inside `createUser`
+  on `app_user.email`. `provider-write-live.test.ts` passed alone and failed in the full run, with
+  a Prisma unique violation pointing at `persist.ts` rather than at anything the suite was testing.
+- **why**: determinism is the point of the factories (`MEM-2026-09-07-06`) and vitest runs files in
+  parallel, so the two defaults are in direct conflict. The symptom names the factory, not the
+  concurrency.
+- **apply**: a live suite that writes rows through `packages/testing` migrates its own scratch
+  database — `provider-live.test.ts` and `search-live.test.ts` have the helper, roughly 20 lines of
+  `DROP DATABASE`/`CREATE DATABASE`/`prisma migrate deploy`. Copy it rather than sharing
+  `marketplace`. Separately: after editing a workspace package, **build it** before running a live
+  suite in another package — `apps/api` imports `dist`, and a stale one fails with an error about
+  the change you just made.
+- **evidence**: `apps/api/tests/provider-write-live.test.ts` (`migrated()`); `W3-T02` run record §3
+- **status**: active
+
+### The web suite runs close to two default timeouts, and CI is where that shows
+
+- **id**: MEM-2026-09-18-11
+- **scope**: repo
+- **fact**: `apps/web`'s page tests failed on CI three times across two pull requests that did not
+  touch `apps/web`, always within ~300 ms of a **default**: `results.test.tsx` AC1 at 1323/1285/1253
+  ms against Testing Library's 1000 ms `findBy*` wait, and `auth.test.tsx` AC5 at 5116 ms against
+  vitest's 5 s `testTimeout`. Both were raised in `W3-T02` — `configure({ asyncUtilTimeout: 5000 })`
+  in `apps/web/tests/setup.ts`, `testTimeout: 20_000` in `apps/web/vitest.config.ts`.
+- **why**: the failing test is always the **first** in its file — the one paying for i18n setup, the
+  first React render and the lazy route chunk — and a 2-core CI runner is several times slower than
+  a laptop. It reads as a flake in unrelated work, and the first instinct (re-run) wastes a full CI
+  cycle and still fails about half the time.
+- **apply**: a red `unit` job naming an `apps/web` test in a PR that changed no web code is this,
+  not your change — check the reported duration against 1000 ms and 5000 ms before investigating.
+  Raising a wait never makes a broken page pass; it fails later, for its own reason. Separately:
+  `[MSW] Error: intercepted a request without a matching request handler: GET .../search` in that
+  output is **expected** — `mocks.test.ts` asserts the handler `W3-T10` deleted is really gone, and
+  it prints alongside whatever else is running.
+- **evidence**: PR #263 and PR #264 CI runs; `apps/web/tests/setup.ts`
+- **status**: active

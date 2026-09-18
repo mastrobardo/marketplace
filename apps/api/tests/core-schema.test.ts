@@ -307,10 +307,12 @@ describe.runIf(live)('live — the core schema against a real PostGIS database',
        WHERE ('PROVIDER' = ANY (u.roles)) <> (p.id IS NOT NULL)`;
 
     const consistent = makeUser(db, 'pro@example.com', "'{CLIENT,PROVIDER}'");
+    // `base_address_id` is NOT NULL since `W3-T02` — a provider profile is not a row that can be
+    // written on its own, here or anywhere else.
     psql(
       db,
-      `INSERT INTO provider_profile (user_id, kind, display_name)
-       VALUES ('${consistent}', 'PRO', 'Fontanería Ana')`,
+      `INSERT INTO provider_profile (user_id, kind, display_name, base_address_id)
+       VALUES ('${consistent}', 'PRO', 'Fontanería Ana', '${makeAddress(db, consistent)}')`,
     );
     expect(psql(db, detector), 'a consistent pair was reported as a violation').toBe('0');
 
@@ -334,11 +336,12 @@ describe.runIf(live)('live — the core schema against a real PostGIS database',
     const db = migrated('w1t05_cascade');
     const user = makeUser(db, 'gone@example.com', "'{CLIENT,PROVIDER}'");
     psql(db, `INSERT INTO client_profile (user_id, display_name) VALUES ('${user}', 'Ana')`);
-    makeAddress(db, user);
+    const base = makeAddress(db, user);
     makeAddress(db, user, 41.3874, 2.1686);
     psql(
       db,
-      `INSERT INTO provider_profile (user_id, kind, display_name) VALUES ('${user}', 'MANITAS', 'Ana')`,
+      `INSERT INTO provider_profile (user_id, kind, display_name, base_address_id)
+       VALUES ('${user}', 'MANITAS', 'Ana', '${base}')`,
     );
 
     psql(db, `DELETE FROM app_user WHERE id = '${user}'`);
@@ -354,8 +357,8 @@ describe.runIf(live)('live — the core schema against a real PostGIS database',
     const provider = returned(
       psql(
         db,
-        `INSERT INTO provider_profile (user_id, kind, display_name)
-         VALUES ('${user}', 'PRO', 'Ana') RETURNING id`,
+        `INSERT INTO provider_profile (user_id, kind, display_name, base_address_id)
+         VALUES ('${user}', 'PRO', 'Ana', '${makeAddress(db, user)}') RETURNING id`,
       ),
     );
     const category = returned(
@@ -385,7 +388,15 @@ describe.runIf(live)('live — the core schema against a real PostGIS database',
     expect(psql(db, `SELECT default_address_id IS NULL FROM client_profile`)).toBe('t');
   }, 180_000);
 
-  it('AC-9 — deleting a base address leaves the provider, no longer searchable', () => {
+  /**
+   * `W1-T05` wrote this as *"deleting a base address leaves the provider, no longer searchable"* —
+   * `ON DELETE SET NULL`, and a provider quietly dropped out of every search. `W3-T02` §8.1 made
+   * the column `NOT NULL`, which makes that outcome impossible to express, and the foreign key had
+   * to change with it: `RESTRICT` says the same intent correctly. You cannot delete the address a
+   * provider works from while they work from it, and nobody is unlisted by a `DELETE` somewhere
+   * else.
+   */
+  it('AC-9 / W3-T02 AC18 — deleting a base address is refused, not absorbed', () => {
     const db = migrated('w1t05_base_addr');
     const user = makeUser(db, 'pro3@example.com', "'{PROVIDER}'");
     const address = makeAddress(db, user);
@@ -394,9 +405,43 @@ describe.runIf(live)('live — the core schema against a real PostGIS database',
       `INSERT INTO provider_profile (user_id, kind, display_name, base_address_id)
        VALUES ('${user}', 'PRO', 'Ana', '${address}')`,
     );
-    psql(db, `DELETE FROM address WHERE id = '${address}'`);
+
+    // 23503, foreign_key_violation — the delete does not happen.
+    expect(sqlstate(db, `DELETE FROM address WHERE id = '${address}'`)).toBe('23503');
     expect(psql(db, `SELECT count(*) FROM provider_profile`)).toBe('1');
-    expect(psql(db, `SELECT base_address_id IS NULL FROM provider_profile`)).toBe('t');
+    expect(psql(db, `SELECT count(*) FROM address WHERE id = '${address}'`)).toBe('1');
+  }, 180_000);
+
+  /**
+   * `W3-T02` AC16, and the home of two assertions that used to be runtime questions.
+   *
+   * `provider-live.test.ts` seeded a provider with no base address and asserted the endpoint had
+   * nothing to serve; `search-live.test.ts` seeded one and asserted it was unsearchable. Neither
+   * row can be written any more, so the claim belongs where impossibility is enforced rather than
+   * observed (`W3-T02` §8.5).
+   */
+  it('W3-T02 AC16 — a provider profile with no base address cannot be written at all', () => {
+    const db = migrated('w3t02_base_required');
+    const user = makeUser(db, 'nobase@example.com', "'{PROVIDER}'");
+
+    // 23502, not_null_violation.
+    expect(
+      sqlstate(
+        db,
+        `INSERT INTO provider_profile (user_id, kind, display_name)
+         VALUES ('${user}', 'PRO', 'Sin base')`,
+      ),
+      'a provider profile without a base address was accepted',
+    ).toBe('23502');
+
+    expect(
+      sqlstate(
+        db,
+        `INSERT INTO provider_profile (user_id, kind, display_name, base_address_id)
+         VALUES ('${user}', 'PRO', 'Con base', '${makeAddress(db, user)}')`,
+      ),
+      'a provider profile with one was rejected',
+    ).toBe('NO_ERROR');
   }, 180_000);
 
   it('AC-10 — a postal code must be five digits', () => {
@@ -415,9 +460,10 @@ describe.runIf(live)('live — the core schema against a real PostGIS database',
   it('AC-11 — a service radius must be positive and at most 200 km', () => {
     const db = migrated('w1t05_radius');
     const user = makeUser(db, 'radius@example.com', "'{PROVIDER}'");
+    const address = makeAddress(db, user);
     const insert = (metres: number): string =>
-      `INSERT INTO provider_profile (user_id, kind, display_name, service_radius_metres)
-       VALUES ('${user}', 'PRO', 'Ana', ${String(metres)})`;
+      `INSERT INTO provider_profile (user_id, kind, display_name, service_radius_metres, base_address_id)
+       VALUES ('${user}', 'PRO', 'Ana', ${String(metres)}, '${address}')`;
     expect(sqlstate(db, insert(0)), 'zero was accepted').toBe('23514');
     expect(sqlstate(db, insert(250_000)), '250 km was accepted').toBe('23514');
     expect(sqlstate(db, insert(15_000)), '15 km was rejected').toBe('NO_ERROR');

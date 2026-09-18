@@ -66,12 +66,21 @@ export async function createClientProfile(
   return client.clientProfile.create({ data: buildClientProfile({ ...overrides, userId }) });
 }
 
+/**
+ * The base address is composed when none is given, the way `createProviderCategory` composes its
+ * parents below — `W3-T02` made `base_address_id` `NOT NULL`, so a profile is not a row that can
+ * be written on its own. The address belongs to the **same user**, because `address.user_id` is a
+ * foreign key and a provider's operating centre is their own row.
+ */
 export async function createProviderProfile(
   client: FactoryClient,
   overrides: Partial<ProviderProfileInput> = {},
 ): Promise<ProviderProfileInput> {
   const userId = await userIdFor(client, overrides.userId);
-  return client.providerProfile.create({ data: buildProviderProfile({ ...overrides, userId }) });
+  const baseAddressId = overrides.baseAddressId ?? (await createAddress(client, { userId })).id;
+  return client.providerProfile.create({
+    data: buildProviderProfile({ ...overrides, userId, baseAddressId }),
+  });
 }
 
 export async function createAddress(
