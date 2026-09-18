@@ -12,7 +12,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { type FastifyInstance } from 'fastify';
 import { type IncomingHttpHeaders } from 'node:http';
-import { UserRole } from '@prisma/client';
+import { type UserRole } from '@prisma/client';
 import { buildApp } from '../src/app.js';
 import { loadConfig } from '../src/config.js';
 import {
