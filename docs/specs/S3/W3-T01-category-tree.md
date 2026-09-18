@@ -10,8 +10,9 @@
 - **Blocks**: `W3-T08` (licence gating reads `requiresLicence`), and a provider picking a real trade
   instead of one of four demo slugs.
 - **Operator decisions, 2026-09-18**: the wire contract **stays flat and unchanged** (§3.2);
-  **`BD-07` is answered** — five gated trades, and the rule that a licence attaches to the trade
-  performed rather than to the umbrella above it (§3.5.1, §10.1).
+  **`BD-07` is answered** — five gated trades, the rule that a licence attaches to the trade
+  performed rather than to the umbrella above it (§3.5.1), and the correction that the flag marks a
+  **verification, not an exclusion** (§3.5.2).
 - **`[M]` `[B]` — the human half has landed.** §8.3's column is filled and AC20 names the set.
 
 ---
@@ -189,12 +190,41 @@ It also vindicates `W1-T05`'s no-inheritance comment from the other direction. T
 propagate **down** (a gated parent must not gate its children), and §3.4's arbitrary parent
 assignment is safe for the same reason — a trade's legal status is its own, never its family's.
 
-**The hole this leaves is real and belongs to `W3-T08`.** `requiresLicence` gates a *category*, so a
-provider listing only `reforma-integral` can be surfaced for work that touches a gated trade without
-ever holding the certification, simply by not claiming `electricidad`. Nothing in this ticket can
-close that — the taxonomy cannot know what a job turns out to involve. The operator has said
-explicitly not to put a hard blocker on the umbrella, so this spec does not; it records the gap so
-that `W3-T08` finds it stated rather than discovering it, and §10.3 carries it forward.
+See §3.5.2 for what "gated" actually costs a provider — which is less than this section's first
+draft assumed, and changes how the umbrella reads.
+
+#### 3.5.2 The flag marks a verification, not an exclusion
+
+**Operator, 2026-09-18**, and it corrects a rule three other artefacts state:
+
+> *"My idea was verification, not hard block. While you can be listed as a pro, you will get a
+> 'verified' badge once documents are uploaded and verified by me."*
+
+So `requiresLicence: true` means: **this trade's claim is checkable, and a provider who proves it
+earns a badge.** It does not mean the trade is hidden from unverified providers. An electrician with
+no uploaded documents is listed, searchable and bookable; what they do not have is the badge, and
+the client sees its absence.
+
+This is not the rule the repo has been carrying, and the disagreement is worth naming because it is
+now settled:
+
+| Artefact | Says | Status |
+|---|---|---|
+| `packages/contracts/src/catalogue.ts` | *"cannot render the **badge** that makes `requiresLicence` mean anything to a visitor"* | **agrees** — the frozen contract already modelled it this way |
+| `memory/repo/glossary.md`, *manitas* | *"**Cannot be surfaced** for `requiresLicence` categories"* | **corrected in this PR** |
+| `memory/repo/glossary.md`, *profesional* | *"Needs an approved `Certification` for **gated** categories"* | **corrected** — needed for the badge, not for being listed |
+| `TODO.md` §6, `W3-T08` | *"`requiresLicence` categories **only surface verified pros**"* | **corrected in this PR** |
+
+The contract getting there first is the useful part: `W12-T09` froze `requiresLicence` onto
+`CategorySummarySchema` precisely so a storefront could render a badge, which means **§4's response
+shape needs no change** and the storefront work this enables is already possible. `W8-T01`
+(licence upload), `W8-T02` (verification queue and admin review — the operator is the reviewer) and
+`W8-T04` (the `VERIFIED_LICENCE` badge) are the tickets that build it; this one supplies the five
+rows that make any of them apply to something.
+
+**What this ticket does with that**: nothing to the data. The column is filled identically either
+way. What changes is the meaning handed downstream, and §10.3, which was written against the wrong
+rule and is now a much smaller thing.
 
 ### 3.6 The four demo slugs are adopted, not replaced
 
@@ -480,8 +510,11 @@ storefront's licence badge exercised in component tests regardless of what §10.
 
 ## 9. Out of scope
 
-- **A licence gate.** `W3-T08` owns what `requiresLicence: true` *does* — surfacing only verified
-  pros. This ticket fills the column it reads.
+- **The verification itself, and the badge.** `W3-T08` owns what `requiresLicence: true` *does*;
+  after §3.5.2 that is *"offer to verify, and badge the proof"*, not *"hide the unverified"*. The
+  machinery is `W8-T01` (upload), `W8-T02` (review queue) and `W8-T04` (the `VERIFIED_LICENCE`
+  badge). This ticket fills the column all of them read. Note `Certification` **does not exist yet**
+  — `schema.prisma` holds eleven models and it is not among them.
 - **An admin CRUD for categories.** The taxonomy is curated seed data. An endpoint that lets a row
   be created at runtime makes `BD-07`'s answer editable by whoever holds an admin session, which is
   the opposite of a legal boundary. If it is ever wanted it is `agent-admin`'s, with an audit trail.
@@ -518,6 +551,12 @@ is the permissive answer, so being wrong here surfaces an unlicensed provider, w
 other way only asks for a certificate nobody needed. It is one seeder edit and one AC20 line if the
 gremio says otherwise — **and it is the operator's to chase, not an agent's.**
 
+**The gremio may yet make this authoritative.** The operator is seeking a meeting with the
+professional body and asking whether it exposes an API or equivalent for checking a registration.
+That would change `W8-T02` from a human document review into a lookup, and would settle `desatascos`
+as a side effect. It is `[H]` and nobody's to chase but the operator's; noted here because it is the
+only path by which this column stops being a judgement call.
+
 **The two sub-questions were not answered, and neither blocks.** Whether the flag varies by comunidad
 autónoma, and whether "licence" means the provider's authorisation or the job's permit. All five
 `true` rows are national installer authorisations held by the *provider*, which is what
@@ -540,18 +579,24 @@ Recommend: A, and correct TODO.md §6's line in this PR.
 Blocked:   Nothing. A is built; B is an additive seeder edit if reaffirmed.
 ```
 
-### 10.3 The umbrella gap *(carried to `W3-T08`, by operator instruction — §3.5.1)*
+### 10.3 The umbrella, after §3.5.2 *(recorded — much smaller than it first looked)*
 
-`requiresLicence` gates a category, and `reforma-integral` is deliberately not gated. So a provider
-who lists only `reforma-integral` can be surfaced for a renovation that turns out to need rewiring,
-without ever holding the electrical authorisation, simply by never claiming `electricidad`.
+This section was written against the assumption that `requiresLicence` **excludes** unverified
+providers. Under that rule, `reforma-integral` being ungated was a hole: list only the umbrella,
+never claim `electricidad`, and dodge a gate. §3.5.2 removes the gate, so most of the hole goes with
+it — there was never an exclusion to evade, and an unverified electrician is listed whether they
+claim `electricidad` or not.
 
-This is not a defect in the taxonomy and no taxonomy can fix it: the table cannot know what a job
-turns out to involve. The operator has ruled that the umbrella carries no hard blocker, and this
-spec implements that. Naming it here is so `W3-T08` inherits a stated constraint rather than
-rediscovering it — and the places it could actually be addressed are all downstream: the job's
-category at posting time (`W4-T01`), the quote (`W4-T03`), or a prompt when a provider adds
-`reforma-integral` without any gated trade beside it.
+**What remains is an information asymmetry, not an evasion.** A provider in `electricidad` with no
+documents shows a *missing* badge against a trade the client can see is checkable. A provider in
+`reforma-integral` alone shows nothing at all, because the category carries no expectation — so the
+client has no signal that the renovation they are buying includes regulated work. The difference is
+what the client can tell, not what the provider is allowed to do.
+
+That is a storefront and job-flow concern, and every place it could be addressed is downstream of
+this table: the job's category at posting (`W4-T01`), the quote (`W4-T03`), or a prompt when a
+provider adds `reforma-integral` with no gated trade beside it. **Nothing here needs to change** —
+recorded so `W3-T08` and `W4-T01` inherit the observation rather than re-deriving it.
 
 ### 10.4 The single parent *(non-blocking — §3.4)*
 

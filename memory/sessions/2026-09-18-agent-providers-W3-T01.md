@@ -73,6 +73,30 @@ ticket is the vocabulary a provider picks from, and the legal column `W3-T08` wi
     blocker there"*): a provider listing only `reforma-integral` can be surfaced for work needing a
     gated trade by simply never claiming it. No taxonomy can close that — the table cannot know what
     a job turns out to involve. Stated in §3.5.1 and carried to §10.3 so `W3-T08` inherits it.
+- **Operator correction, 2026-09-18, and the most consequential input of the session:**
+  *"My idea was verification, not hard block. While you can be listed as a pro, you will get a
+  'verified' badge once documents are uploaded and verified by me."* `requiresLicence: true` marks a
+  trade whose claim is **checkable and worth badging**, not one that hides unverified providers.
+  Became spec §3.5.2.
+  - **Three artefacts said otherwise and are corrected in this PR**: `glossary.md`'s *manitas* row
+    (*"cannot be surfaced for `requiresLicence` categories"*), its *profesional* row, and
+    `TODO.md` §6's `W3-T08` line (*"only surface verified pros"*).
+  - **The frozen contract already agreed**, which is why nothing in §4 changes:
+    `packages/contracts/src/catalogue.ts` surfaces the flag so a storefront *"can render the badge
+    that makes `requiresLicence` mean anything to a visitor"*. `W12-T09` modelled it as a badge
+    before anyone wrote the rule down as a gate.
+  - **It shrank §10.3.** That section was written against the exclusion rule, where an ungated
+    `reforma-integral` was a gate to dodge. With no gate there is nothing to evade; what survives is
+    an information asymmetry — a provider in `electricidad` with no documents shows a *missing*
+    badge, one in `reforma-integral` alone shows nothing, so the client has no signal that the
+    renovation includes regulated work. Downstream (`W4-T01`, `W4-T03`), not here.
+  - The verification machinery already exists in the backlog and matches the operator's description
+    exactly: `W8-T01` upload, `W8-T02` review queue (**the operator is the reviewer**), `W8-T04` the
+    `VERIFIED_LICENCE` badge. `Certification` is **not yet a model** — `schema.prisma` has eleven and
+    it is not among them.
+  - Operator is seeking a meeting with the gremio and asking whether it exposes an **API for
+    registration lookups**. That would turn `W8-T02` from human document review into a call, and
+    settle `desatascos` as a side effect. `[H]`, recorded in spec §10.1 and on `BD-07`'s row.
 - `fontaneria` is `false` beside three `true` rows, and §8.3 says why out loud: plumbing carries no
   national authorisation, and the moment the work touches a gas appliance it is `gas`, which does.
   A reviewer expecting plumbing to be regulated should find the reason rather than file a bug.
@@ -103,6 +127,9 @@ option A (two roots), which is an additive seeder edit to reverse.
   on the row (§8.3). `desatascos` is the only provisional cell and the operator owns the re-check.
 - Gating a parent or a wide category. §3.5.1 is an operator rule, and AC21 fails if any root or
   parent row carries `true`.
+- Writing anything that makes `requiresLicence` exclude a provider from search, a listing or a
+  booking. §3.5.2 — it is a verification and a badge. If an artefact says otherwise it is one of the
+  three this PR corrected, or a fourth nobody has found yet; correct it rather than following it.
 - Looking for a migration or a contract change. Neither is needed and §8.1/§8.2 say why. Both paths
   are `forbidden:` for this slice, so finding that they need no edit is the finding.
 - Proposing a nested `CategorySummarySchema`. Operator settled it flat on 2026-09-18 (§3.2).
@@ -112,6 +139,12 @@ option A (two roots), which is an additive seeder edit to reverse.
   reaffirmed this on 2026-09-18 when `W3-T10` proposed deleting them.
 - Adding a row to `permissions.ts`. The route is public; `W2-T03`'s growth rule is that a permission
   enters with the route that guards with it, and this one guards nothing (§5).
+
+**Carry forward to `W3-T08` and `agent-trust`:** the ticket is *verification*, not gating, and its
+`TODO.md` line now says so. The five flagged trades are the categories that should **ask** for proof;
+nothing about the flag may exclude. `W8-T01`/`W8-T02`/`W8-T04` are the machinery, `Certification`
+does not exist yet, and the gremio API — if it exists — changes `W8-T02`'s shape entirely, so check
+with the operator before building a manual review queue.
 
 **Carry forward:** `packages/testing`'s `ProviderProfileInput` still has no `ratingAvg` — the fourth
 ticket to route around it (`agent-qa`, from `W3-T10`). And with exactly twenty leaves, a provider can
