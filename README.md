@@ -352,6 +352,23 @@ for it first.
 | `staging` | `FLY_API_TOKEN`, `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `STAGING_DATABASE_URL`, `STAGING_BETTER_AUTH_SECRET`, `STAGING_SEED_DEMO_PASSWORD` | `OPS-07`, `OPS-08`, `OPS-09` |
 | `production` | `FLY_API_TOKEN`, `PRODUCTION_DATABASE_URL`, `PRODUCTION_BETTER_AUTH_SECRET` | `OPS-07`, `OPS-08` |
 
+Generate a value with the tool rather than inventing one:
+
+```bash
+tsx scripts/secrets/generate.ts --list                               # what it can and cannot make
+tsx scripts/secrets/generate.ts PREVIEW_SEED_DEMO_PASSWORD           # prints it, to paste
+tsx scripts/secrets/generate.ts PREVIEW_SEED_DEMO_PASSWORD --write   # sets it via gh, never shows it
+```
+
+It picks the strength from the secret's name, refuses to invent a vendor credential like
+`FLY_API_TOKEN`, and **refuses to run at all unless stdout is a terminal** — so a pipe, a redirect,
+a CI job or an agent session gets a refusal rather than a credential (`W0-T31`). With `--write` the
+value goes to `gh` over stdin, so it never appears in your shell history or in `ps`.
+
+⚠ It also prints what rotation does and does not do. Changing a `*_SEED_DEMO_PASSWORD` does **not**
+change an already-seeded environment: the seeder runs once per database and the ledger skips it
+afterwards. That is `W0-T32`.
+
 The two `*_SEED_DEMO_PASSWORD` values are new in `W0-T30` and **unset everywhere**. Until each
 exists, the guard reports that environment unconfigured and *skips* its deploy — nothing is created
 and nothing is changed, which is the point. They are the password `pnpm db:seed` gives the two demo
