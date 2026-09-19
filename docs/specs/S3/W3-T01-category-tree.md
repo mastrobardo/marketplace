@@ -257,9 +257,19 @@ receives `name`, never the pair.
 
 ### 3.8 Ordering, and what "active" means
 
-`ORDER BY position, slug`. `position` is the curated order (the trades a marketplace wants first are
-not alphabetical); `slug` breaks ties deterministically, so two rows sharing a position never swap
-between requests and a paging-free list is still stable in a snapshot test.
+`ORDER BY parent.position, position, slug`. `position` is the curated order (the trades a
+marketplace wants first are not alphabetical); `slug` breaks ties deterministically, so two rows
+sharing a position never swap between requests and a paging-free list is still stable in a snapshot
+test.
+
+**The first key was added in review, and its absence was a real defect.** This section originally
+read `ORDER BY position, slug`, which is incompatible with §8.3's *"`position` is per sibling set"*
+once §3.2 flattens the tree to leaves: both families start at 1, so the served list interleaved them
+— `fontaneria, reforma-integral, albanileria, electricidad, …` — and the "curated order" reached the
+client as a shuffle whose only real signal was the tie-break. Neither AC9 nor AC10 could see it,
+because both were written against a single family. A leaf's own position orders it *within* its
+family; where the family sits is the parent's, which is the one thing a root contributes to the wire
+despite never appearing on it.
 
 `isActive: false` removes a category from the wire and from nothing else. Existing
 `provider_category` rows survive — the `Category` foreign key is `onDelete: Restrict` precisely so a
@@ -524,6 +534,17 @@ storefront's licence badge exercised in component tests regardless of what §10.
   `SearchUrgencySchema` with the Prisma enum it will add.
 - **Facet counts.** `GET /api/search` already returns per-category counts; this endpoint is the
   vocabulary, not the statistics.
+- **Moving the names into i18n.** `nameEs`/`nameEn` are columns, and the operator noted on
+  2026-09-18 that they should eventually be **keys** resolved by the i18n layer — with the English
+  key being the short noun (`drain`), not the current label (`Drain unblocking`). Deliberately not
+  done here, and cheap to defer: §3.7 resolves the locale server-side and the contract carries one
+  `name`, so this is a storage-and-seeder change with **no contract change and no consumer change**.
+  Two things to settle before it is attempted, recorded in `MEM-2026-09-18-13`: the **slug is an
+  identifier and the names are labels** — slugs are Spanish, appear in URLs and in `W3-T02`'s write
+  path, and an English key namespace does not imply renaming them; and it is **mutually exclusive
+  with an admin-authored taxonomy**, because a category created at runtime cannot have a
+  compile-checked catalogue key, which is the only thing the move would buy over the outbound parse
+  in §6.
 - **Provider migration.** No seeded provider changes categories. The five demo providers keep the
   four adopted slugs.
 

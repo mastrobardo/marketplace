@@ -342,19 +342,28 @@ Promotion happens in the same PR as the work. A separate "memory PR" never gets 
 
 Task IDs are stable — use them as board card titles.
 
-> ### ▶ NEXT — `W3-T01`, and a storefront that can now be written to
+> ### ▶ NEXT — the storefront half, now that every endpoint it needs is real
 >
-> **A provider can describe themselves.** `W3-T02` shipped: `PUT /api/providers/me` upserts the
-> profile, the address and the category set in one transaction, `GET /api/providers/me` reads it
-> back with the address lines the owner typed, and `base_address_id` is `NOT NULL` — so the
-> transitional `404` in `W3-T07`, the "unsearchable" row in `W3-T05` and the factory default that
-> produced them are all gone.
+> **A provider can describe themselves, and there is finally something to say.** `W3-T02` shipped
+> the write path; `W3-T01` shipped the vocabulary — two family roots and twenty trades, served by
+> `GET /api/categories`, with `BD-07` answered in the `requires_licence` column (five gated trades).
 >
-> **What is missing is the categories themselves.** The write path validates slugs against
-> `category`, and the only rows in that table are the four `W3-T10` seeded for the demo world, all
-> carrying `requiresLicence: false` with `BD-07` named beside them. `W3-T01` is the real tree —
-> reformas, mantenimiento, urgencias — and it is `[M]` `[B]`: **`BD-07` is yours**, and it is the
-> one decision now standing between the write path and a provider who can pick a real trade.
+> **MSW is gone.** `GET /categories` was the last endpoint the storefront did not have, so the
+> handler, the worker, the `stripMocks` plugin and `VITE_ENABLE_MOCKS` went with it — four workflows
+> included. `apps/web/mocks/` no longer exists; its world lives in `apps/web/tests/fixtures/`, where
+> the component harness still stubs `ApiClient` from it.
+>
+> **Two things are deliberately left open.** The nightly and the visual baselines now shoot a
+> `vite preview` with no API behind it, so the category grid and facet rail render their empty
+> states — a real shape a visitor reaches, but **the committed baselines are stale and
+> `visual-baselines.yml` must be re-run**. And **preview and staging serve `{items: []}`**: no
+> deploy runs `db:seed`, and `assertSafeTarget` refuses the whole run while `auth.demo-users` is
+> `localOnly`, so no seeder can reach a deployed database at all. Operator, 2026-09-18: *"For now,
+> empty categories. Seed will come with /categories api."* Tracked as `W0-T30` below.
+>
+> **Then `W3-T03` (portfolio) or `W3-T09` (availability)**, or the storefront work these unblock:
+> nothing in `apps/web` yet calls `PUT /api/providers/me`, and the category list it now receives is
+> real data rather than a fixture.
 >
 > **Then `W3-T03` (portfolio) or `W3-T09` (availability)**, both unblocked and neither urgent, or
 > the storefront half — nothing in `apps/web` can yet call either new endpoint, and the editor page
@@ -481,7 +490,9 @@ for data), so no feature is blocked waiting for an account that is not needed ye
 - `W2-T10` `[A]` ✅ **The account page, and a usable sign-up while there is no mail.** Two things the operator found by using `W2-T09`: a new account cannot be signed into (verification is required and nothing can send mail until `OPS-14`), and the header still offered `Log in`/`Sign up` to somebody already signed in. **`AUTH_TRUST_EMAIL_ON_SIGNUP`** marks a new user verified at creation — off by default, on locally and in preview/staging, warned about at boot outside development, and deleted the day `OPS-14` lands. **Not `requireEmailVerification: false`**, which is the shortcut that looks equivalent: better-auth derives the synthetic duplicate-sign-up response from that option, so turning it off would delete `W2-T01` §4.5's enumeration defence as a side effect — `auth-config.test.ts` now pins it. Sign-up **chains a sign-in**, so the page serves both modes without a flag reaching the browser: usable account → the home page, signed in; `403`/`401` → the inbox panel, unchanged. Signed in, the header is the user's **name, linking to `/:lang/account`**, and sign-out moved there — with identity, and an `AuthWall` where the plan upgrade goes (`BD-16`/`BD-03`; `W5-T07`/`W5-T08` are `[B]`). **Also fixed a runtime import cycle** `api.ts → session.ts → query.ts → api.ts`, latent since `W12-T08` and closed by `W2-T09`: it crashed `signup.tsx` with `seedSession is not a function` while `login.tsx` worked, because a cycle resolves by entry order. `ApiError` now has its own module. **And recovered `W2-T09`'s "login is one API call" commit**, which was pushed two minutes after #247 merged and so never reached `main` *(spec: `docs/specs/S2/W2-T10-account-page.md`)*
 
 ### W3 — Providers & discovery (`agent-providers`, `agent-discovery`)
-- `W3-T01` `[M]` `[B]` Category tree + seed data for reformas/mantenimiento/urgencias, `requiresLicence` flag *(human: which categories legally require a licence in ES)*
+- `W0-T30` `[A]` **Get seed data into a deployed database at all.** `assertSafeTarget` (`apps/api/prisma/seed/run.ts`) rejects the **entire run** when any registered seeder is `localOnly`, and `auth.demo-users` is — so `pnpm db:seed` cannot reach preview or staging no matter what the other seeders declare, and no deploy workflow runs it anyway (`db:migrate:deploy` only). `W3-T01` made this visible: `categories.taxonomy` is deliberately not `localOnly` because a preview *should* hold the real taxonomy, and it still cannot get there — `GET /api/categories` answers `{items: []}` on both environments and the storefront renders an empty grid. **Deferred knowingly** by the operator on 2026-09-18 (*"For now, empty categories. Seed will come with /categories api."*). Smallest fix is a filtered run — `db:seed --only <id>` — so the safety gate judges the list it is actually given rather than the registry; the deploy step is trivial once that exists. `W0-T20` is the neighbour that owns what is *safe* to put in a non-local environment. Both deploy workflows carry the reason inline, including the instruction not to reintroduce a mock to cover it
+
+- `W3-T01` `[M]` `[B]` ✅ **The category tree — two family roots, twenty trades, and `requiresLicence` answered.** `GET /api/categories` serves the **leaves only**: a category on the wire is a thing you can pick, so the roots are storage and `parentId` is populated but unrendered (`W12-T13` is the ticket that would render it). Flat contract, unchanged — `CategorySummarySchema` was already right. **`BD-07` is answered**: five gated trades (`electricidad`, `gas`, `climatizacion`, `telecomunicaciones`, `placas-solares`), and the rule that matters more than the list — *a licence attaches to the trade performed, not to the umbrella above it*, so `reforma-integral` is **not** gated. The flag marks a **verification**, not an exclusion (§3.5.2), which corrected `glossary.md` twice and `W3-T08`'s own line. `urgencias` is **not** a category and §3.1 says why — *urgencia* is already `EmergencyRequest` and `SearchUrgencySchema`'s `when`. No migration and no contract change: `W1-T05` modelled the table before anyone filled it. `demo-providers.ts` stops creating its four trades and resolves them instead, which makes seeder order load-bearing for the first time — asserted, not commented. **MSW deleted whole** *(spec: `docs/specs/S3/W3-T01-category-tree.md`)*
 - `W3-T02` `[A]` ✅ **The provider profile write path — `GET`/`PUT /api/providers/me`, and the migration that deletes the state `W3-T07` answered `404` for.** The first guarded route in the API: `requirePermission('provider-profile:update-own')`, the one row `W2-T03` shipped with no consumer. **`/me`, never `/:id`** — the row is resolved from the principal, so ownership is structural and the `403`-vs-`404` question never arises. **`PUT` is the whole document**, because a partial update of a *set* has no agreed meaning (`{"categories":["gas"]}` is either "add" or "only"), and **the first write creates the profile** (operator, 2026-09-18) — without that the endpoint is unreachable by anyone who can sign in, since `auth-demo-users`' user has no profile and `demo-providers`' five profiles have no credentials. Profile, address and the category set move in **one transaction**, slugs resolve *before* any write, and a changed address is a **new `address` row** rather than an `UPDATE`: the old one may be where they live and `client_profile` may point at it. An identical address is reused, so repeated saves leak nothing. The answer is the **public** projection — what you saved is what a visitor sees — while `GET /me` adds the lines the owner typed. **`0009` makes `base_address_id` `NOT NULL`**, and three things came with it: the foreign key had to become `RESTRICT` (with the column required, `SET NULL` is not an outcome Postgres can produce), `packages/testing` now composes an address for every provider profile, and two live assertions describing a now-impossible row moved into `core-schema.test.ts` — where `AC-9` **inverted**, from *"deleting a base address leaves the provider, no longer searchable"* to a refused delete. **One thing found by building it:** `/me` and `/:id` share a path space, so an unguarded build answers `GET /me` as a malformed id — the fail-closed property is *never `200`*, not *always `404`* *(spec: `docs/specs/S3/W3-T02-provider-profile-write.md`)*
 - `W3-T03` `[M]` Portfolio: image upload (S3 presigned), ordering, per-item category *(human: bucket + CDN credentials)*
 - `W3-T04` `[A]` Listing CRUD with price model

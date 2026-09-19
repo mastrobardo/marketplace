@@ -738,9 +738,35 @@ come from real experience.
   cycle and still fails about half the time.
 - **apply**: a red `unit` job naming an `apps/web` test in a PR that changed no web code is this,
   not your change — check the reported duration against 1000 ms and 5000 ms before investigating.
-  Raising a wait never makes a broken page pass; it fails later, for its own reason. Separately:
-  `[MSW] Error: intercepted a request without a matching request handler: GET .../search` in that
-  output is **expected** — `mocks.test.ts` asserts the handler `W3-T10` deleted is really gone, and
-  it prints alongside whatever else is running.
+  Raising a wait never makes a broken page pass; it fails later, for its own reason.
+  *(The `[MSW] Error: intercepted a request without a matching request handler` aside that used to
+  be here is obsolete — `W3-T01` deleted MSW from `apps/web` entirely, so that line can no longer
+  appear.)*
 - **evidence**: PR #263 and PR #264 CI runs; `apps/web/tests/setup.ts`
+- **status**: active
+
+### `STACK_LIVE=1` is only half the live gate — two suites also need `DATABASE_URL`
+
+- **id**: MEM-2026-09-18-12
+- **scope**: repo
+- **fact**: `STACK_LIVE=1 pnpm --filter @marketplace/api exec vitest run` reports
+  `2 failed | 20 passed` with `ConfigError: Invalid environment: DATABASE_URL` in `beforeAll`,
+  followed by `TypeError: Cannot read properties of undefined (reading 'close')` in `afterAll`. The
+  suites are `tests/auth.test.ts` and `tests/guard-live.test.ts`. Adding the URL turns the run into
+  `22 passed (338)` with nothing skipped:
+  `STACK_LIVE=1 DATABASE_URL="postgres://marketplace:marketplace_local@127.0.0.1:5433/marketplace"`.
+  The port is `.env`'s `POSTGRES_PORT`, **5433**, not 5432.
+- **why**: most live suites build their own scratch database — `migrated()` in
+  `provider-write-live`, `search-live`, `categories-live` — because the factories' deterministic
+  emails collide when two suites share one. Those two do not: they call `loadConfig(process.env)`
+  and talk to whatever database the environment names. So the flag alone gets them as far as config
+  parsing and no further.
+- **apply**: run the full live suite with **both**, and read a `ConfigError` here as an incomplete
+  command rather than a broken test. The trap is that the same run reports the other live tests as
+  *skipped*, so a missing database looks like "these did not apply on this machine" instead of
+  "you did not give them one" — which is exactly how `W3-T01` mis-recorded it as a pre-existing
+  failure before the operator pushed back. `provider-write-live.test.ts`'s file header already
+  carries the full command; it is the one place that spelled it out.
+- **evidence**: `W3-T01` run record, Green phase; `apps/api/tests/auth.test.ts:114`,
+  `apps/api/tests/guard-live.test.ts:91`
 - **status**: active
