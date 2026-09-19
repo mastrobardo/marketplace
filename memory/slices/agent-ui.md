@@ -244,8 +244,12 @@ Keep it to facts that changed how you would work. Task-specific detail stays in 
 - **fact**: `if (import.meta.env.DEV) { await import('../mocks/browser.js') }` in `src/main.tsx`
   shipped 511 KB of MSW and the whole seeded catalogue as `dist/assets/browser-*.js`, **referenced
   by the entry chunk**. Rollup resolves a dynamic import while building the module graph, before the
-  `false` branch is minified away. `vite.config.ts` now carries a `stripMocks()` plugin that resolves
-  `mocks/browser` to two empty exports under `mode === 'production'`, so the edge never exists.
+  `false` branch is minified away. `vite.config.ts` carried a `stripMocks()` plugin that resolved
+  `mocks/browser` to two empty exports, so the edge never existed.
+
+  *(Corrected by `W3-T01` #266, 2026-09-19 — `agent-providers`. The lesson stands; the example changed.)* `W3-T01` deleted MSW whole, and
+  `stripMocks` with it — **the surviving instance of this mechanism is `stripFaults()`**, in the
+  same file, stubbing `shared/fault`. Read that one for the pattern.
 - **why**: The guard is the documented Vite pattern and it reads as sufficient. It is not, and the
   failure is silent — a working app, a correct dev experience, and test data on the CDN.
 - **apply**: Any dev-only dynamic import in this repo (mocks, debug panels, a11y tooling) needs the
@@ -373,10 +377,16 @@ Keep it to facts that changed how you would work. Task-specific detail stays in 
   them stubbed the API successfully.
 - **apply**: A loader either mocks what does not exist or degrades without it, and there is a test
   for the degraded path. Never a bare `await` on an endpoint that is still in the backlog. Second
-  trap from the same incident: `W12-T08`'s `stripMocks` fires on `mode === 'production'`, which
+  trap from the same incident: `W12-T08`'s `stripMocks` fired on `mode === 'production'`, which
   includes *preview* — combined with a real `VITE_API_URL`, that deploy had neither a real endpoint
-  nor a mocked one. `VITE_ENABLE_MOCKS=true` is now set for preview and staging and never for the
-  production release.
+  nor a mocked one, and `VITE_ENABLE_MOCKS=true` was the fix.
+
+  *(Corrected by `W3-T01` #266, 2026-09-19 — `agent-providers`. The lesson stands; the example changed.)* Both the flag and the mocks are gone:
+  every storefront endpoint is real, and **the degrade path is now the only thing standing between a
+  missing endpoint and the 500 page**. `shared/categories.ts`'s `.catch(() => [])` is what keeps
+  preview and staging rendering an empty grid rather than an error, since nothing seeds those
+  databases yet (`W0-T30`). The first half of this entry is therefore more load-bearing than when it
+  was written, not less.
 - **evidence**: `apps/web/src/routes/root.tsx` loader; `apps/web/vite.config.ts`;
   `.github/workflows/deploy-preview.yml`; `routing.test.tsx` AC8a/b; `mocks.test.ts` AC19
 - **status**: active
@@ -386,8 +396,15 @@ Keep it to facts that changed how you would work. Task-specific detail stays in 
 - **scope**: slice:S10
 - **fact**: `W12-T08` AC17 asserts the production bundle contains no MSW and no factory data. It
   passes just as happily when the mocks are *never* bundled at all — which is exactly what happened
-  on the `W12-T09` preview. AC19 now asserts the other half: with `VITE_ENABLE_MOCKS=true`, the
-  worker and the seeded catalogue **are** in the bundle.
+  on the `W12-T09` preview. AC19 asserted the other half: with `VITE_ENABLE_MOCKS=true`, the worker
+  and the seeded catalogue **are** in the bundle.
+
+  *(Corrected by `W3-T01` #266, 2026-09-19 — `agent-providers`. The lesson stands; the example changed.)* AC19 is retired with MSW; the
+  live pair of this shape is now `VITE_ENABLE_FAULT_ROUTES`, which still has a test per outcome in
+  `mocks.test.ts`. `W3-T01` also found the blind spot this entry does not cover: **a bundle grep
+  cannot see `public/`**, which Vite copies verbatim into `dist/`. The vendored
+  `mockServiceWorker.js` shipped for months past the deletion of the handlers because it contains
+  neither `setupWorker` nor its own filename.
 - **why**: A one-sided assertion about a flag only tests one of its two states, and the untested
   state is the one that ships broken.
 - **apply**: Any build flag with two meaningful outcomes gets a test per outcome. Both build tests

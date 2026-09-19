@@ -528,6 +528,11 @@ storefront's licence badge exercised in component tests regardless of what §10.
 - **An admin CRUD for categories.** The taxonomy is curated seed data. An endpoint that lets a row
   be created at runtime makes `BD-07`'s answer editable by whoever holds an admin session, which is
   the opposite of a legal boundary. If it is ever wanted it is `agent-admin`'s, with an audit trail.
+
+  > **Overridden by the operator, 2026-09-19** — the back office will be the taxonomy's writer, and
+  > it is `W3-T11`. This paragraph stands as the argument that ticket has to answer rather than as a
+  > prohibition: the audit trail it names is now a requirement, not an aside, and *who may flip
+  > `requiresLicence`* is the part that needs a narrower answer than "an admin session".
 - **Grouped navigation.** §3.3 — `parentId` is populated and unrendered.
 - **Category landing pages** — `W12-T13`, deferred by ADR-011 Amendment 1.
 - **`Job.urgency`** — §3.1 leaves urgency where it is. `W4-T01` still owns reconciling

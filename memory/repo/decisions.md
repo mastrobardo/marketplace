@@ -196,6 +196,13 @@ this file records the *why* an agent would otherwise have to rediscover.
 - **apply**: do not "fix" the name columns opportunistically — the change is cheap on the wire and
   expensive in the seeder, and it is blocked on the authoring question above, not on effort. If the
   back office wins, names stay data and the columns are correct as they are.
+
+  **The back office won.** Operator, 2026-09-19, asking for a full CRUD over the taxonomy
+  (`W3-T11`): a category created by an admin at runtime cannot be given a compile-checked catalogue
+  key, so **the i18n-key direction does not apply to category names** and `nameEs`/`nameEn` stay as
+  they are. Recorded rather than treated as final — the two remarks were made a day apart and the
+  operator may not have connected them, so **confirm this at `W3-T11`'s start** before building on
+  it. Everything above about the slug being an identifier is unaffected and still holds.
 - **evidence**: operator, 2026-09-18, on `apps/api/prisma/seed/categories.ts:107`;
   `W3-T01` spec §3.7, §9; `packages/contracts/src/catalogue.ts`
 - **status**: active

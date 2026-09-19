@@ -31,8 +31,9 @@ Keep it to facts that changed how you would work. Task-specific detail stays in 
 - **why**: "Who will travel to me" is the question a client is actually asking; "who is near me"
   returns people who will not come. The column exists for this and carries its own
   `CHECK (> 0 AND <= 200000)`, and `schema.prisma:127` already stated the consequence. The flat
-  40 km radius in `apps/web/mocks/search.ts` was a stand-in for a catalogue with no radius data,
-  never the intended semantics.
+  40 km radius in `apps/web/tests/fixtures/search.ts` (was `apps/web/mocks/search.ts` until
+  `W3-T01` #266 deleted MSW and moved the fixtures) was a stand-in for a catalogue with no radius
+  data, never the intended semantics.
 - **apply**: Keep the three searchability preconditions together — they are one rule, and a filter
   that drops one silently changes who exists. `W3-T08` adds licence gating on top of this set, not
   beside it.

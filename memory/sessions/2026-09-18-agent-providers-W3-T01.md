@@ -2,7 +2,7 @@
 task:    W3-T01
 agent:   agent-providers
 session: 2026-09-18
-status:  green — implemented, tested, not committed
+status:  closed — merged as #266 (82fcbf4), 2026-09-19
 ---
 
 # Session — W3-T01
@@ -239,7 +239,12 @@ if it flips is one seeder row and one AC20 line.
 
 **The spec is done, `BD-07` is answered, §7 is implemented and green, and nothing is committed.**
 
-**Next action**: `04-refactor.md` and `05-code-review.md`, then the PR. Nothing is committed. §10.2 (`urgencias`) is the one thing still
+**Done. Merged as #266 (`82fcbf4`) on 2026-09-19**, after `/code-review high` found four real
+defects — all fixed in the branch, all described in the run record's Review section.
+
+**What outlived this session** is in `memory/slices/agent-providers.md` (`MEM-2026-09-19-1`, the
+taxonomy and its three traps) and `memory/repo/` (`MEM-2026-09-18-12`, the live-test gate;
+`MEM-2026-09-18-13`, the i18n direction for the name columns). Read those, not this file. §10.2 (`urgencias`) is the one thing still
 unconfirmed; it is non-blocking and the spec builds option A (two roots), which is an additive
 seeder edit to reverse.
 
