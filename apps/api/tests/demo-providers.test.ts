@@ -23,13 +23,32 @@ interface Created {
 }
 
 /**
+ * The four rows `categories.taxonomy` seeds and this one resolves (`W3-T01` §3.6).
+ *
+ * The uuids are the ones this seeder used to mint itself; the taxonomy adopted them so the demo
+ * world's `provider_category` links survived the handover.
+ */
+const SEEDED_CATEGORIES = [
+  { id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaa0001', slug: 'fontaneria' },
+  { id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaa0002', slug: 'electricidad' },
+  { id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaa0003', slug: 'cerrajeria' },
+  { id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaa0004', slug: 'climatizacion' },
+];
+
+/**
  * A transaction client that records instead of writing.
  *
  * It defines exactly the five models this seeder is allowed to touch: a call to any other — an
  * `account` row, say, which is what a credential would be — is a TypeError and fails the test
  * before an assertion has to think of it.
+ *
+ * **Since `W3-T01` `category` can also be read.** The seeder no longer creates its trades; it
+ * resolves them from the taxonomy, so the double has to be able to answer. `create` is still
+ * defined on it, and that is deliberate — AC1 below asserts it is never called.
  */
-function recorder(): { rows: Created[]; db: Prisma.TransactionClient } {
+function recorder(
+  categories: { id: string; slug: string }[] = SEEDED_CATEGORIES,
+): { rows: Created[]; db: Prisma.TransactionClient } {
   const rows: Created[] = [];
   const model = (name: string) => ({
     create: ({ data }: { data: Record<string, unknown> }) => {
@@ -39,7 +58,10 @@ function recorder(): { rows: Created[]; db: Prisma.TransactionClient } {
   });
 
   const db = {
-    category: model('category'),
+    category: {
+      ...model('category'),
+      findMany: () => Promise.resolve(categories),
+    },
     user: model('user'),
     address: model('address'),
     providerProfile: model('providerProfile'),
@@ -75,10 +97,12 @@ function distanceMetres(
 }
 
 describe('AC1 — the seeder writes the demo world', () => {
-  it('creates four categories, five providers and their links', async () => {
+  it('creates five providers and their links, and no categories at all', async () => {
     const rows = await seeded();
 
-    expect(of(rows, 'category')).toHaveLength(4);
+    // `W3-T01` §8.5: the four trades belong to `categories.taxonomy` now. Creating them here would
+    // duplicate a unique slug — Postgres refuses — or orphan the links below.
+    expect(of(rows, 'category'), 'the seeder still creates categories').toHaveLength(0);
     expect(of(rows, 'user')).toHaveLength(5);
     expect(of(rows, 'address')).toHaveLength(5);
     expect(of(rows, 'providerProfile')).toHaveLength(5);
@@ -184,21 +208,37 @@ describe('AC4/AC5 — it runs anywhere, and carries nothing that could not', () 
   });
 });
 
-describe('AC6 — the seeder does not decide BD-07', () => {
-  it('marks no category as requiring a licence', async () => {
-    for (const category of of(await seeded(), 'category')) {
-      expect(
-        category['requiresLicence'],
-        `${String(category['slug'])} claims a licence requirement BD-07 has not answered`,
-      ).toBe(false);
-    }
+/**
+ * `W3-T10`'s AC6 stood here: *the seeder marks no category as requiring a licence*, and *names
+ * `BD-07` in the file so the false is a deferral and not an answer*.
+ *
+ * **`W3-T01` retires both.** `BD-07` was answered by the operator on 2026-09-18 — five gated
+ * trades — and this seeder no longer writes a category at all, so it has no flag to defer. The
+ * column and its justification live in `prisma/seed/categories.ts`, and
+ * `tests/categories-seed.test.ts` AC20/AC21 assert them. What survives of the original intent is
+ * the property below: this file must have no opinion about `requiresLicence` whatsoever.
+ */
+describe('W3-T01 — the seeder has no opinion about the licence column', () => {
+  it('never writes requiresLicence, because it never writes a category', async () => {
+    const rows = await seeded();
+    expect(JSON.stringify(rows), 'the demo seeder still sets the legal flag').not.toContain(
+      'requiresLicence',
+    );
   });
 
-  it('names BD-07 in the file, so the false is a deferral and not an answer', () => {
-    // The flag is a legal boundary. A `false` with no explanation reads as a decision to whoever
-    // finds it next.
+  it('resolves its trades by slug rather than naming a category id', () => {
+    // A hard-coded id here would silently survive the taxonomy changing one, and the link would
+    // point at nothing. The slug is the contract between the two seeders.
     const source = readSeeder();
-    expect(source).toContain('BD-07');
+    expect(source, 'the seeder does not read the taxonomy').toContain('findMany');
+    expect(source, 'a category uuid is spelled into the demo seeder').not.toMatch(
+      /aaaaaaaa-aaaa-4aaa/,
+    );
+  });
+
+  it('fails loudly, naming the slug, when the taxonomy has not run', async () => {
+    const { db } = recorder([]);
+    await expect(demoProviders.run({ db })).rejects.toThrow(/fontaneria/);
   });
 });
 

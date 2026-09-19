@@ -4,6 +4,7 @@ import { createMailer } from './auth/mail.js';
 import { ConfigError, getConfig } from './config.js';
 import { getPrismaClient } from './db/client.js';
 import { createSearchRepository } from './modules/search/repository.js';
+import { createCategoryRepository } from './modules/categories/repository.js';
 import { createProviderRepository } from './modules/providers/repository.js';
 import {
   createProviderOwnRepository,
@@ -25,6 +26,7 @@ async function main(): Promise<void> {
   const prisma = getPrismaClient(config);
   const auth = buildAuth({ config, prisma, mailer: createMailer({ config }) });
   const search = createSearchRepository(prisma);
+  const categories = createCategoryRepository(prisma);
   const providers = createProviderRepository(prisma);
   const providerOwn = createProviderOwnRepository(prisma);
   const providerWriter = createProviderWriter(prisma);
@@ -33,6 +35,7 @@ async function main(): Promise<void> {
     config,
     auth,
     search,
+    categories,
     providers,
     providerOwn,
     providerWriter,

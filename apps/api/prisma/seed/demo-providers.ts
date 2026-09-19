@@ -8,6 +8,11 @@ import { type Seeder } from './types.js';
  * that worked perfectly and returned nothing. So the mock handlers stayed one ticket too long, and
  * this is the ticket.
  *
+ * **Since `W3-T01` it creates no categories.** The four trades it used to insert are the taxonomy's
+ * (`categories.taxonomy`), which adopts their fixed uuids; this seeder resolves the slugs instead.
+ * That makes pipeline order load-bearing for the first time — `registry.ts` puts the taxonomy first
+ * and `tests/categories-seed.test.ts` AC18 asserts the index rather than trusting a comment.
+ *
  * **It is `apps/web/mocks/catalogue.ts`, persisted.** That world was built for this job — five
  * providers around Madrid, one of them out of town, one quote-only, one unrated — and reproducing
  * it means the storefront looks the same on the day the handlers are deleted. Three of the rows are
@@ -37,29 +42,6 @@ import { type Seeder } from './types.js';
  */
 const id = (entity: 'a' | 'b' | 'c' | 'd', n: number): string =>
   `${entity.repeat(8)}-${entity.repeat(4)}-4${entity.repeat(3)}-8${entity.repeat(3)}-${entity.repeat(8)}${String(n).padStart(4, '0')}`;
-
-interface DemoCategory {
-  readonly slug: string;
-  readonly nameEs: string;
-  readonly nameEn: string;
-}
-
-/**
- * The four trades the storefront's filters are built around.
- *
- * **Every one carries `requiresLicence: false`, and that is a deferral rather than an answer.**
- * Which trades legally require a licence in Spain is `BD-07`, a question for a human, and `W3-T01`
- * is blocked on it. A demo seeder that guessed would put the guess in the column `W3-T08`'s licence
- * verification will read as fact. The storefront's badge stays exercised by the component tests,
- * which build their categories from `buildCatalogue()` — where `electricidad` deliberately says
- * `true` — so nothing that was being tested is given up here.
- */
-const CATEGORIES: readonly DemoCategory[] = [
-  { slug: 'fontaneria', nameEs: 'Fontanería', nameEn: 'Plumbing' },
-  { slug: 'electricidad', nameEs: 'Electricidad', nameEn: 'Electrical' },
-  { slug: 'cerrajeria', nameEs: 'Cerrajería', nameEn: 'Locksmith' },
-  { slug: 'climatizacion', nameEs: 'Climatización', nameEn: 'Heating & cooling' },
-];
 
 interface DemoProvider {
   readonly displayName: string;
@@ -203,23 +185,20 @@ export const demoProviders: Seeder = {
     'the world apps/web/mocks answered with until GET /api/search became real',
 
   async run({ db }) {
-    const categoryIds = new Map<string, string>();
-
-    for (const [index, category] of CATEGORIES.entries()) {
-      const row = { ...category, id: id('a', index + 1) };
-      categoryIds.set(category.slug, row.id);
-      await db.category.create({
-        data: {
-          id: row.id,
-          slug: row.slug,
-          nameEs: row.nameEs,
-          nameEn: row.nameEn,
-          requiresLicence: false,
-          position: index + 1,
-          isActive: true,
-        },
-      });
-    }
+    /**
+     * Read, not created (`W3-T01` §8.5). The taxonomy owns these rows and adopted the four uuids
+     * this seeder used to mint, so creating them here would either duplicate a unique slug —
+     * Postgres refuses — or orphan the demo world's `provider_category` links.
+     *
+     * The flag they used to carry went with them. This file no longer has an opinion about
+     * `requiresLicence`; it is the taxonomy's column and `BD-07` is answered.
+     */
+    const wanted = [...new Set(PROVIDERS.flatMap((provider) => provider.slugs))];
+    const rows = await db.category.findMany({
+      where: { slug: { in: wanted } },
+      select: { id: true, slug: true },
+    });
+    const categoryIds = new Map(rows.map((row) => [row.slug, row.id]));
 
     for (const [index, provider] of PROVIDERS.entries()) {
       const userId = id('b', index + 1);

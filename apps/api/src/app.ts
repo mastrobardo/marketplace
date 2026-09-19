@@ -13,6 +13,8 @@ import { generateRequestId, REQUEST_ID_HEADER, requestIdHook } from './plugins/r
 import { healthRoutes } from './routes/health.js';
 import { searchRoutes } from './modules/search/routes.js';
 import { type SearchRepository } from './modules/search/repository.js';
+import { categoryRoutes } from './modules/categories/routes.js';
+import { type CategoryRepository } from './modules/categories/repository.js';
 import { providerRoutes } from './modules/providers/routes.js';
 import { type ProviderRepository } from './modules/providers/repository.js';
 import {
@@ -42,6 +44,14 @@ export interface BuildAppOptions {
    * tests pass a recording stub; a build with neither simply has no `/api/search`.
    */
   search?: SearchRepository;
+  /**
+   * The category tree (`W3-T01`).
+   *
+   * Optional for the reason `search` is: `buildApp` must stay buildable without a database. A build
+   * with neither simply has no `/api/categories` — and the storefront degrades to an empty list
+   * rather than a 500, which is `W12-T09`'s rule (`shared/categories.ts`).
+   */
+  categories?: CategoryRepository;
   /**
    * The provider-profile data layer (`W3-T07`).
    *
@@ -97,6 +107,7 @@ export function buildApp({
   logDestination,
   auth,
   search,
+  categories,
   providers,
   providerOwn,
   providerWriter,
@@ -142,6 +153,14 @@ export function buildApp({
    */
   if (search !== undefined) {
     app.register(searchRoutes({ repository: search }), { prefix: '/api' });
+  }
+
+  /**
+   * `W3-T01`, under the same prefix and for the same reason. Public: no guard is attached here, and
+   * `tests/categories.test.ts` AC14 fails if one ever is.
+   */
+  if (categories !== undefined) {
+    app.register(categoryRoutes({ repository: categories }), { prefix: '/api' });
   }
 
   /**
