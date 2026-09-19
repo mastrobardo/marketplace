@@ -520,7 +520,14 @@ describe('AC30 — a deployed app is given the variables it requires', () => {
     const block = /const EnvSchema = z\.object\(\{([\s\S]*?)\n\}\);/.exec(source);
     expect(block, 'EnvSchema is no longer a z.object literal').not.toBeNull();
     return [...(block?.[1] ?? '').matchAll(/^\s{2}([A-Z][A-Z0-9_]*):\s*(.+?),\s*$/gm)]
-      .filter((declaration) => !(declaration[2] ?? '').includes('.default('))
+      .filter((declaration) => {
+        const definition = declaration[2] ?? '';
+        // `.optional()` as well as `.default(…)`. `W0-T30` added `SEED_DEMO_PASSWORD`, which the
+        // *seed step* needs and the running app never reads — putting it on the Fly app would be
+        // a credential in a container for no reason. "Required" here means the API exits without
+        // it, and an optional variable by definition does not.
+        return !definition.includes('.default(') && !definition.includes('.optional(');
+      })
       .map((declaration) => declaration[1] as string);
   }
 
@@ -890,6 +897,9 @@ describe('AC35 — the workbench is deployed beside the app, not instead of it',
       'NEON_API_KEY',
       'NEON_PROJECT_ID',
       'PREVIEW_BETTER_AUTH_SECRET',
+      // Nor is this one — `W0-T30`. It is the password our own seeder gives its own demo accounts,
+      // held by us, meaningful only to this deployment. No vendor is behind it.
+      'PREVIEW_SEED_DEMO_PASSWORD',
     ]);
   });
 });
@@ -1242,4 +1252,106 @@ describe('W12-T20 — regenerating the route baselines', () => {
     expect(String(pr?.with?.['committer'])).toContain('mastrobardo@gmail.com');
     expect(String(pr?.with?.['author'])).toContain('mastrobardo@gmail.com');
   });
+});
+
+/**
+ * `W0-T30` — the deploy steps that put seed data in a deployed database.
+ *
+ * Until this ticket, `pnpm db:seed` reached neither preview nor staging, for two independent
+ * reasons: `assertSafeTarget` judged the whole registry rather than the seeders selected for the
+ * run, and no workflow invoked it at all. `apps/api/tests/seed-filter.test.ts` owns the first half.
+ * This is the second — the part that is only true if it is written in YAML.
+ *
+ * Spec: `docs/specs/S0/W0-T30-seed-a-deployed-database.md` §5.
+ */
+describe('W0-T30 AC12 — preview and staging seed their databases', () => {
+  /** The seeders a deployed environment is allowed to hold, from the registry's own source. */
+  function registeredIds(): string[] {
+    const source = readFileSync(join(root, 'apps/api/prisma/seed/registry.ts'), 'utf8');
+    const ids = [
+      ...readFileSync(join(root, 'apps/api/prisma/seed/auth-demo-users.ts'), 'utf8').matchAll(
+        /^\s{2}id: '([^']+)'/gm,
+      ),
+      ...readFileSync(join(root, 'apps/api/prisma/seed/categories.ts'), 'utf8').matchAll(
+        /^\s{2}id: '([^']+)'/gm,
+      ),
+      ...readFileSync(join(root, 'apps/api/prisma/seed/demo-providers.ts'), 'utf8').matchAll(
+        /^\s{2}id: '([^']+)'/gm,
+      ),
+    ].map((match) => match[1] as string);
+
+    expect(source, 'the registry no longer exports the three seeders this asserts').toMatch(
+      /authDemoUsers, categoryTaxonomy, demoProviders/,
+    );
+    return ids;
+  }
+
+  for (const file of [PREVIEW, STAGING]) {
+    it(`${file} runs db:seed with an explicit --only list`, () => {
+      const seed = deployJobs(file)
+        .flatMap(([, job]) => steps(job))
+        .filter((step) => /pnpm db:seed/.test(step.run ?? ''));
+
+      expect(seed.length, `${file} never runs pnpm db:seed`).toBe(1);
+
+      const step = seed[0] as Step;
+      // Explicit, never the bare registry: what reaches a deployed database is a decision with a
+      // reviewer, not a consequence of appending to an array (§3.4).
+      expect(step.run, `${file} seeds the whole registry instead of naming ids`).toMatch(
+        /--only\s/,
+      );
+
+      for (const id of registeredIds()) {
+        expect(step.run, `${file} does not seed ${id}`).toContain(id);
+      }
+    });
+
+    it(`${file} seeds after it migrates, and gives the seeder a password`, () => {
+      const job = deployJobs(file).find(([, candidate]) =>
+        steps(candidate).some((step) => /pnpm db:seed/.test(step.run ?? '')),
+      );
+      expect(job, `${file} has no job that seeds`).toBeDefined();
+
+      const names = steps(job?.[1] ?? {}).map((step) => step.run ?? '');
+      const migrated = names.findIndex((run) => /db:migrate:deploy/.test(run));
+      const seeded = names.findIndex((run) => /pnpm db:seed/.test(run));
+
+      // Seeding a database that has not been migrated fails on a missing table, which reads in a
+      // log as a broken seeder rather than as a step in the wrong order.
+      expect(migrated, `${file} does not migrate in the job that seeds`).toBeGreaterThanOrEqual(0);
+      expect(seeded, `${file} seeds before it migrates`).toBeGreaterThan(migrated);
+
+      const step = steps(job?.[1] ?? {}).find((candidate) =>
+        /pnpm db:seed/.test(candidate.run ?? ''),
+      );
+      // Without it `auth.demo-users` refuses rather than writing the password this repository
+      // publishes, so a seed step that omits it is a deploy that fails at the last moment.
+      expect(JSON.stringify(step?.env ?? {}), `${file} seeds without SEED_DEMO_PASSWORD`).toMatch(
+        /SEED_DEMO_PASSWORD/,
+      );
+    });
+  }
+
+  it('release-production.yml seeds nothing', () => {
+    // §7: data reaching production is a release decision, not a deploy side effect — and `W3-T11`
+    // is about to make the taxonomy writable by a human anyway.
+    expect(code(RELEASE)).not.toMatch(/db:seed/);
+  });
+});
+
+describe('W0-T30 AC14 — neither workflow still claims its database is unseeded', () => {
+  for (const file of [PREVIEW, STAGING]) {
+    it(`${file} does not tell the next reader the grid is empty`, () => {
+      // Read the raw text, comments included: these two claims live *only* in comments, and they
+      // became false the moment the seed step landed. A stale explanation is worse than none —
+      // the next person believes it and reintroduces the mock it warns against.
+      const prose = text(file);
+      expect(prose, `${file} still says nothing seeds its database`).not.toMatch(
+        /Nothing seeds this|has no seeded taxonomy/,
+      );
+      expect(prose, `${file} still describes an empty category grid`).not.toMatch(
+        /renders? (its )?\*\*empty\*\* category grid|category grid renders\s*#?\s*empty/,
+      );
+    });
+  }
 });

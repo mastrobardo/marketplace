@@ -52,11 +52,17 @@ function schema(): Array<{ name: string; required: boolean }> {
   const declarations = [...(block?.[1] ?? '').matchAll(/^\s{2}([A-Z][A-Z0-9_]*):\s*(.+?),\s*$/gm)];
   expect(declarations.length, 'parsed no variables out of EnvSchema').toBeGreaterThan(0);
 
-  return declarations.map((declaration) => ({
-    name: declaration[1] as string,
-    // A variable with a `.default(…)` is optional; one without it must be supplied.
-    required: !(declaration[2] ?? '').includes('.default('),
-  }));
+  return declarations.map((declaration) => {
+    const definition = declaration[2] ?? '';
+    return {
+      name: declaration[1] as string,
+      // A variable with a `.default(…)` is optional, because the API supplies one; so is an
+      // explicitly `.optional()` one, which has no default *and* no obligation. `W0-T30` added the
+      // first of those (`SEED_DEMO_PASSWORD`), and without this clause the example file would have
+      // been forced to set live a value whose whole point is to be absent on a laptop.
+      required: !definition.includes('.default(') && !definition.includes('.optional('),
+    };
+  });
 }
 
 /** Every `${{ secrets.NAME }}` any workflow reads. */

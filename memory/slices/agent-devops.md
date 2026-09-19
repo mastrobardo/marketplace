@@ -297,3 +297,56 @@ Keep it to facts that changed how you would work. Task-specific detail stays in 
 - **evidence**: `scripts/gates/run.ts`; `tests/ci-gates.test.ts` AC3–AC6, AC8;
   `docs/specs/S0/W0-T29-gate-consolidation.md`
 - **status**: active
+
+### `pnpm` forwards script arguments through nested `--filter` runs, both forms
+- **id**: MEM-2026-09-19-4
+- **scope**: slice:S0
+- **fact**: Root `db:seed` is `pnpm --filter @marketplace/api db:seed`, so an argument crosses two
+  `pnpm run` layers before reaching `tsx`. Both `pnpm db:seed --only x` and
+  `pnpm db:seed -- --only x` arrive intact; the `--` is passed through literally as an extra argv
+  entry, which is why `parseOnly` looks for the flag by position rather than assuming `argv[0]`.
+- **why**: I expected pnpm to swallow `--only` — it was a real pnpm flag in v6 (`--only=prod`) —
+  and planned a fallback around it. It does not, in pnpm 10.13. An hour of design was almost spent
+  avoiding a problem that does not exist.
+- **apply**: Don't rename a script flag to dodge a suspected pnpm collision without testing it
+  first: `pnpm <script> --flag value` and read the echoed command line, which pnpm prints. Do keep
+  parsing tolerant of a stray `--`.
+- **evidence**: `W0-T30` run record, live verification section; `apps/api/prisma/seed.ts`
+- **status**: active
+
+### A guard test that derives "required" from zod must know about `.optional()`
+- **id**: MEM-2026-09-19-5
+- **scope**: slice:S0
+- **fact**: `tests/env-example.test.ts` and `tests/cd-workflows.test.ts` (AC30) both parsed
+  `EnvSchema` and treated *"no `.default(`"* as required. `W0-T30` added `SEED_DEMO_PASSWORD`, the
+  repo's first `.optional()` variable, and both tests demanded things that would have been actively
+  wrong: a live password value committed to `.env.example`, and a `flyctl secrets set` for a
+  variable the running API never reads.
+- **why**: The heuristic was correct for every variable that existed when it was written. It fails
+  open in the dangerous direction — it *adds* demands — so it looks like a legitimate failure rather
+  than a stale test, and the obvious way to make it green is the insecure one.
+- **apply**: When a guard test parses source to infer a rule, the failure it produces on a genuinely
+  new construct is indistinguishable from a real violation. Read what the test *says it asserts*
+  (both say "what the API requires") before satisfying what it *computes*. Any future `z` modifier
+  that changes obligation — `.catch()`, `.nullish()` — needs the same two lines updating.
+- **evidence**: `W0-T30` run record deviation 1; `tests/env-example.test.ts` `schema()`;
+  `tests/cd-workflows.test.ts` `requiredByTheApi()`
+- **status**: active
+
+### Adding a secret to `REQUIRED` takes the whole environment dark until a human sets it
+- **id**: MEM-2026-09-19-6
+- **scope**: slice:S0
+- **fact**: `tests/env-example.test.ts` asserts `guardSecrets()` equals `workflowSecrets()`, so a
+  `${{ secrets.X }}` anywhere in a deploy workflow *must* enter `REQUIRED` in
+  `scripts/deploy/config.ts`. The guard then reports that environment unconfigured and **skips** its
+  deploy until the secret exists — not fails, skips, which is quieter. `deploy-preview-teardown.yml`
+  shares `REQUIRED.preview`, so a preview-only secret also gates the job that *destroys* previews.
+- **why**: The coupling is deliberate (nothing is consumed without being checked for first) and its
+  cost is real: a merged PR that introduces a secret stops deploys silently rather than loudly.
+- **apply**: Introducing a workflow secret is a **pre-merge** human task, not a post-merge one — say
+  so in the PR and in the session's `BLOCKED` block. Check whether teardown or any other workflow
+  shares the target's `REQUIRED` list; if it does, hand it the secret with a comment explaining that
+  it does not use it, or the resource cleanup skips too.
+- **evidence**: `W0-T30` run record deviation 2; `scripts/deploy/config.ts`;
+  `tests/cd-workflows.test.ts` AC28
+- **status**: active

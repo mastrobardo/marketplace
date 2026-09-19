@@ -67,6 +67,7 @@ jobs:
           # that never reaches this step reports "configured" and deploys a container that
           # exits 78 on boot (the failure AC28 exists for).
           PREVIEW_BETTER_AUTH_SECRET: ${{ secrets.PREVIEW_BETTER_AUTH_SECRET }}
+          PREVIEW_SEED_DEMO_PASSWORD: ${{ secrets.PREVIEW_SEED_DEMO_PASSWORD }}
 
   deploy:
     name: deploy
@@ -223,6 +224,26 @@ jobs:
           NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
           NEON_PROJECT_ID: ${{ secrets.NEON_PROJECT_ID }}
 
+      # `W0-T30`. Until this step existed, `pnpm db:seed` could not reach any deployed database:
+      # `assertSafeTarget` judged the whole registry, and one `localOnly` fixture in it refused
+      # every seeder beside it. The gate now judges the list `--only` names.
+      #
+      # The ids are spelled out rather than running the registry wholesale, and that is the point:
+      # what reaches a deployed environment is visible in this diff and has a reviewer. A seeder
+      # appended to `registry.ts` does not travel until somebody adds it here.
+      #
+      # Idempotent by the ledger, not by luck — a seeder already recorded is skipped, so every push
+      # to this pull request re-runs the step and writes nothing new. The preview database is
+      # branched from `sanitised-staging`, which is seeded too, so usually everything is skipped.
+      - name: Seed the preview database
+        run: pnpm db:seed --only auth.demo-users,categories.taxonomy,providers.demo-world
+        env:
+          DATABASE_URL: ${{ steps.migrate.outputs.url }}
+          # `auth.demo-users` refuses to run against a non-local host without this: its fallback
+          # password is a literal in a public repository, and a preview is reachable by anyone.
+          # Absent, the deploy guard skips this whole workflow before it creates anything.
+          SEED_DEMO_PASSWORD: ${{ secrets.PREVIEW_SEED_DEMO_PASSWORD }}
+
       # `turbo run`, not `pnpm --filter`: the web app became a runtime consumer of
       # `@marketplace/contracts` in `W12-T09`, and that package resolves to `dist/`. `pnpm --filter`
       # builds only the named package, so the import failed to resolve here while passing locally,
@@ -234,18 +255,15 @@ jobs:
           # the storefront did not have — and deleted MSW whole. `VITE_API_ORIGIN` below points the
           # edge at the real API.
           #
-          # ⚠ That API answers `200 {"items": []}` here, and it is expected. **Nothing seeds this
-          # database**: this job runs `db:migrate:deploy` and no `db:seed`, and the preview DB is
-          # branched from `sanitised-staging`, which is not seeded either. A manual run is refused
-          # as the registry stands — `assertSafeTarget` rejects the *whole* run while
-          # `auth.demo-users` is `localOnly` (`apps/api/prisma/seed/run.ts`), so
-          # `categories.taxonomy` not being `localOnly` gets it past its own gate and no further.
+          # That API serves a real taxonomy here since `W0-T30`: the "Seed the preview database"
+          # step above runs the three seeders, so the category grid and the facet rail render the
+          # same twenty trades a developer sees locally, and search returns the five demo
+          # providers. It answered `200 {"items": []}` for one day between `W3-T01` and `W0-T30`.
           #
-          # So the preview storefront renders its **empty** category grid and facet rail.
-          # `shared/categories.ts` degrades to `[]` rather than throwing, so this is a quiet empty
-          # state and not the 500 page. Operator decision, 2026-09-18: *"For now, empty categories.
-          # Seed will come with /categories api."* Do not reintroduce a mock to paper over it — a
-          # fixture in front of a real, empty endpoint is the facade `W3-T01` removed.
+          # `shared/categories.ts` still degrades to `[]` rather than throwing, which is worth
+          # keeping: a seed step that fails should leave a quiet empty state, not the 500 page.
+          # And still do not reintroduce a mock — a fixture in front of a real endpoint is the
+          # facade `W3-T01` removed, and there is now real data behind it anyway.
           # `W0-T28`. **Not `VITE_API_URL`** — that pointed the browser straight at Fly, which is a
           # different registrable domain from `*.pages.dev`, so every call was cross-origin and the
           # `SameSite=Lax` session cookie was never sent. `baseUrl()` now returns `/` and this names

@@ -207,3 +207,50 @@ this file records the *why* an agent would otherwise have to rediscover.
   `W3-T01` spec §3.7, §9; `packages/contracts/src/catalogue.ts`
 - **status**: active
 
+
+### Seeded fixtures are the test substrate; a sanitised dump is a debugging instrument
+- **id**: MEM-2026-09-19-2
+- **scope**: repo
+- **fact**: Deployed environments get their data from the **seed pipeline**, not from a copy of
+  production. The operator asked at `W0-T30` whether an anonymised production dump would be needed
+  instead, or as well, in order to reproduce production edge cases in preview or staging. The
+  answer recorded here is *both, but not interchangeably*:
+  1. **Fixtures are what tests assert against**, and a dump cannot replace them. Anonymised rows
+     are non-deterministic, so an e2e test can assert shapes and never values; a seeded taxonomy
+     lets a test say `toBe('gas')`.
+  2. **A dump is for discovery** — real shape, real volume, the accented surname and the 400-character
+     address nobody thought to write. That is a genuine need and `W0-T20` owns it.
+  3. **The durable answer to a production edge case is a regression seeder, not the dump.** The dump
+     helps you *find* the case; a seeder is how you *keep* it — it is in git, it runs in CI for
+     ever, and it needs no sanitisation pipeline to stay alive.
+- **why**: Sanitisation is a permanent liability — one missed column is a GDPR breach, which is
+  `R14` in the risk register — and it buys nothing that fixtures already provide for testing. The
+  cost is worth paying for debugging fidelity, and only for that. There is also no production to
+  dump yet, so building the pipeline now would be guessing at the shape of data that does not exist.
+- **apply**: Do not propose copying production data into a test environment as a way of getting
+  test data; add a seeder. When `W0-T20` builds the sanitised path, it is *additive* — the seed
+  pipeline stays the source of truth for anything a test asserts on. A bug reproduced from
+  production ships with a seeder that reproduces it.
+- **evidence**: operator, 2026-09-19 (*"would a prd db dump (maybe anonymized) also be required? […]
+  we might want to replicate […] some edge cases coming from PRD"*); `W0-T30` spec §1.2;
+  `TODO.md` `R14`, `W0-T20`
+- **status**: active
+
+### A fixture that must not travel is a password problem, not a data problem
+- **id**: MEM-2026-09-19-3
+- **scope**: repo
+- **fact**: `auth.demo-users` carried `localOnly: true` for a year of tickets, and the reason was
+  never that its rows were fake — it was that its password is a literal in a public repository.
+  `W0-T30` removed the flag and resolved the password from `SEED_DEMO_PASSWORD` instead, refusing to
+  run against a non-local host when that is unset. No registered seeder is `localOnly` today; the
+  flag stays in `Seeder` for `W0-T20`'s real cases.
+- **why**: "Never leave the laptop" is a blunt answer that cost more than it protected: it made the
+  seed pipeline useless in every deployed environment — `assertSafeTarget` refused the *whole* run
+  over one flagged seeder — and staging still needed accounts QA could sign in as. Separating *the
+  rows may travel* from *this credential may not* gets both.
+- **apply**: Before marking a seeder `localOnly`, ask which part is actually unsafe. If it is a
+  secret, take it from the environment and refuse loudly when it is missing. Reserve the flag for
+  data that is unsafe **as data** — real personal information, real licence documents.
+- **evidence**: `W0-T30` spec §2, §3.3; `apps/api/prisma/seed/auth-demo-users.ts`;
+  `apps/api/tests/seed-filter.test.ts` AC8–AC11
+- **status**: active

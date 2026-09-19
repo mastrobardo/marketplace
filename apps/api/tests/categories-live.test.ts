@@ -30,6 +30,7 @@ import { TAXONOMY, categoryTaxonomy } from '../prisma/seed/categories.js';
 import { demoProviders } from '../prisma/seed/demo-providers.js';
 import { seeders } from '../prisma/seed/registry.js';
 import { runSeeders } from '../prisma/seed/run.js';
+import { localSeedContext } from './seed-context.js';
 
 const live = process.env['STACK_LIVE'] === '1';
 const describeLive = live ? describe : describe.skip;
@@ -179,7 +180,7 @@ describeLive('AC16 — seeding twice is safe', () => {
      * against rows that already exist, which is the `category_slug_key` collision §8.4 describes.
      */
     const before = await prisma.category.count();
-    await categoryTaxonomy.run({ db: prisma as unknown as Prisma.TransactionClient });
+    await categoryTaxonomy.run(localSeedContext(prisma as unknown as Prisma.TransactionClient));
 
     expect(await prisma.category.count()).toBe(before);
   });
