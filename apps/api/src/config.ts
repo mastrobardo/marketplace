@@ -58,6 +58,21 @@ const EnvSchema = z.object({
    */
   AUTH_TRUST_EMAIL_ON_SIGNUP: z.stringbool().default(false),
 
+  // ── W0-T30 §3.3 — seeding a deployed database ─────────────────────────────────────────────
+
+  /**
+   * The password `auth.demo-users` gives its two accounts.
+   *
+   * **Optional here and conditionally required by the seeder**, which is the only place both facts
+   * are known at once: the schema cannot see whether `DATABASE_URL` points at a laptop. Unset
+   * against a local host means the committed convenience password; unset against anything else is
+   * a refusal, because that literal is public and these accounts are reachable from the internet.
+   *
+   * Nothing but the seed pipeline reads it, and the API never needs it at boot — which is why it
+   * has no default rather than a bad one.
+   */
+  SEED_DEMO_PASSWORD: z.string().min(12).optional(),
+
   /** Mailpit locally (docker-compose, SMTP 1025); OPS-14 replaces the values, not the code. */
   MAIL_SMTP_HOST: z.string().min(1).default('127.0.0.1'),
   MAIL_SMTP_PORT: z.coerce.number().int().min(1).max(65535).default(1025),

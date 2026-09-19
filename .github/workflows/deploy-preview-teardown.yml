@@ -53,6 +53,11 @@ jobs:
           NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
           NEON_PROJECT_ID: ${{ secrets.NEON_PROJECT_ID }}
           PREVIEW_BETTER_AUTH_SECRET: ${{ secrets.PREVIEW_BETTER_AUTH_SECRET }}
+          # Handed over only because the guard checks `REQUIRED.preview`, which this workflow
+          # shares with the deploy. A teardown seeds nothing and signs nothing; withholding it
+          # would report the target unconfigured and leak the resources this job exists to
+          # destroy. Same reason the auth secret above is here.
+          PREVIEW_SEED_DEMO_PASSWORD: ${{ secrets.PREVIEW_SEED_DEMO_PASSWORD }}
 
   destroy:
     name: destroy

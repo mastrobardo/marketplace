@@ -18,6 +18,10 @@ export type DeployTarget = 'preview' | 'staging' | 'production';
  * `production` is deliberately the shortest list. It has no Cloudflare or Neon API key because it
  * must not be able to create or delete a database branch or a Pages project — a release should be
  * able to do one thing, and blast radius is a function of what the token can reach.
+ *
+ * It has no `SEED_DEMO_PASSWORD` either, and that is the same principle: `deploy-production.yml`
+ * runs no seed step, because data reaching production is a release decision rather than a deploy
+ * side effect (`W0-T30` §7).
  */
 export const REQUIRED: Record<DeployTarget, readonly string[]> = {
   preview: [
@@ -30,6 +34,10 @@ export const REQUIRED: Record<DeployTarget, readonly string[]> = {
     // container that never boots — the half-built state this guard exists to prevent, and the
     // exact shape the PREVIEW_DATABASE_URL note below describes.
     'PREVIEW_BETTER_AUTH_SECRET',
+    // W0-T30 §3.5. `auth.demo-users` refuses a non-local target without it rather than write the
+    // password this repository publishes, so a preview without it deploys and then has no account
+    // anyone can sign in as — which is only discovered by whoever opens the review link.
+    'PREVIEW_SEED_DEMO_PASSWORD',
     // No PREVIEW_DATABASE_URL. It was briefly here, and it was the wrong shape twice over: the
     // guard was never handed it (so every preview and every teardown skipped, permanently), and a
     // single static URL points every open pull request at one shared database — which makes the
@@ -43,6 +51,9 @@ export const REQUIRED: Record<DeployTarget, readonly string[]> = {
     'CLOUDFLARE_ACCOUNT_ID',
     'STAGING_DATABASE_URL',
     'STAGING_BETTER_AUTH_SECRET',
+    // W0-T30 §3.5, and the same reasoning as the preview entry above. Staging is the one QA
+    // exercises, so an environment nobody can sign in to is the whole point of it missing.
+    'STAGING_SEED_DEMO_PASSWORD',
   ],
   production: ['FLY_API_TOKEN', 'PRODUCTION_DATABASE_URL', 'PRODUCTION_BETTER_AUTH_SECRET'],
 };

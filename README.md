@@ -119,8 +119,15 @@ is needed before `pnpm typecheck`.
 pnpm stack:up
 pnpm db:migrate:deploy   # apply pending migrations — what CI and every deploy run
 pnpm db:seed             # run every seeder that has not run
+pnpm db:seed --only categories.taxonomy,providers.demo-world   # …or just these, in registry order
 pnpm db:reset            # drop, re-migrate, re-seed (refuses when NODE_ENV=production)
 ```
+
+`--only` is what lets a deploy seed a real environment (`W0-T30`): the safety gate judges the
+seeders you named rather than everything registered, so one laptop-only fixture no longer refuses
+the whole run. An id nothing declares is an error, not an empty run that succeeds. Seeding a
+non-local database also needs `SEED_DEMO_PASSWORD` — `auth.demo-users` refuses rather than write the
+convenience password this repository publishes.
 
 | Command | |
 |---|---|
@@ -128,7 +135,7 @@ pnpm db:reset            # drop, re-migrate, re-seed (refuses when NODE_ENV=prod
 | `pnpm db:migrate` | dev loop: diff the schema, write a migration, apply it |
 | `pnpm db:migrate:deploy` | apply pending migrations only |
 | `pnpm db:migrate:status` | non-zero when the database is behind or failed |
-| `pnpm db:seed` | run pending seeders |
+| `pnpm db:seed` | run pending seeders; `--only a,b` narrows it to those ids |
 | `pnpm db:reset` | drop, re-migrate, re-seed |
 
 `pnpm verify` deliberately calls **none** of them — the local gate stays daemon-free. The tests
@@ -341,9 +348,15 @@ for it first.
 
 | Environment | Secrets | Blocked on |
 |---|---|---|
-| `preview` | `FLY_API_TOKEN`, `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `NEON_API_KEY`, `NEON_PROJECT_ID` | `OPS-07`, `OPS-08`, `OPS-09` |
-| `staging` | `FLY_API_TOKEN`, `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `STAGING_DATABASE_URL` | `OPS-07`, `OPS-08`, `OPS-09` |
-| `production` | `FLY_API_TOKEN`, `PRODUCTION_DATABASE_URL` | `OPS-07`, `OPS-08` |
+| `preview` | `FLY_API_TOKEN`, `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `NEON_API_KEY`, `NEON_PROJECT_ID`, `PREVIEW_BETTER_AUTH_SECRET`, `PREVIEW_SEED_DEMO_PASSWORD` | `OPS-07`, `OPS-08`, `OPS-09` |
+| `staging` | `FLY_API_TOKEN`, `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `STAGING_DATABASE_URL`, `STAGING_BETTER_AUTH_SECRET`, `STAGING_SEED_DEMO_PASSWORD` | `OPS-07`, `OPS-08`, `OPS-09` |
+| `production` | `FLY_API_TOKEN`, `PRODUCTION_DATABASE_URL`, `PRODUCTION_BETTER_AUTH_SECRET` | `OPS-07`, `OPS-08` |
+
+The two `*_SEED_DEMO_PASSWORD` values are new in `W0-T30` and **unset everywhere**. Until each
+exists, the guard reports that environment unconfigured and *skips* its deploy — nothing is created
+and nothing is changed, which is the point. They are the password `pnpm db:seed` gives the two demo
+accounts; anything 12 characters or longer works, different per environment. `production` has none,
+because no deploy seeds it.
 
 `production` deliberately holds the shortest list: no Cloudflare or Neon API key, so a release
 cannot create or destroy a database branch. Blast radius is a function of what the token can reach.

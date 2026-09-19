@@ -21,6 +21,7 @@ import { CATEGORY_SLUG } from '@marketplace/contracts';
 import { TAXONOMY, categoryTaxonomy } from '../prisma/seed/categories.js';
 import { demoProviders } from '../prisma/seed/demo-providers.js';
 import { seeders } from '../prisma/seed/registry.js';
+import { localSeedContext } from './seed-context.js';
 
 /** §8.3's ruling, as the compliance query would answer it (`BD-07`, resolved 2026-09-18). */
 const GATED = ['climatizacion', 'electricidad', 'gas', 'placas-solares', 'telecomunicaciones'];
@@ -210,7 +211,7 @@ describe('the seeder — §8.4', () => {
 
   it('writes every row in the taxonomy', async () => {
     const { written, db } = recorder();
-    await categoryTaxonomy.run({ db });
+    await categoryTaxonomy.run(localSeedContext(db));
 
     const slugs = written.filter((row) => row.model === 'category').map((row) => row.data['slug']);
     expect(slugs.sort()).toEqual(TAXONOMY.map((row) => row.slug).sort());
@@ -218,7 +219,7 @@ describe('the seeder — §8.4', () => {
 
   it('AC16 — upserts on slug rather than creating, so a re-run cannot collide', async () => {
     const { written, db } = recorder();
-    await categoryTaxonomy.run({ db });
+    await categoryTaxonomy.run(localSeedContext(db));
 
     const creates = written.filter((row) => row.op === 'create');
     expect(
@@ -237,7 +238,7 @@ describe('the seeder — §8.4', () => {
     // would put every retired trade back on the public wire the next time somebody fixed a typo
     // in this file and re-ran the seeder. Found in review.
     const { written, db } = recorder();
-    await categoryTaxonomy.run({ db });
+    await categoryTaxonomy.run(localSeedContext(db));
 
     for (const row of written) {
       expect(
@@ -249,7 +250,7 @@ describe('the seeder — §8.4', () => {
 
   it('AC15 — carries the four adopted uuids, so a link in a screenshot still resolves', async () => {
     const { written, db } = recorder();
-    await categoryTaxonomy.run({ db });
+    await categoryTaxonomy.run(localSeedContext(db));
 
     const byslug = new Map(written.map((row) => [row.data['slug'], row.data['id']]));
     for (const [slug, id] of Object.entries(ADOPTED)) {
@@ -259,7 +260,7 @@ describe('the seeder — §8.4', () => {
 
   it('writes the roots before the children that point at them', async () => {
     const { written, db } = recorder();
-    await categoryTaxonomy.run({ db });
+    await categoryTaxonomy.run(localSeedContext(db));
 
     const order = written.map((row) => String(row.data['slug']));
     for (const leaf of leaves()) {
@@ -276,7 +277,7 @@ describe('AC17 — demo-providers is decoupled from category creation (§8.5)', 
 
   it('creates no category rows at all', async () => {
     const { written, db } = recorder(seeded);
-    await demoProviders.run({ db });
+    await demoProviders.run(localSeedContext(db));
 
     expect(
       written.filter((row) => row.model === 'category'),
@@ -286,7 +287,7 @@ describe('AC17 — demo-providers is decoupled from category creation (§8.5)', 
 
   it('still links its five providers to the four adopted categories', async () => {
     const { written, db } = recorder(seeded);
-    await demoProviders.run({ db });
+    await demoProviders.run(localSeedContext(db));
 
     const links = written.filter((row) => row.model === 'providerCategory');
     expect(links).toHaveLength(7);
@@ -303,6 +304,6 @@ describe('AC17 — demo-providers is decoupled from category creation (§8.5)', 
     // The same failure mode the existing `No seeded category "…"` guard has for providers — and the
     // one AC18 exists to prevent reaching anyone.
     const { db } = recorder([]);
-    await expect(demoProviders.run({ db })).rejects.toThrow(/fontaneria/);
+    await expect(demoProviders.run(localSeedContext(db))).rejects.toThrow(/fontaneria/);
   });
 });

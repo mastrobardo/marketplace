@@ -16,6 +16,7 @@ import { type Prisma } from '@prisma/client';
 import { demoProviders } from '../prisma/seed/demo-providers.js';
 import { seeders } from '../prisma/seed/registry.js';
 import { assertSafeTarget } from '../prisma/seed/run.js';
+import { localSeedContext } from './seed-context.js';
 
 interface Created {
   readonly model: string;
@@ -74,7 +75,7 @@ function recorder(categories: { id: string; slug: string }[] = SEEDED_CATEGORIES
 
 async function seeded(): Promise<Created[]> {
   const { rows, db } = recorder();
-  await demoProviders.run({ db });
+  await demoProviders.run(localSeedContext(db));
   return rows;
 }
 
@@ -239,7 +240,7 @@ describe('W3-T01 — the seeder has no opinion about the licence column', () => 
 
   it('fails loudly, naming the slug, when the taxonomy has not run', async () => {
     const { db } = recorder([]);
-    await expect(demoProviders.run({ db })).rejects.toThrow(/fontaneria/);
+    await expect(demoProviders.run(localSeedContext(db))).rejects.toThrow(/fontaneria/);
   });
 });
 
