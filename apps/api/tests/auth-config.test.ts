@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -210,10 +210,17 @@ describe('W2-T01 §4.7 — one origin in development too', () => {
   /**
    * AC23. Mocking the auth endpoints would reproduce, on the one flow that cannot tolerate it, the
    * facade this ticket exists to start removing.
+   *
+   * **`W3-T01` made it structural.** The assertion used to read `apps/web/mocks/handlers.ts` and
+   * check that no handler matched `/auth`. That file is gone, and so is the directory: the last
+   * endpoint the storefront lacked — `GET /categories` — is real, and MSW went with it. There is
+   * no longer a place to mock an auth route, which is the strongest form this criterion can take.
    */
   it('does not mock the auth endpoints in the web app', () => {
-    const handlers = readFileSync(join(apiRoot, '..', 'web', 'mocks', 'handlers.ts'), 'utf8');
-    expect(handlers).not.toContain('/auth');
+    expect(
+      existsSync(join(apiRoot, '..', 'web', 'mocks')),
+      'the web app has a mock layer again, and it could answer /api/auth',
+    ).toBe(false);
   });
 });
 

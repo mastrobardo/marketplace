@@ -163,3 +163,40 @@ this file records the *why* an agent would otherwise have to rediscover.
   `agent-contracts`' to correct.
 - **evidence**: `docs/specs/S2/W2-T03-route-guards.md` §3.5.2; `memory/repo/glossary.md`
 - **status**: active
+
+### Category names are columns today, and are meant to become i18n keys
+
+- **id**: MEM-2026-09-18-13
+- **scope**: repo
+- **fact**: `Category.nameEs` / `Category.nameEn` hold display strings in the database
+  (`apps/api/prisma/seed/categories.ts` seeds twenty pairs like
+  `nameEs: 'Desatascos', nameEn: 'Drain unblocking'`). The operator's stated direction, 2026-09-18,
+  is that these belong in the i18n layer instead — a category carries a **key**, and the catalogues
+  in `apps/web/src/i18n/locales/{es,en}.ts` carry the words. The English key is expected to be the
+  short noun (`drain`), not the current column value (`Drain unblocking`).
+- **why**: three things follow from it that are not obvious from the column alone.
+  1. **The wire contract already hides this.** `CategorySummarySchema` is
+     `{ slug, name, requiresLicence }` with the locale resolved at the route (`W3-T01` §3.7), so
+     moving names out of the table is a storage-and-seeder change with **no contract change and no
+     consumer change**. That is why it can wait, and it is the reason to keep resolving locale
+     server-side rather than shipping the pair.
+  2. **The slug is an identifier, the names are labels, and only one of them is safe to change.**
+     Slugs are Spanish today (`fontaneria`, `desatascos`) and they are load-bearing: they appear in
+     URLs (`?what=fontaneria`), in `W3-T02`'s slug→id resolution on every profile write, in
+     `provider_category`, and in the four fixed demo uuids `MEM-2026-09-18-1` pins. An English key
+     namespace does **not** imply renaming slugs — that is a breaking change with a migration, and
+     a relabel is not.
+  3. **It conflicts with making the back office the taxonomy's writer**, which the operator also
+     raised on 2026-09-18. The i18n catalogues have a *compile-time* completeness guarantee —
+     `apps/web/tests/fixtures/{unknown-key,incomplete-catalogue}` exist to prove `tsc` fails on a
+     missing key — while the columns are checked only at runtime, by the outbound zod parse that
+     turns a bad row into a 500 (`W3-T01` AC11). Moving to keys **upgrades** that guarantee, but an
+     admin who can create a category at runtime cannot be given a compile-checked key for it. The
+     two directions are mutually exclusive for the same string; choosing either decides the other.
+- **apply**: do not "fix" the name columns opportunistically — the change is cheap on the wire and
+  expensive in the seeder, and it is blocked on the authoring question above, not on effort. If the
+  back office wins, names stay data and the columns are correct as they are.
+- **evidence**: operator, 2026-09-18, on `apps/api/prisma/seed/categories.ts:107`;
+  `W3-T01` spec §3.7, §9; `packages/contracts/src/catalogue.ts`
+- **status**: active
+

@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Vite + React SPA — router, layout shell, ES/EN i18n and theme tokens.",
+  "description": "Vite + React SPA \u2014 router, layout shell, ES/EN i18n and theme tokens.",
   "scripts": {
     "dev": "vite",
     "preview": "vite preview",
@@ -27,7 +27,6 @@
     "eslint": "^10.10.0",
     "jsdom": "^30.0.1",
     "lighthouse": "^12.8.2",
-    "msw": "^2.12.4",
     "typescript": "~5.9.3",
     "vite": "^8.2.2",
     "vitest": "^5.0.0"
@@ -45,10 +44,5 @@
     "react-i18next": "^17.0.13",
     "react-router": "^8.3.1",
     "zod": "^4.5.4"
-  },
-  "msw": {
-    "workerDirectory": [
-      "public"
-    ]
   }
 }

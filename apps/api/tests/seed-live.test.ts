@@ -31,6 +31,7 @@ import { createSearchRepository } from '../src/modules/search/repository.js';
 import { createProviderRepository } from '../src/modules/providers/repository.js';
 import { seeders } from '../prisma/seed/registry.js';
 import { demoProviders } from '../prisma/seed/demo-providers.js';
+import { TAXONOMY } from '../prisma/seed/categories.js';
 import { runSeeders } from '../prisma/seed/run.js';
 
 const apiRoot = fileURLToPath(new URL('..', import.meta.url));
@@ -116,7 +117,11 @@ describe.runIf(live)(
 
     describe('AC1/AC3 — the seeder is ledgered, and runs once', () => {
       it('wrote the world it claims', async () => {
-        expect(await prisma.category.count()).toBe(4);
+        // The categories are `categories.taxonomy`'s since `W3-T01` — two roots and twenty trades,
+        // of which this seeder resolves four. It creates none of them, which is why this asserts
+        // the taxonomy's size rather than `4 + 18`: a demo seeder that added one would show up here
+        // as a number nobody could explain.
+        expect(await prisma.category.count()).toBe(TAXONOMY.length);
         expect(await prisma.providerProfile.count()).toBe(5);
         expect(await prisma.providerCategory.count()).toBe(7);
       });

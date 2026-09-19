@@ -9,12 +9,17 @@
 // 404 the stubbed page tests would never see.
 import { describe, expect, it, vi } from 'vitest';
 import { type AxiosInstance } from 'axios';
-import { readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { ApiError, createApiClient } from '../src/shared/api.js';
 
 const src = fileURLToPath(new URL('../src', import.meta.url));
+/**
+ * `W3-T01` deleted `apps/web/mocks/` with MSW itself. What survives of that world is the component
+ * harness's fixtures, which is where this criterion now looks.
+ */
 const mocks = fileURLToPath(new URL('../mocks', import.meta.url));
+const fixtures = fileURLToPath(new URL('./fixtures', import.meta.url));
 
 interface Recorded {
   method: 'get' | 'post';
@@ -231,8 +236,13 @@ describe('AC22/AC23 — the rules that outlive these pages', () => {
     }
   });
 
-  it('AC23 — the storefront mocks no auth route', () => {
-    for (const file of sourceFiles(mocks)) {
+  it('AC23 — the storefront mocks no auth route, and since W3-T01 mocks nothing at all', () => {
+    // The original claim was narrow: whatever else MSW answered, it must never answer better-auth,
+    // because a mocked session is a cookie path that no deployed environment exercises. `W3-T01`
+    // makes it structural — there is no mock layer to add one to.
+    expect(existsSync(mocks), 'apps/web/mocks/ is back').toBe(false);
+
+    for (const file of sourceFiles(fixtures)) {
       expect(readFileSync(file, 'utf8'), `${file} mocks /api/auth`).not.toContain('api/auth');
     }
   });

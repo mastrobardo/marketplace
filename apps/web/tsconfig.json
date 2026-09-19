@@ -7,11 +7,17 @@
   "include": [
     "src/**/*.ts",
     "src/**/*.tsx",
-    "mocks/**/*.ts",
     "tests/**/*.ts",
     "tests/**/*.tsx",
     "eslint/**/*.js",
     "*.config.ts"
   ],
-  "exclude": ["node_modules", "dist", ".turbo", "tests/fixtures"]
+  "exclude": [
+    "node_modules",
+    "dist",
+    ".turbo",
+    "tests/fixtures/incomplete-catalogue",
+    "tests/fixtures/unknown-key",
+    "tests/fixtures/valid"
+  ]
 }

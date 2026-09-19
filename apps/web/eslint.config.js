@@ -16,7 +16,6 @@ export default [
   // Vendored by `msw init` and regenerated whenever msw is upgraded. It carries its own
   // `eslint-disable` header, which our config then reports as an unused directive — linting a
   // generated file to tell it off for silencing lint is a warning nobody can action.
-  { ignores: ['public/mockServiceWorker.js'] },
   ...createEslintConfig({ environment: 'browser' }),
   // The performance harness (`W12-T15`) runs in node, not in the browser this package is linted
   // as. Scoped to `perf/`, deliberately: the app itself must keep failing on a `process` reference.

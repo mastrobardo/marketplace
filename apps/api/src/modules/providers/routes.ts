@@ -39,8 +39,13 @@ export interface ProviderRoutesDeps {
 /**
  * `nameEs` or `nameEn`, decided here so the client never sees the pair — the same rule
  * `modules/search/routes.ts` follows. Spanish is the default because the market is Spain.
+ *
+ * **Exported since `W3-T01`**, which needed it for a third endpoint. Copying eight lines a third
+ * time is a review failure, and spec §3.7 names this one as the source. A neutral home would read
+ * better, but that edit lands in `modules/search/`, which belongs to another slice — so the import
+ * points here until someone owns both files in one ticket.
  */
-function localeOf(request: FastifyRequest): 'es' | 'en' {
+export function localeOf(request: FastifyRequest): 'es' | 'en' {
   const header = request.headers['accept-language'];
   return typeof header === 'string' && header.toLowerCase().startsWith('en') ? 'en' : 'es';
 }

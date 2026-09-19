@@ -5,8 +5,8 @@ write one product. Code identifiers are English; user-facing copy is ES-first wi
 
 | Term (ES) | EN | Meaning in this codebase |
 |---|---|---|
-| **manitas** | handyman | Non-licensed provider. `ProviderProfile.kind = MANITAS`. Cannot be surfaced for `requiresLicence` categories. |
-| **profesional** | professional | Licensed provider. `kind = PRO`. Needs an approved `Certification` for gated categories. |
+| **manitas** | handyman | Unlicensed provider. `ProviderProfile.kind = MANITAS`. May be listed in `requiresLicence` categories — the flag earns a badge, it does not exclude (operator, 2026-09-18). |
+| **profesional** | professional | Licensed provider. `kind = PRO`. An approved `Certification` earns the `VERIFIED_LICENCE` badge in a `requiresLicence` category; it is not a condition of appearing there. |
 | **presupuesto** | quote | A provider's priced offer on a Job. Model: `Quote`. Never call it "estimate" in code. |
 | **subasta** | auction | Reverse bidding on a Job. Models: `Auction`, `Bid`. |
 | **urgencia** | emergency | Immediate call-out. Model: `EmergencyRequest`. |
@@ -16,6 +16,14 @@ write one product. Code identifiers are English; user-facing copy is ES-first wi
 | **colegio profesional** | professional body | Issues/registers licences. `Certification.issuingBody`. |
 | **IVA** | VAT | Spanish VAT. Invoicing rules are `[H]` — accountant-defined (`W5-T09`). |
 | **fianza / señal** | deposit | Not in MVP. Do not introduce the concept without an ADR. |
+
+**`requiresLicence` is a verification, not a gate.** Both rows above said otherwise until
+2026-09-18, when the operator settled it: *"my idea was verification, not hard block — while you can
+be listed as a pro, you will get a 'verified' badge once documents are uploaded and verified."* A
+trade carrying the flag is one whose claim is checkable and whose proof is worth showing; an
+unverified provider is listed, searchable and bookable, and simply has no badge. The frozen contract
+already modelled it this way (`packages/contracts/src/catalogue.ts`). Evidence and the five gated
+trades: `docs/specs/S3/W3-T01-category-tree.md` §3.5.2, `TODO.md` §10.1 `BD-07`.
 
 ## Naming rules
 - Code, tables, API fields: **English** (`quote`, `auction`, `bid`, `provider`).

@@ -92,13 +92,19 @@ jobs:
       - run: pnpm --filter @marketplace/ui build:storybook
 
       # The same build the nightly shoots against — a real production build behind `vite preview`,
-      # with the two flags that give the mocked pages their data and the 500 page a URL. Skipped
-      # when only the stories are being regenerated, because then nothing needs a storefront.
+      # with the flag that gives the 500 page a URL. Skipped when only the stories are being
+      # regenerated, because then nothing needs a storefront.
+      #
+      # `W3-T01` removed the mocks flag with MSW itself. This `vite preview` has no API behind it,
+      # so the category grid and the facet rail render their **empty** states — a real shape a
+      # visitor reaches when the API is down, and the one these baselines capture from now on.
+      #
+      # The first regeneration after `W3-T01` is therefore expected to rewrite `route-es.png` and
+      # `route-en.png`. Until it is run, the nightly diffs on those two subjects.
       - name: Build the storefront
         if: inputs.subjects != 'stories'
         run: pnpm turbo run build --filter=@marketplace/web
         env:
-          VITE_ENABLE_MOCKS: 'true'
           VITE_ENABLE_FAULT_ROUTES: 'true'
 
       - name: Serve the storefront
