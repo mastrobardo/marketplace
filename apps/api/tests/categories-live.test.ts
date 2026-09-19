@@ -150,7 +150,14 @@ describeLive('AC15 — pnpm db:seed writes the tree', () => {
 
   it('points every leaf at a real parent row', async () => {
     const orphans = await prisma.category.count({
-      where: { parentId: { notIn: (await prisma.category.findMany({ where: { parentId: null }, select: { id: true } })).map((row) => row.id) }, NOT: { parentId: null } },
+      where: {
+        parentId: {
+          notIn: (
+            await prisma.category.findMany({ where: { parentId: null }, select: { id: true } })
+          ).map((row) => row.id),
+        },
+        NOT: { parentId: null },
+      },
     });
     expect(orphans).toBe(0);
   });
@@ -193,7 +200,10 @@ describeLive('AC20, AC21 — the compliance question is one query', () => {
       WHERE c.requires_licence
         AND (c.parent_id IS NULL OR EXISTS (SELECT 1 FROM category k WHERE k.parent_id = c.id))
     `;
-    expect(gatedParents.map((row) => row.slug), 'a family is gated as a whole').toEqual([]);
+    expect(
+      gatedParents.map((row) => row.slug),
+      'a family is gated as a whole',
+    ).toEqual([]);
   });
 
   it('AC21 — reforma-integral is not gated, however wide it is', async () => {
@@ -359,9 +369,10 @@ describeLive('AC12 — retirement takes a trade off the wire and nothing else (�
       ).toBe(1);
 
       const { items } = CategoryListSchema.parse((await list()).json);
-      expect(items.map((item) => item.slug), 'a retired trade is still on the wire').not.toContain(
-        'mudanzas',
-      );
+      expect(
+        items.map((item) => item.slug),
+        'a retired trade is still on the wire',
+      ).not.toContain('mudanzas');
       expect(items).toHaveLength(19);
     } finally {
       await prisma.category.update({ where: { slug: 'mudanzas' }, data: { isActive: true } });

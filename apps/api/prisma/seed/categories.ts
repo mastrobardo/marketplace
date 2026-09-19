@@ -71,8 +71,22 @@ export const TAXONOMY: readonly TaxonomyNode[] = [
   // ── Roots ────────────────────────────────────────────────────────────────────────────────────
   // Never gated, and AC21 fails if one ever is: a licence attaches to the trade performed, not to
   // the umbrella above it (§3.5.1). Neither root is served on the wire (§3.2).
-  { slug: 'reformas', nameEs: 'Reformas', nameEn: 'Renovations', position: 1, requiresLicence: false, parent: null },
-  { slug: 'mantenimiento', nameEs: 'Mantenimiento', nameEn: 'Maintenance', position: 2, requiresLicence: false, parent: null },
+  {
+    slug: 'reformas',
+    nameEs: 'Reformas',
+    nameEn: 'Renovations',
+    position: 1,
+    requiresLicence: false,
+    parent: null,
+  },
+  {
+    slug: 'mantenimiento',
+    nameEs: 'Mantenimiento',
+    nameEn: 'Maintenance',
+    position: 2,
+    requiresLicence: false,
+    parent: null,
+  },
 
   // ── Reformas ─────────────────────────────────────────────────────────────────────────────────
   // Every row `false`, which is the shape §3.5.1 predicts: this is where the wide, unregulated
@@ -82,32 +96,176 @@ export const TAXONOMY: readonly TaxonomyNode[] = [
   // `reforma-integral` is the largest thing on the list and is **not** gated. Marking it `true`
   // would demand a licence from a tiler and teach the column to mean "this job might involve
   // something regulated" — a guess about scope, not a legal boundary.
-  { slug: 'reforma-integral', nameEs: 'Reforma integral', nameEn: 'Full renovation', position: 1, requiresLicence: false, parent: 'reformas' },
-  { slug: 'albanileria', nameEs: 'Albañilería', nameEn: 'Masonry', position: 2, requiresLicence: false, parent: 'reformas' },
-  { slug: 'alicatado-solados', nameEs: 'Alicatado y solados', nameEn: 'Tiling & flooring', position: 3, requiresLicence: false, parent: 'reformas' },
-  { slug: 'pintura', nameEs: 'Pintura', nameEn: 'Painting', position: 4, requiresLicence: false, parent: 'reformas' },
-  { slug: 'carpinteria', nameEs: 'Carpintería', nameEn: 'Carpentry', position: 5, requiresLicence: false, parent: 'reformas' },
-  { slug: 'escayola-pladur', nameEs: 'Escayola y pladur', nameEn: 'Plasterboard', position: 6, requiresLicence: false, parent: 'reformas' },
-  { slug: 'ventanas-cerramientos', nameEs: 'Ventanas y cerramientos', nameEn: 'Windows & glazing', position: 7, requiresLicence: false, parent: 'reformas' },
-  { slug: 'aislamiento', nameEs: 'Aislamiento', nameEn: 'Insulation', position: 8, requiresLicence: false, parent: 'reformas' },
+  {
+    slug: 'reforma-integral',
+    nameEs: 'Reforma integral',
+    nameEn: 'Full renovation',
+    position: 1,
+    requiresLicence: false,
+    parent: 'reformas',
+  },
+  {
+    slug: 'albanileria',
+    nameEs: 'Albañilería',
+    nameEn: 'Masonry',
+    position: 2,
+    requiresLicence: false,
+    parent: 'reformas',
+  },
+  {
+    slug: 'alicatado-solados',
+    nameEs: 'Alicatado y solados',
+    nameEn: 'Tiling & flooring',
+    position: 3,
+    requiresLicence: false,
+    parent: 'reformas',
+  },
+  {
+    slug: 'pintura',
+    nameEs: 'Pintura',
+    nameEn: 'Painting',
+    position: 4,
+    requiresLicence: false,
+    parent: 'reformas',
+  },
+  {
+    slug: 'carpinteria',
+    nameEs: 'Carpintería',
+    nameEn: 'Carpentry',
+    position: 5,
+    requiresLicence: false,
+    parent: 'reformas',
+  },
+  {
+    slug: 'escayola-pladur',
+    nameEs: 'Escayola y pladur',
+    nameEn: 'Plasterboard',
+    position: 6,
+    requiresLicence: false,
+    parent: 'reformas',
+  },
+  {
+    slug: 'ventanas-cerramientos',
+    nameEs: 'Ventanas y cerramientos',
+    nameEn: 'Windows & glazing',
+    position: 7,
+    requiresLicence: false,
+    parent: 'reformas',
+  },
+  {
+    slug: 'aislamiento',
+    nameEs: 'Aislamiento',
+    nameEn: 'Insulation',
+    position: 8,
+    requiresLicence: false,
+    parent: 'reformas',
+  },
 
   // ── Mantenimiento ────────────────────────────────────────────────────────────────────────────
-  { id: adopted(1), slug: 'fontaneria', nameEs: 'Fontanería', nameEn: 'Plumbing', position: 1, requiresLicence: false, parent: 'mantenimiento' },
-  { id: adopted(2), slug: 'electricidad', nameEs: 'Electricidad', nameEn: 'Electrical', position: 2, requiresLicence: true, parent: 'mantenimiento' },
-  { id: adopted(3), slug: 'cerrajeria', nameEs: 'Cerrajería', nameEn: 'Locksmith', position: 3, requiresLicence: false, parent: 'mantenimiento' },
-  { id: adopted(4), slug: 'climatizacion', nameEs: 'Climatización', nameEn: 'Heating & cooling', position: 4, requiresLicence: true, parent: 'mantenimiento' },
-  { slug: 'gas', nameEs: 'Instalaciones de gas', nameEn: 'Gas installations', position: 5, requiresLicence: true, parent: 'mantenimiento' },
-  { slug: 'electrodomesticos', nameEs: 'Electrodomésticos', nameEn: 'Appliance repair', position: 6, requiresLicence: false, parent: 'mantenimiento' },
-  { slug: 'telecomunicaciones', nameEs: 'Telecomunicaciones y antenas', nameEn: 'Telecoms & aerials', position: 7, requiresLicence: true, parent: 'mantenimiento' },
-  { slug: 'placas-solares', nameEs: 'Placas solares', nameEn: 'Solar panels', position: 8, requiresLicence: true, parent: 'mantenimiento' },
+  {
+    id: adopted(1),
+    slug: 'fontaneria',
+    nameEs: 'Fontanería',
+    nameEn: 'Plumbing',
+    position: 1,
+    requiresLicence: false,
+    parent: 'mantenimiento',
+  },
+  {
+    id: adopted(2),
+    slug: 'electricidad',
+    nameEs: 'Electricidad',
+    nameEn: 'Electrical',
+    position: 2,
+    requiresLicence: true,
+    parent: 'mantenimiento',
+  },
+  {
+    id: adopted(3),
+    slug: 'cerrajeria',
+    nameEs: 'Cerrajería',
+    nameEn: 'Locksmith',
+    position: 3,
+    requiresLicence: false,
+    parent: 'mantenimiento',
+  },
+  {
+    id: adopted(4),
+    slug: 'climatizacion',
+    nameEs: 'Climatización',
+    nameEn: 'Heating & cooling',
+    position: 4,
+    requiresLicence: true,
+    parent: 'mantenimiento',
+  },
+  {
+    slug: 'gas',
+    nameEs: 'Instalaciones de gas',
+    nameEn: 'Gas installations',
+    position: 5,
+    requiresLicence: true,
+    parent: 'mantenimiento',
+  },
+  {
+    slug: 'electrodomesticos',
+    nameEs: 'Electrodomésticos',
+    nameEn: 'Appliance repair',
+    position: 6,
+    requiresLicence: false,
+    parent: 'mantenimiento',
+  },
+  {
+    slug: 'telecomunicaciones',
+    nameEs: 'Telecomunicaciones y antenas',
+    nameEn: 'Telecoms & aerials',
+    position: 7,
+    requiresLicence: true,
+    parent: 'mantenimiento',
+  },
+  {
+    slug: 'placas-solares',
+    nameEs: 'Placas solares',
+    nameEn: 'Solar panels',
+    position: 8,
+    requiresLicence: true,
+    parent: 'mantenimiento',
+  },
   // `false`, and **provisional**: the operator is checking with the gremio. The risk is asymmetric —
   // `false` is the permissive answer, so being wrong surfaces an unlicensed provider, while being
   // wrong the other way only asks for a certificate nobody needed. One row and one AC20 line to
   // flip, and it is the operator's to chase (§10.1).
-  { slug: 'desatascos', nameEs: 'Desatascos', nameEn: 'Drain unblocking', position: 9, requiresLicence: false, parent: 'mantenimiento' },
-  { slug: 'limpieza', nameEs: 'Limpieza', nameEn: 'Cleaning', position: 10, requiresLicence: false, parent: 'mantenimiento' },
-  { slug: 'jardineria', nameEs: 'Jardinería', nameEn: 'Gardening', position: 11, requiresLicence: false, parent: 'mantenimiento' },
-  { slug: 'mudanzas', nameEs: 'Mudanzas y montaje', nameEn: 'Removals & assembly', position: 12, requiresLicence: false, parent: 'mantenimiento' },
+  {
+    slug: 'desatascos',
+    nameEs: 'Desatascos',
+    nameEn: 'Drain unblocking',
+    position: 9,
+    requiresLicence: false,
+    parent: 'mantenimiento',
+  },
+  {
+    slug: 'limpieza',
+    nameEs: 'Limpieza',
+    nameEn: 'Cleaning',
+    position: 10,
+    requiresLicence: false,
+    parent: 'mantenimiento',
+  },
+  {
+    slug: 'jardineria',
+    nameEs: 'Jardinería',
+    nameEn: 'Gardening',
+    position: 11,
+    requiresLicence: false,
+    parent: 'mantenimiento',
+  },
+  {
+    slug: 'mudanzas',
+    nameEs: 'Mudanzas y montaje',
+    nameEn: 'Removals & assembly',
+    position: 12,
+    requiresLicence: false,
+    parent: 'mantenimiento',
+  },
 ];
 
 export const categoryTaxonomy: Seeder = {
@@ -133,7 +291,9 @@ export const categoryTaxonomy: Seeder = {
       if (node.parent !== null) {
         const found = ids.get(node.parent);
         if (found === undefined) {
-          throw new Error(`Category "${node.slug}" names a parent "${node.parent}" that is not seeded yet`);
+          throw new Error(
+            `Category "${node.slug}" names a parent "${node.parent}" that is not seeded yet`,
+          );
         }
         parentId = found;
       }
@@ -148,7 +308,12 @@ export const categoryTaxonomy: Seeder = {
 
       const row = await db.category.upsert({
         where: { slug: node.slug },
-        create: { ...(node.id === undefined ? {} : { id: node.id }), slug: node.slug, ...fields, isActive: true },
+        create: {
+          ...(node.id === undefined ? {} : { id: node.id }),
+          slug: node.slug,
+          ...fields,
+          isActive: true,
+        },
         /**
          * **`isActive` is absent here, and that is the point.** It is the retirement mechanism
          * (§3.8, AC12): an operator sets it `false` to take a trade off the wire without touching

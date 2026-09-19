@@ -84,7 +84,8 @@ function recorder(rows: { id: string; slug: string }[] = []) {
       Promise.resolve(rows.find((row) => row.slug === where.slug) ?? null),
     findUniqueOrThrow: ({ where }: { where: { slug?: string } }) => {
       const found = rows.find((row) => row.slug === where.slug);
-      if (found === undefined) return Promise.reject(new Error(`No seeded category "${String(where.slug)}"`));
+      if (found === undefined)
+        return Promise.reject(new Error(`No seeded category "${String(where.slug)}"`));
       return Promise.resolve(found);
     },
   };
@@ -220,9 +221,10 @@ describe('the seeder — §8.4', () => {
     await categoryTaxonomy.run({ db });
 
     const creates = written.filter((row) => row.op === 'create');
-    expect(creates.map((row) => row.data['slug']), 'a create would hit category_slug_key').toEqual(
-      [],
-    );
+    expect(
+      creates.map((row) => row.data['slug']),
+      'a create would hit category_slug_key',
+    ).toEqual([]);
     for (const row of written) {
       expect(row.where, `${String(row.data['slug'])} is not keyed on its slug`).toMatchObject({
         slug: row.data['slug'],

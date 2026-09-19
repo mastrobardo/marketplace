@@ -55,11 +55,7 @@ export default defineConfig(({ mode }) => {
   const apiOrigin = env['VITE_API_ORIGIN'];
 
   return {
-    plugins: [
-      react(),
-      ...(withFaults ? [] : [stripFaults()]),
-      apiProxyPlugin(apiOrigin),
-    ],
+    plugins: [react(), ...(withFaults ? [] : [stripFaults()]), apiProxyPlugin(apiOrigin)],
     /**
      * `/api` reaches the API through the dev server, so the browser sees one origin — `W2-T01`
      * §4.7, and the local mirror of what `W0-T28` does in preview and production.

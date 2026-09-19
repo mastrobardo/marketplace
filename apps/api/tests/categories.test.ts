@@ -171,9 +171,7 @@ describe('GET /api/categories', () => {
   it('AC5 — accept-language: en-GB asks the repository for English', async () => {
     boot([node({ name: 'Plumbing' })]);
 
-    const { items } = CategoryListSchema.parse(
-      (await list({ 'accept-language': 'en-GB' })).json,
-    );
+    const { items } = CategoryListSchema.parse((await list({ 'accept-language': 'en-GB' })).json);
 
     expect(calls[0]?.locale).toBe('en');
     expect(items[0]?.name).toBe('Plumbing');

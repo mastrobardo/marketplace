@@ -55,9 +55,7 @@ export interface CategoryNode {
   readonly isActive: boolean;
 }
 
-export type CategoryRepository = (
-  criteria: CategoryCriteria,
-) => Promise<readonly CategoryNode[]>;
+export type CategoryRepository = (criteria: CategoryCriteria) => Promise<readonly CategoryNode[]>;
 
 /** The columns this endpoint reads, named once. The pair `nameEs`/`nameEn` collapses below. */
 const CATEGORY_SELECT = {
@@ -84,19 +82,17 @@ export function createCategoryRepository(prisma: PrismaClient): CategoryReposito
       orderBy: [{ parent: { position: 'asc' } }, { position: 'asc' }, { slug: 'asc' }],
     });
 
-    return rows.map(
-      (row): CategoryNode => ({
-        slug: row.slug,
-        // The client receives one name and never the pair — the contract says this endpoint owns
-        // that decision, because `W12-T14` will make it a per-request concern on a Worker.
-        name: locale === 'en' ? row.nameEn : row.nameEs,
-        requiresLicence: row.requiresLicence,
-        parentId: row.parentId,
-        position: row.position,
-        // A root has no parent and is never served, so the value is unused rather than wrong.
-        parentPosition: row.parent?.position ?? 0,
-        isActive: row.isActive,
-      }),
-    );
+    return rows.map((row): CategoryNode => ({
+      slug: row.slug,
+      // The client receives one name and never the pair — the contract says this endpoint owns
+      // that decision, because `W12-T14` will make it a per-request concern on a Worker.
+      name: locale === 'en' ? row.nameEn : row.nameEs,
+      requiresLicence: row.requiresLicence,
+      parentId: row.parentId,
+      position: row.position,
+      // A root has no parent and is never served, so the value is unused rather than wrong.
+      parentPosition: row.parent?.position ?? 0,
+      isActive: row.isActive,
+    }));
   };
 }

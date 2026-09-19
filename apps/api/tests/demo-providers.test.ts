@@ -46,9 +46,10 @@ const SEEDED_CATEGORIES = [
  * resolves them from the taxonomy, so the double has to be able to answer. `create` is still
  * defined on it, and that is deliberate — AC1 below asserts it is never called.
  */
-function recorder(
-  categories: { id: string; slug: string }[] = SEEDED_CATEGORIES,
-): { rows: Created[]; db: Prisma.TransactionClient } {
+function recorder(categories: { id: string; slug: string }[] = SEEDED_CATEGORIES): {
+  rows: Created[];
+  db: Prisma.TransactionClient;
+} {
   const rows: Created[] = [];
   const model = (name: string) => ({
     create: ({ data }: { data: Record<string, unknown> }) => {
