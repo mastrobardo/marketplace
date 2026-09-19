@@ -5,7 +5,7 @@ Agent:        agent-devops
 Model:        claude-opus-5
 Skills used:  security-and-hardening, test-driven-development, documentation-and-adrs
 Started:      2026-09-19T13:40Z
-Finished:     2026-09-19T13:52Z
+Finished:     2026-09-19T14:30Z
 Stacked on:   W0-T30-seed-a-deployed-database (PR #268)
 ```
 
@@ -33,7 +33,21 @@ ordinary command output.
 Answered with a mechanism rather than a promise — `isTTY` on stdout is a fact about where bytes go,
 not a guess about who is calling.
 
-### 3. Corrections
+### 3. The wrappers
+
+> please create a bash script calling tsx scripts/secrets/generate.ts PREVIEW_SEED_DEMO_PASSWORD
+> --write . this will be easier for other people
+
+and, when asked whether one script should set every secret an environment needs:
+
+> Divide them, but let's stat with just SEED PREVIEW and STAGING. We will add them later, depending
+> also on the who will setup the env ( i'm not sure who will be a colllaborator: they might be
+> thechnical or not )
+
+That last clause is what settled the shape: **one script per secret, no arguments**. An `--env` flag
+would be less code and more to explain to somebody who may not be technical.
+
+### 4. Corrections
 
 **None from the operator.** Two self-corrections during the build, both recorded below under
 deviations.
@@ -89,8 +103,27 @@ captures stdout.
 
 `--list` is exempt and prints happily through a pipe — it emits names and reasons, never values.
 
-Final: `tests/secrets-generate.test.ts` 25/25. `pnpm typecheck` 10/10, `pnpm lint` clean, prettier
-clean.
+### The wrappers, verified the same way
+
+```
+$ echo "yes" | ./scripts/secrets/set-preview-seed-password.sh
+
+Cannot continue. this needs to run in a terminal window.
+
+  It produces a password, so anything that records the output — a pipe, a file,
+  a CI job, an AI coding assistant — would record that too.
+```
+
+Two things this proves. The guard survives the extra layers — a bash wrapper and `pnpm exec` both
+pass the TTY through, so nothing about the convenience weakened the guarantee. And the *early* check
+matters: before it was added, the same command reached the confirmation prompt and the piped `yes`
+answered it, so a prompt nobody saw was being satisfied before `generate.ts` finally refused.
+
+The three shapes `AC10` forbids were checked against the assertion directly rather than assumed:
+`VALUE=$(…)`, `… | tee log.txt` and `… > out.txt` are each caught, and the real `exec` line passes.
+
+Final: `tests/secrets-generate.test.ts` 31/31. `pnpm verify` green — 10/10 turbo tasks, typecheck,
+lint and prettier clean.
 
 ## Deviations from spec
 
@@ -122,6 +155,12 @@ clean.
 knowledge already implicit in `REQUIRED`. The test forces it to stay complete, which is the best
 available answer, but it is still two lists that a careless edit can put out of step — the test will
 catch *missing* entries and only the `not.toContain` assertion catches contradictory ones.
+
+**The wrappers are the new weakest point, not the generator.** A shell script is the easiest place
+in this repository to capture a credential by accident — `$(...)` is what a shell programmer reaches
+for by reflex, and it defeats the whole design. `AC10` asserts its absence, but the assertion is a
+regex over source text, which is a weaker instrument than the type system protecting everything else
+here.
 
 **What is not proven.** `--write` has never been executed end to end: doing so would either write a
 real secret or need a `gh` fixture, and the refusal that makes this tool safe also prevents me from
