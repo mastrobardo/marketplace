@@ -78,17 +78,22 @@ Keep it to facts that changed how you would work. Task-specific detail stays in 
   uuids — categories `aaaa…0001`-`0004`, users `bbbb…`, addresses `cccc…`, profiles `dddd…`. Every
   provider has a base address and a radius, so none of them is the `404` of `W3-T07` §2.4 or the
   unsearchable row of `W3-T05` AC6. `Clima Costa` sits 29.8 km from Sol with a 50 km radius; the
-  other four cover 15 km. Since `W3-T10` the storefront's MSW answers `GET /categories` and nothing
-  else.
+  other four cover 15 km.
+
+  **Amended by `W3-T01` (#266, 2026-09-19).** This seeder no longer creates categories — it
+  *resolves* the four slugs that `categories.taxonomy` writes, adopting the same four uuids, so
+  `providers.demo-world` now depends on another seeder having run. And the storefront has **no MSW
+  at all**: `GET /categories` was the last mocked endpoint and went with the rest of it.
 - **why**: `W3-T05` and `W3-T07` both shipped real endpoints and left their mocks in place, because
   a correct endpoint over an empty table is worse than a mock. This is what unblocked both
   deletions, and it is the data every later S3 ticket will develop against.
 - **apply**: build against these rows rather than adding a fixture — `pnpm db:reset` then
   `pnpm db:seed` rebuilds the same world, so a uuid in a screenshot still resolves. The seeder is
   **not** `localOnly` (no credential, no personal data), so it may run in preview; anything with a
-  password or a licence number that joins it must be a separate, `localOnly` seeder. The categories
-  say `requiresLicence: false` and name `BD-07` — do not read that as an answer, and do not copy the
-  pattern of encoding a legal flag in demo data.
+  password or a licence number that joins it must be a separate, `localOnly` seeder. **The
+  `requiresLicence: false` warning here is spent**: `BD-07` is answered and this seeder writes no
+  category at all — see `MEM-2026-09-19-1`. The general half still stands: never encode a legal flag
+  in demo data.
 - **evidence**: `docs/specs/S3/W3-T10-demo-provider-seeder.md` §2;
   `apps/api/tests/seed-live.test.ts`
 - **status**: active
@@ -134,3 +139,38 @@ Keep it to facts that changed how you would work. Task-specific detail stays in 
 - **evidence**: `apps/api/prisma/migrations/0009_provider_base_address_required/`;
   `docs/specs/S3/W3-T02-provider-profile-write.md` §8.1, §8.5
 - **status**: active
+
+### The taxonomy is the vocabulary, and the wire serves leaves only
+
+- **id**: MEM-2026-09-19-1
+- **scope**: slice:S3
+- **fact**: `apps/api/prisma/seed/categories.ts` holds `TAXONOMY` — two family roots (`reformas`,
+  `mantenimiento`) and twenty trades — seeded by `categories.taxonomy` and served by
+  `GET /api/categories` (`modules/categories/`). The wire is **flat and leaves-only**: a root is a
+  real row with real children and is never served, because *a category on the wire is a thing you
+  can pick*. `parentId` is populated and unrendered. Order is **parent position, then position,
+  then slug**. Five trades carry `requiresLicence`; it is a **verification that earns a badge**, and
+  nothing about it may exclude a provider from a search, a listing or a booking.
+- **why**: three traps, each of which cost something.
+  1. **`position` is per sibling set**, so both families start at 1. Sorting the flattened leaves on
+     `position` alone interleaves them — the shipped list was
+     `fontaneria, reforma-integral, albanileria, electricidad, …`, a curated order reduced to a slug
+     tie-break. Spec §3.8 said `ORDER BY position, slug` and was wrong; review caught it, not the
+     tests, because AC9 and AC10 both fed a single family and the live test mirrored the same
+     `ORDER BY` instead of asserting the property.
+  2. **The seeder is a sync, not an insert.** It upserts on `slug`, so editing a name or a position
+     and re-running updates the table — but `isActive` is written on **create only**. In the update
+     half it would un-retire every trade an operator had taken off the wire, and `isActive: false`
+     is the retirement mechanism (`onDelete: Restrict` keeps the `provider_category` history).
+  3. **Registry order is load-bearing** for the first time: `categories.taxonomy` must precede
+     `providers.demo-world`, which resolves slugs it no longer creates.
+- **apply**: a new trade is a row in `TAXONOMY` with a parent **slug** and an explicit
+  `requiresLicence` — never defaulted, never inherited, and **never on a root or a parent**
+  (a licence attaches to the trade performed, not the umbrella above it, so `reforma-integral` is
+  `false`). Slugs are identifiers: they are in URLs, in `W3-T02`'s write-path resolution, in
+  `provider_category` and in four fixed demo uuids, so renaming one is a breaking change while
+  relabelling is free. `urgencias` is **not** a category and never becomes one — see §3.1.
+- **evidence**: `docs/specs/S3/W3-T01-category-tree.md` §3.2/§3.5/§3.8/§8.4;
+  `apps/api/tests/categories{,-seed,-live}.test.ts`; PR #266
+- **status**: active
+

@@ -265,8 +265,13 @@ Keep it to facts that changed how you would work. Task-specific detail stays in 
   is not reachable through the edge at all (`/api/health` is a 404), and the storefront's
   `categories`/`search`/`providers/:id` were rootless too — the edge would have answered each with
   the SPA's `index.html`: a `200` full of HTML that fails as a JSON parse error far from its cause.
-- **why**: nothing catches it locally (the dev proxy forwards `/api` and MSW answers the rest on a
-  wildcard) and nothing catches it in a unit test. It appears only on a deploy.
+- **why**: nothing catches it locally (the dev proxy forwards `/api`, and MSW used to answer the
+  rest on a wildcard) and nothing catches it in a unit test. It appears only on a deploy.
+
+  *(Corrected by `W3-T01` #266, 2026-09-19 — `agent-providers`. The lesson stands; the example changed.)* MSW is gone, so the wildcard
+  safety net is gone with it — a rootless call now fails in **development** too, which makes this
+  trap louder and easier to catch rather than quieter. All three endpoints named below are live and
+  mounted under `/api`.
 - **apply**: every endpoint the browser calls lives under `/api`; `W3-T01`/`W3-T05`/`W3-T07` must
   mount their routes there. Probe the seam with `/api/auth/get-session`, never `/api/health`.
 - **evidence**: `W0-T28` run record §2.1–§2.2; `apps/web/tests/api-proxy.test.ts` AC7
