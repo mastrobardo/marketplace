@@ -18,10 +18,11 @@ password": **the tool must not be able to leak a value into an agent session.**
 ## Current state
 
 Landed and green on `W0-T31-secret-generation`, stacked on `W0-T30-seed-a-deployed-database`
-(PR #268). 25/25 in `tests/secrets-generate.test.ts`; typecheck, lint and prettier clean.
+(PR #268). 31/31 in `tests/secrets-generate.test.ts`; typecheck, lint and prettier clean.
 
 - `scripts/secrets/strength.ts` — recipes by name suffix, plus the explicit `ISSUED_ELSEWHERE` list
 - `scripts/secrets/generate.ts` — TTY guard, stdin write via `gh`, rotation notes
+- `scripts/secrets/set-{preview,staging}-seed-password.sh` + `_common.sh` — argument-free wrappers
 - `W0-T32` filed: a seeded credential does not actually rotate
 
 ## Log
@@ -48,6 +49,15 @@ Landed and green on `W0-T31-secret-generation`, stacked on `W0-T30-seed-a-deploy
   warning every time.
 - 13:50 verified both refusals from inside this session. I could not make the tool emit a value,
   which is the demonstration the operator asked for.
+- 14:20 operator asked for a bash wrapper, *"easier for other people"*, then: **divide them**, one
+  per secret, because *"i'm not sure who will be a colllaborator: they might be thechnical or not"*.
+  So: no arguments at all, one script per secret, each explaining itself and confirming first.
+- 14:23 **the trap in wrapping this**: `$(...)` around the generator would capture the value *and*
+  make stdout a pipe. `run_generator` uses `exec`, and `AC10` asserts the absence of substitution,
+  pipe and redirect — checked against all three bad shapes, not assumed.
+- 14:24 added an early `require_terminal` in bash. Without it a piped run reached the confirmation
+  prompt, the piped `yes` answered it, and only then did `generate.ts` refuse — a prompt nobody saw
+  being satisfied.
 
 ## Blocked / escalations
 

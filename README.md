@@ -352,7 +352,17 @@ for it first.
 | `staging` | `FLY_API_TOKEN`, `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `STAGING_DATABASE_URL`, `STAGING_BETTER_AUTH_SECRET`, `STAGING_SEED_DEMO_PASSWORD` | `OPS-07`, `OPS-08`, `OPS-09` |
 | `production` | `FLY_API_TOKEN`, `PRODUCTION_DATABASE_URL`, `PRODUCTION_BETTER_AUTH_SECRET` | `OPS-07`, `OPS-08` |
 
-Generate a value with the tool rather than inventing one:
+**The short way**, if you just need the two `W0-T30` secrets set. One script per environment, no
+arguments, and each explains itself and asks before it changes anything:
+
+```bash
+./scripts/secrets/set-preview-seed-password.sh
+./scripts/secrets/set-staging-seed-password.sh
+```
+
+They need `gh auth login` first, and they must be run **in a terminal** — see below.
+
+**The long way**, for any other secret:
 
 ```bash
 tsx scripts/secrets/generate.ts --list                               # what it can and cannot make

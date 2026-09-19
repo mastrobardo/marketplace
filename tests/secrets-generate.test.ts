@@ -11,7 +11,7 @@
  * Spec: `docs/specs/S0/W0-T31-secret-generation.md` §5.
  */
 import { describe, expect, it } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -267,5 +267,96 @@ describe('AC9 — argument parsing', () => {
     // The key is omitted rather than set to undefined — `exactOptionalPropertyTypes` is on.
     expect(parseArgs(['--list']).list).toBe(true);
     expect(parseArgs(['--list'])).not.toHaveProperty('name');
+  });
+});
+
+/**
+ * `W0-T31` — the `set-*.sh` wrappers.
+ *
+ * These exist so somebody who does not know what `tsx` is can set a secret. That convenience is
+ * also the risk: a shell script is the easiest place in this repository to accidentally capture a
+ * credential, because `$(...)` is the most natural thing a shell programmer reaches for and it both
+ * captures the value *and* turns stdout into a pipe.
+ *
+ * So these assertions are about what the scripts must **not** contain.
+ */
+describe('AC10 — the shell wrappers cannot capture what they run', () => {
+  const dir = join(root, 'scripts/secrets');
+  const wrappers = ['set-preview-seed-password.sh', 'set-staging-seed-password.sh'];
+
+  function shell(file: string): string {
+    return readFileSync(join(dir, file), 'utf8');
+  }
+
+  it('hands off with exec, never a substitution or a pipe', () => {
+    const common = shell('_common.sh');
+    const handoff =
+      /^\s*exec pnpm exec tsx scripts\/secrets\/generate\.ts "\$secret_name" --write$/m;
+    expect(common, 'run_generator no longer execs the generator').toMatch(handoff);
+
+    // The three shapes that would defeat `generate.ts`'s TTY guard by making stdout a pipe, and
+    // would put the value in a shell variable on the way.
+    const generatorCall = /generate\.ts/;
+    for (const line of common.split('\n')) {
+      if (!generatorCall.test(line) || line.trim().startsWith('#')) continue;
+      expect(line, 'the generator call is inside a command substitution').not.toMatch(/\$\(/);
+      expect(line, 'the generator call is piped').not.toMatch(/\|/);
+      expect(line, 'the generator call is redirected to a file').not.toMatch(/>\s*\S/);
+    }
+  });
+
+  it('checks for a terminal before anything else', () => {
+    for (const file of wrappers) {
+      const source = shell(file);
+      const terminal = source.indexOf('require_terminal');
+      const generator = source.indexOf('run_generator');
+      expect(terminal, `${file} does not require a terminal`).toBeGreaterThan(-1);
+      expect(terminal, `${file} runs the generator before checking for a terminal`).toBeLessThan(
+        generator,
+      );
+    }
+  });
+
+  it('confirms before overwriting, because gh secret set does not', () => {
+    for (const file of wrappers) {
+      const source = shell(file);
+      expect(source.indexOf('confirm '), `${file} overwrites without asking`).toBeGreaterThan(-1);
+      expect(source.indexOf('confirm '), `${file} asks after writing`).toBeLessThan(
+        source.indexOf('run_generator'),
+      );
+    }
+  });
+
+  it('names a secret this tool can actually generate', () => {
+    const generatable = new Set(generatableSecrets());
+    for (const file of wrappers) {
+      const named = [...shell(file).matchAll(/\b([A-Z][A-Z0-9_]{4,})_SEED_DEMO_PASSWORD\b/g)].map(
+        (match) => match[0],
+      );
+      expect(named.length, `${file} names no secret`).toBeGreaterThan(0);
+      for (const name of new Set(named)) {
+        expect(generatable, `${file} names ${name}, which cannot be generated`).toContain(name);
+      }
+    }
+  });
+
+  it('fails on any error rather than limping to the next line', () => {
+    for (const file of [...wrappers, '_common.sh']) {
+      expect(shell(file), `${file} does not set -euo pipefail`).toMatch(/set -euo pipefail/);
+    }
+  });
+
+  it('is executable, and the sourced helper is not', () => {
+    for (const file of wrappers) {
+      // eslint-disable-next-line no-bitwise
+      expect(statSync(join(dir, file)).mode & 0o111, `${file} is not executable`).toBeGreaterThan(
+        0,
+      );
+    }
+    // eslint-disable-next-line no-bitwise
+    expect(
+      statSync(join(dir, '_common.sh')).mode & 0o111,
+      '_common.sh should be sourced, not run',
+    ).toBe(0);
   });
 });

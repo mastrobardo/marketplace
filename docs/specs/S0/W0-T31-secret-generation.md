@@ -103,6 +103,43 @@ everyone out of that environment as soon as the app restarts.
 **This is a gap in `W0-T30`, not a property of this ticket**, and §7 files it rather than fixing it
 here.
 
+### 3.5 The `set-*.sh` wrappers, and why they take no arguments
+
+`generate.ts` is a developer tool: it assumes you know what `tsx` is and which secret you want.
+Setting up an environment may fall to somebody who knows neither — the operator's reason, 2026-09-19:
+*"i'm not sure who will be a colllaborator: they might be thechnical or not"*.
+
+So there is one script **per secret**, named after what it does, taking **no arguments**:
+
+```bash
+./scripts/secrets/set-preview-seed-password.sh
+./scripts/secrets/set-staging-seed-password.sh
+```
+
+Nothing to get wrong, and nothing to look up. A single script with an `--env` flag would be less
+code and more to explain; two files that each do one obvious thing is the trade this makes, and
+`_common.sh` holds the parts that would otherwise be copied.
+
+Each one: checks it is in a terminal, checks `gh` is installed and signed in, checks dependencies
+exist, explains in plain language what is about to happen and what the accounts are for, and
+**asks for confirmation** — `gh secret set` overwrites an existing secret silently, and that is not
+a thing to discover afterwards.
+
+**These are the repository's first `.sh` files**; everything else in `scripts/` is TypeScript. The
+break is deliberate and narrow: this is the one place where the audience may not have a toolchain
+opinion, and `./script.sh` is the lowest-friction thing that exists.
+
+#### The one rule these scripts must not break
+
+`run_generator` uses `exec`. **Not** `$(...)`, not a pipe, not a redirect — each of which would
+capture the child's stdout, which is the secret, *and* would make stdout a pipe so `generate.ts`
+would refuse anyway. Command substitution is the most natural thing a shell programmer reaches for,
+so `AC10` asserts its absence rather than trusting a comment.
+
+They also check for a terminal **themselves**, before the preflight and the prompt. `generate.ts`
+would refuse regardless, but being told after answering a confirmation is a confusing place to
+learn it — and a piped `yes` would otherwise answer a prompt nobody saw.
+
 ## 4. What does not change
 
 - `agents/policies/human-boundaries.md`. This tool does not relax the rule; it is built so the rule
@@ -132,10 +169,16 @@ here.
 - **AC8** — The rotation note for a `*_SEED_DEMO_PASSWORD` says rotation is **not** immediate and
   names the ledger; the note for a `*_BETTER_AUTH_SECRET` says it is.
 - **AC9** — `--env value` and `--env=value` both parse; `--list` needs no name.
+- **AC10** — The `set-*.sh` wrappers hand off with `exec` and contain no command substitution,
+  pipe or redirect around the generator call; they require a terminal before running it; they
+  confirm before it; each names a secret that is actually generatable; all set `-euo pipefail`; the
+  wrappers are executable and `_common.sh` is not.
 
 ## 6. For the operator
 
 ```bash
+./scripts/secrets/set-preview-seed-password.sh                       # the short way, no arguments
+./scripts/secrets/set-staging-seed-password.sh
 tsx scripts/secrets/generate.ts --list                               # what it can and cannot make
 tsx scripts/secrets/generate.ts PREVIEW_SEED_DEMO_PASSWORD           # prints it, to paste
 tsx scripts/secrets/generate.ts PREVIEW_SEED_DEMO_PASSWORD --write   # sets it, never shows it
