@@ -230,14 +230,22 @@ jobs:
       - name: Build the web app
         run: pnpm turbo run build --filter=@marketplace/web
         env:
-          # Keep the MSW handlers in this build. ADR-011 §4 — "the storefront does not wait for its
-          # endpoints" — is only true if the *deployed* storefront has them, and `W12-T09` reached a
-          # preview with neither: `stripMocks` had removed the mocks, and `VITE_API_URL` points at a
-          # real API that has no `GET /categories` yet (`W3-T01`). `onUnhandledRequest` is `'bypass'`,
-          # so this intercepts only what does not exist and passes everything real through.
-          # Drop endpoints from `mocks/handlers.ts` as `W3` lands; remove this line when it is empty.
-          # `release-production.yml` deliberately does **not** set it.
-          VITE_ENABLE_MOCKS: 'true'
+          # No mocks flag, and no mocks: `W3-T01` shipped `GET /api/categories` — the last endpoint
+          # the storefront did not have — and deleted MSW whole. `VITE_API_ORIGIN` below points the
+          # edge at the real API.
+          #
+          # ⚠ That API answers `200 {"items": []}` here, and it is expected. **Nothing seeds this
+          # database**: this job runs `db:migrate:deploy` and no `db:seed`, and the preview DB is
+          # branched from `sanitised-staging`, which is not seeded either. A manual run is refused
+          # as the registry stands — `assertSafeTarget` rejects the *whole* run while
+          # `auth.demo-users` is `localOnly` (`apps/api/prisma/seed/run.ts`), so
+          # `categories.taxonomy` not being `localOnly` gets it past its own gate and no further.
+          #
+          # So the preview storefront renders its **empty** category grid and facet rail.
+          # `shared/categories.ts` degrades to `[]` rather than throwing, so this is a quiet empty
+          # state and not the 500 page. Operator decision, 2026-09-18: *"For now, empty categories.
+          # Seed will come with /categories api."* Do not reintroduce a mock to paper over it — a
+          # fixture in front of a real, empty endpoint is the facade `W3-T01` removed.
           # `W0-T28`. **Not `VITE_API_URL`** — that pointed the browser straight at Fly, which is a
           # different registrable domain from `*.pages.dev`, so every call was cross-origin and the
           # `SameSite=Lax` session cookie was never sent. `baseUrl()` now returns `/` and this names

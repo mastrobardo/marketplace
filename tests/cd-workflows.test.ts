@@ -794,6 +794,30 @@ describe('the image knows about every workspace package', () => {
  * credentials, same rule about reading the URL back. ADR-012 §6 calls it "a new Pages *project*,
  * not a fifth service", and these assertions are what keep that sentence true.
  */
+/**
+ * `W3-T01` — the preview deploy stops carrying a mocked API.
+ *
+ * The flag was set here because `stripMocks` removed the handlers from every production-mode build
+ * while `VITE_API_URL` pointed preview at a real API that had no `GET /categories` — a deployed
+ * storefront with neither. That endpoint is real now, `W0-T28` routes `/api/*` to it through one
+ * origin, and `categories.taxonomy` is deliberately not `localOnly`, so a preview database holds
+ * the real taxonomy. The stand-in has nothing left to stand in for.
+ */
+describe('W3-T01 — the preview storefront talks to the real API, not to MSW', () => {
+  it('sets no mocks flag on the web build', () => {
+    expect(
+      code(PREVIEW),
+      'the preview build still asks for handlers that no longer exist',
+    ).not.toContain('VITE_ENABLE_MOCKS');
+  });
+
+  it('still names the origin the edge forwards /api/* to', () => {
+    // The half that must survive: without this the browser calls `/api/*` on the Pages host and
+    // the edge has nowhere to send it.
+    expect(code(PREVIEW)).toContain('VITE_API_ORIGIN');
+  });
+});
+
 describe('AC35 — the workbench is deployed beside the app, not instead of it', () => {
   it('builds the static workbench and deploys it to its own project', () => {
     const preview = code(PREVIEW);
@@ -929,15 +953,20 @@ describe('W12-T16 — nightly visual regression', () => {
     expect(all['report']?.permissions).toMatchObject({ contents: 'read', issues: 'write' });
   });
 
-  it('AC13 — the storefront is a real build behind a preview server, with mocks on', () => {
+  it('AC13 — the storefront is a real build behind a preview server, with no mocks at all', () => {
     const code_ = code(NIGHTLY);
 
     // A dev server is a different application: no minification, no stripping, and `stripMocks`
     // never runs. The a11y pass has to see what a visitor sees.
     expect(code_).toContain('vite preview');
-    expect(code_, 'without mocks every page renders its degraded shape').toContain(
-      "VITE_ENABLE_MOCKS: 'true'",
-    );
+    /**
+     * `W3-T01` deleted MSW whole, so there is no flag to set and the storefront this shoots has no
+     * API behind it: the category grid and the facet rail render their **empty** states. That is
+     * now the intended subject — the degraded shape is a real shape a visitor can reach, and the
+     * baselines were regenerated against it. A flag here would reference a build input that no
+     * longer exists.
+     */
+    expect(code_, 'VITE_ENABLE_MOCKS no longer exists').not.toContain('VITE_ENABLE_MOCKS');
     expect(code_, 'the 500 page has no URL without this').toContain(
       "VITE_ENABLE_FAULT_ROUTES: 'true'",
     );
@@ -1163,9 +1192,9 @@ describe('W12-T20 — regenerating the route baselines', () => {
     // no `stripMocks`, no `stripFaults`. The baseline has to come from the build the nightly will
     // compare against, or every comparison is between two different things.
     expect(code_).toContain('vite preview');
-    expect(code_, 'without mocks the pages are shot in their degraded shape').toContain(
-      "VITE_ENABLE_MOCKS: 'true'",
-    );
+    // `W3-T01`: MSW is gone, so the baselines and the nightly must be shot from the *same* build
+    // input — neither sets a mocks flag, and both therefore capture the same empty states.
+    expect(code_, 'VITE_ENABLE_MOCKS no longer exists').not.toContain('VITE_ENABLE_MOCKS');
     expect(code_, 'the 500 page has no URL without this').toContain(
       "VITE_ENABLE_FAULT_ROUTES: 'true'",
     );

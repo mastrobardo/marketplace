@@ -61,14 +61,20 @@ jobs:
         run: pnpm turbo run build --filter=@marketplace/ui
       - run: pnpm --filter @marketplace/ui build:storybook
 
-      # VITE_ENABLE_MOCKS, because `GET /categories` is still `W3-T01` and without it every page
-      # renders its degraded shape — the axe pass would then cover the empty variant of each one.
+      # `VITE_ENABLE_MOCKS` is gone with MSW (`W3-T01`): `GET /api/categories` is real, and this
+      # `vite preview` has no API behind it, so every page renders its degraded shape and the axe
+      # pass covers the empty variant of each one. That is a real state a visitor reaches when the
+      # API is down, and it is the deliberate trade rather than an accident.
+      #
+      # ⚠ The committed route baselines predate this and were shot with a populated category grid.
+      # The first run after `W3-T01` merges WILL diff on `route-es.png` and `route-en.png` until
+      # `visual-baselines.yml` is re-run. That is expected once, and is not a regression.
+      #
       # VITE_ENABLE_FAULT_ROUTES, because `W12-T09` correctly made the 500 page unreachable and this
       # is the only build in which it has a URL (spec §10 Q1).
       - name: Build the storefront
         run: pnpm turbo run build --filter=@marketplace/web
         env:
-          VITE_ENABLE_MOCKS: 'true'
           VITE_ENABLE_FAULT_ROUTES: 'true'
 
       - name: Serve the storefront

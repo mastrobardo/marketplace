@@ -17,23 +17,18 @@ if (container === null) throw new Error('No #root element in index.html');
 // corrects itself is worse than one that appears a frame later.
 await setupI18n();
 
-// The MSW handlers live outside `src/` on purpose — they import the `packages/testing` factories,
-// which `W1-T09`'s gate forbids any production module from touching.
-//
-// `VITE_ENABLE_MOCKS` is what makes a preview deploy reviewable. ADR-011 §4 says the storefront does
-// not wait for its endpoints — but `W12-T08`'s `stripMocks` plugin removed them from *every*
-// production-mode build, preview included, while `VITE_API_URL` pointed preview at a real API that
-// has none of them yet. The result was a deployed storefront with neither. `onUnhandledRequest` is
-// `'bypass'`, so with this on, MSW answers only the endpoints that do not exist and everything real
-// goes straight through to the API.
-//
-// It is never set for the production release, so factory data cannot ship — `W12-T08` AC17 asserts
-// that against the built bundle, and AC19 asserts the flag actually works.
-if (import.meta.env.DEV || import.meta.env['VITE_ENABLE_MOCKS'] === 'true') {
-  const { startMocks } = await import('../mocks/browser.js');
-  await startMocks();
-}
-
+/**
+ * **There is no mock layer any more** — `W3-T01`.
+ *
+ * `GET /categories` was the last endpoint the storefront did not have, and this file used to start
+ * an MSW worker so a dev server and a preview deploy had something to answer it. All three of the
+ * storefront's endpoints are real now, `W0-T28` routes `/api/*` to the API through one origin, and
+ * `shared/categories.ts` degrades to an empty list if a call fails — so a missing endpoint is a
+ * quiet empty grid rather than the 500 page, which is the rule `W12-T09` learned the expensive way.
+ *
+ * `tests/mocks.test.ts` asserts the absence in both directions: nothing named `mocks/` survives, and
+ * no build carries msw even with the old `VITE_ENABLE_MOCKS` flag set.
+ */
 createRoot(container).render(
   <StrictMode>
     <App />

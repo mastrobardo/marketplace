@@ -10,9 +10,9 @@ import { type SearchQuery } from '@marketplace/ui';
 import { App } from '../src/app/App.js';
 import { ApiError, type ApiClient } from '../src/shared/api.js';
 import { type SessionUser } from '../src/shared/session.js';
-import { buildCatalogue } from '../../../apps/web/mocks/catalogue.js';
-import { searchCatalogue } from '../../../apps/web/mocks/search.js';
-import { profileFromCatalogue, seededProviderIds } from '../../../apps/web/mocks/provider.js';
+import { buildCatalogue } from './fixtures/catalogue.js';
+import { searchCatalogue } from './fixtures/search.js';
+import { profileFromCatalogue, seededProviderIds } from './fixtures/provider.js';
 
 /**
  * Render the real `App` at a path, with the API stubbed.
@@ -39,8 +39,8 @@ export function categoriesFor(locale: string): CategorySummary[] {
  * A stub that decided for itself which providers match, in what order, with what facet counts,
  * would be a second definition of the mock's behaviour — and a component test that disagrees with
  * the dev server teaches the page something the dev server does not do. `W12-T08` established one
- * source of test *data*; `W12-T11` extracted `mocks/search.ts` so there is one source of the logic
- * over it too.
+ * source of test *data*; `W12-T11` extracted the search logic so there is one source of that too.
+ * Both moved to `tests/fixtures/` with `W3-T01`, when the handlers they used to share went.
  */
 export function searchFor(
   query: Parameters<typeof searchCatalogue>[0],

@@ -6,36 +6,35 @@
 // from `packages/testing` rather than from a second fixture set (ADR-011 §4, `W1-T09`). The second
 // is that none of it reaches production, which is a claim about a build and is therefore checked
 // against one.
-import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ID_PREFIXES } from '@marketplace/testing';
-import { CategoryListSchema } from '@marketplace/contracts';
-import { setupServer } from 'msw/node';
-import { buildCatalogue } from '../mocks/catalogue.js';
-import { handlers } from '../mocks/handlers.js';
+import { CategorySummarySchema } from '@marketplace/contracts';
+import { buildCatalogue } from './fixtures/catalogue.js';
 
 const webRoot = fileURLToPath(new URL('..', import.meta.url));
 
-const server = setupServer(...handlers);
-beforeAll(() => {
-  server.listen({ onUnhandledRequest: 'error' });
-});
-afterEach(() => {
-  server.resetHandlers();
-});
-afterAll(() => {
-  server.close();
-});
+/** `W3-T01` AC22/AC23: the mock world moved here, and the MSW server it fed is gone. */
+const fixtures = join(webRoot, 'tests', 'fixtures');
+const mocks = join(webRoot, 'mocks');
 
-const categories = async (locale = 'es') => {
-  const response = await fetch('http://api.test/categories', {
-    headers: { 'accept-language': locale },
-  });
-  return { status: response.status, body: (await response.json()) as unknown };
-};
+const exists = (path: string): boolean => existsSync(path);
+
+/**
+ * A file's source with its comments removed.
+ *
+ * The assertions below are about **code**, not about whether a word appears — and the files that
+ * deleted MSW explain why they no longer start a worker, which a raw grep cannot tell from the
+ * worker itself. `tests/cd-workflows.test.ts` strips `#` comments for the same reason.
+ */
+function code(path: string): string {
+  return readFileSync(path, 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/(^|\s)\/\/.*$/gm, '');
+}
 
 describe('AC13 — every row came from a factory', () => {
   it('carries the per-entity id prefix a hand-written row could not forge', () => {
@@ -69,11 +68,11 @@ describe('AC13 — every row came from a factory', () => {
 
 /**
  * `W3-T10` deleted the search and provider handlers: `GET /api/search` and `GET /api/providers/:id`
- * are real, and a demo seeder now fills the database they read. What is left of `handlers.ts` is
- * `GET /categories`, which `W3-T01` owns and which `BD-07` blocks.
+ * are real, and a demo seeder now fills the database they read. `W3-T01` deletes the last one —
+ * `GET /categories` is a real endpoint, so this directory has no handlers left.
  *
- * AC14–AC16 were `W12-T08`'s criteria *about the contract*, asserted through the handler that went.
- * They are not dropped — they are re-homed on the real endpoints, and
+ * AC14–AC16 were `W12-T08`'s criteria *about the contract*, asserted through the handlers that
+ * went. They are not dropped — they are re-homed on the real endpoints, and
  * `docs/specs/S3/W3-T10-demo-provider-seeder.md` §3.1 is the mapping:
  *
  *   AC14  a search body satisfies SearchResponseSchema  → apps/api/tests/seed-live.test.ts
@@ -88,60 +87,154 @@ describe('AC13 — every row came from a factory', () => {
  *   AC12  an unseeded uuid is a NOT_FOUND envelope       → apps/api/tests/provider{,-live}.test.ts
  *   AC13  a malformed id is VALIDATION_FAILED, not 404   → apps/api/tests/provider.test.ts
  *
- * AC11 is the one that was worth having — it checks that the two endpoints agree with each other,
- * which is the failure that reaches a visitor as a working list of links to nothing. It is now
- * asserted over the seeded world, where the two endpoints are the real ones.
+ * And the category handler's own two, which `W3-T01` re-homes the same way:
+ *
+ *   a list the contract accepts     → apps/api/tests/categories.test.ts AC1
+ *   answers in the language asked   → apps/api/tests/categories{,-live}.test.ts AC5–AC7
  */
-describe('the one handler left answers the contract', () => {
-  it('serves a category list the contract accepts', async () => {
-    const { status, body } = await categories();
-    expect(status).toBe(200);
-
-    const parsed = CategoryListSchema.safeParse(body);
-    expect(
-      parsed.success ? [] : parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`),
-    ).toEqual([]);
+describe('W3-T01 AC22 — MSW is gone from the storefront, whole', () => {
+  it('leaves no mocks directory behind', () => {
+    // Operator decision, 2026-09-18: *"I would delete MSW as a whole for now."* `GET /categories`
+    // was the last endpoint that did not exist; `W3-T01` makes it real, and with it the reason the
+    // storefront carried a second, parallel definition of its own API.
+    for (const file of ['handlers.ts', 'browser.ts', 'catalogue.ts', 'search.ts', 'provider.ts']) {
+      expect(exists(join(mocks, file)), `apps/web/mocks/${file} survives`).toBe(false);
+    }
+    expect(exists(mocks), 'apps/web/mocks/ survives the deletion of everything in it').toBe(false);
   });
 
-  it('answers in the language the request asked for', async () => {
-    const es = CategoryListSchema.parse((await categories('es')).body);
-    const en = CategoryListSchema.parse((await categories('en')).body);
-
-    expect(es.items.map((item) => item.slug)).toEqual(en.items.map((item) => item.slug));
-    expect(es.items.map((item) => item.name)).not.toEqual(en.items.map((item) => item.name));
+  it('is not started by the entry point any more', () => {
+    const main = code(join(webRoot, 'src', 'main.tsx'));
+    expect(main, 'main.tsx still imports a worker that no longer exists').not.toMatch(/mocks\//);
+    expect(main, 'main.tsx still calls startMocks').not.toContain('startMocks');
   });
 
-  it('is the only handler, now that search and providers are real', async () => {
-    // `onUnhandledRequest: 'error'` in this file's server: a request no handler claims throws
-    // rather than falling through, so this asserts the deletion rather than trusting it.
-    expect(handlers).toHaveLength(1);
-    await expect(fetch('http://api.test/search?where=28013')).rejects.toThrow();
+  it('needs no build-time stub, because there is nothing to strip', () => {
+    // `stripMocks` existed because `src/main.tsx`'s guarded dynamic import was not enough on its
+    // own — Rollup resolved it while building the module graph and emitted 511 KB of MSW anyway.
+    // With no import there is no graph edge, and the plugin is a stub for a module that is absent.
+    const vite = code(join(webRoot, 'vite.config.ts'));
+    expect(vite, 'vite.config.ts still stubs the MSW entry point').not.toContain('stripMocks');
+    expect(vite, 'vite.config.ts still resolves mocks/browser').not.toMatch(/mocks\/browser/);
+  });
+
+  it('ships no vendored service worker, which the bundle greps cannot see', () => {
+    /**
+     * `public/` is copied verbatim into `dist/` — it is never part of the module graph, so neither
+     * `stripMocks` nor the `setupWorker` grep below could ever have caught it. MSW's vendored
+     * worker is 9.4 KB, contains neither the string `setupWorker` nor its own filename, and was
+     * still being deployed after the handlers were deleted. Worse, the `msw` devDependency that
+     * regenerates it is gone, so it was an orphan nobody could refresh. Found in review.
+     */
+    expect(exists(join(webRoot, 'public', 'mockServiceWorker.js')), 'the MSW worker ships').toBe(
+      false,
+    );
+    const distWorker = join(webRoot, 'dist', 'mockServiceWorker.js');
+    expect(exists(distWorker), 'a stale build still carries the worker; rebuild dist/').toBe(false);
+  });
+
+  it('leaves no VITE_ENABLE_MOCKS anywhere in the web app', () => {
+    // The flag's whole job was to give a *deployed* storefront the endpoints it did not have. With
+    // `W0-T28`'s one origin pointing preview at a real API, and `categories.taxonomy` deliberately
+    // not `localOnly` (§8.4), a preview database holds the real tree — so preview needs no mock.
+    for (const file of ['src/main.tsx', 'vite.config.ts', 'package.json']) {
+      expect(code(join(webRoot, file)), `${file} still reads the flag`).not.toContain(
+        'VITE_ENABLE_MOCKS',
+      );
+    }
+  });
+});
+
+describe('W3-T01 AC23 — the mock world moved to tests/fixtures', () => {
+  it('holds the three files the component harness stubs ApiClient from', () => {
+    // They survive the deletion of their handlers with one caller left: `tests/app-harness.tsx`.
+    // `W12-T11` split them out so the stub and the handler could not disagree, and the operator
+    // reaffirmed on 2026-09-18 that they move rather than go.
+    for (const file of ['catalogue.ts', 'search.ts', 'provider.ts']) {
+      expect(exists(join(fixtures, file)), `tests/fixtures/${file} is missing`).toBe(true);
+      expect(exists(join(mocks, file)), `mocks/${file} was copied rather than moved`).toBe(false);
+    }
+  });
+
+  it('is imported from its new home by the harness, not by a path that no longer exists', () => {
+    const harness = readFileSync(join(webRoot, 'tests', 'app-harness.tsx'), 'utf8');
+    expect(harness, 'app-harness.tsx still reaches into mocks/').not.toMatch(/mocks\//);
+    for (const file of ['catalogue', 'search', 'provider']) {
+      expect(harness, `app-harness.tsx does not import ${file} from fixtures`).toMatch(
+        new RegExp(`fixtures/${file}\\.js`),
+      );
+    }
+  });
+
+  it('still answers the frozen contract, which is why the fixture was worth keeping', () => {
+    // The handler validated its own output against `packages/contracts`; that check moves onto the
+    // fixture itself, so a drift fails here rather than teaching a component test a shape the API
+    // will never send.
+    const catalogue = buildCatalogue();
+    expect(catalogue.categories.length).toBeGreaterThan(0);
+
+    for (const category of catalogue.categories) {
+      const parsed = CategorySummarySchema.safeParse({
+        slug: category.slug,
+        name: category.nameEs,
+        requiresLicence: category.requiresLicence,
+      });
+      expect(
+        parsed.success ? [] : parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`),
+        `${category.slug} drifted from CategorySummarySchema`,
+      ).toEqual([]);
+    }
+  });
+
+  it('keeps electricidad gated, so the licence badge stays exercised', () => {
+    // §8.6: independent of what the real taxonomy says, this row is what keeps the storefront's
+    // badge under test in the component suites.
+    const electricidad = buildCatalogue().categories.find((c) => c.slug === 'electricidad');
+    expect(electricidad?.requiresLicence).toBe(true);
   });
 });
 
 describe('AC17..AC18 — none of this ships, and all of it is typechecked', () => {
-  it('AC18 — the mocks are inside the tsconfig include', () => {
+  it('AC23 — the moved fixtures are typechecked, and the lint fixtures still are not', () => {
     const tsconfig = JSON.parse(readFileSync(join(webRoot, 'tsconfig.json'), 'utf8')) as {
       include: string[];
+      exclude: string[];
     };
-    expect(tsconfig.include, 'mocks/** is not typechecked').toContain('mocks/**/*.ts');
+
+    expect(tsconfig.include, 'tests/** is not typechecked').toContain('tests/**/*.ts');
+
+    /**
+     * `tests/fixtures` was excluded wholesale, because it held the three *deliberately broken*
+     * i18n-lint fixture projects. The mock world now lives in the same directory and must be
+     * typechecked — `app-harness.tsx` imports it — so the exclude is narrowed to those three
+     * subdirectories rather than the parent.
+     */
+    expect(tsconfig.exclude, 'tests/fixtures is still excluded wholesale').not.toContain(
+      'tests/fixtures',
+    );
+    for (const broken of ['incomplete-catalogue', 'unknown-key', 'valid']) {
+      expect(
+        tsconfig.exclude,
+        `tests/fixtures/${broken} is a lint fixture and must stay out of the program`,
+      ).toContain(`tests/fixtures/${broken}`);
+    }
   });
 
-  it('AC18 — msw and the factories are devDependencies, never runtime ones', () => {
+  it('AC18 — the factories are a devDependency, and msw is no longer a dependency at all', () => {
     const manifest = JSON.parse(readFileSync(join(webRoot, 'package.json'), 'utf8')) as {
       dependencies?: Record<string, string>;
       devDependencies?: Record<string, string>;
+      msw?: unknown;
     };
-    for (const testOnly of ['msw', '@marketplace/testing']) {
-      expect(
-        manifest.devDependencies?.[testOnly],
-        `${testOnly} is not a devDependency`,
-      ).toBeDefined();
-      expect(
-        manifest.dependencies?.[testOnly],
-        `${testOnly} is a runtime dependency`,
-      ).toBeUndefined();
-    }
+
+    // The factories stay: `tests/fixtures/` builds the component harness's world from them.
+    expect(manifest.devDependencies?.['@marketplace/testing']).toBeDefined();
+    expect(manifest.dependencies?.['@marketplace/testing']).toBeUndefined();
+
+    // msw goes with the handlers it served, including the `"msw": { … }` worker-directory block.
+    expect(manifest.devDependencies?.['msw'], 'msw is still installed').toBeUndefined();
+    expect(manifest.dependencies?.['msw'], 'msw is a runtime dependency').toBeUndefined();
+    expect(manifest.msw, 'the msw worker-directory config survives').toBeUndefined();
   });
 
   /** Every emitted JS chunk, by path — what "its own chunk" is a claim about. */
@@ -226,20 +319,25 @@ describe('AC17..AC18 — none of this ships, and all of it is typechecked', () =
   });
 
   /**
-   * The other half, and the reason it exists: AC17 alone passes just as happily when the flag is
-   * broken and the mocks are *never* included. That is how `W12-T09` reached a preview deploy with
-   * neither a real `GET /categories` nor a mocked one — an absence nobody was asserting.
+   * `W12-T09`'s AC19 stood here: *with `VITE_ENABLE_MOCKS=true`, the worker and the seeded catalogue
+   * **are** in the bundle*. It was the necessary other half of AC17 — AC17 alone passes just as
+   * happily when the flag is broken and the mocks are never included, which is how `W12-T09`
+   * reached a preview deploy with neither a real `GET /categories` nor a mocked one.
+   *
+   * **`W3-T01` retires it, because the absence it guarded against is now the intended state.**
+   * There is no flag, no worker and no handler: the endpoint is real, `W0-T28` points preview at
+   * it through one origin, and `categories.taxonomy` is deliberately not `localOnly` so a preview
+   * database holds the real tree. A test asserting the mocks are bundled would now be asserting
+   * that a deleted directory still ships.
+   *
+   * What replaces it is the same shape pointed the other way: the flag must be gone *everywhere*,
+   * not merely unset — an env var still read by a build is a mock waiting to come back.
    */
-  it('AC19 — VITE_ENABLE_MOCKS=true keeps them in the bundle', { timeout: 180_000 }, () => {
-    const sources = bundledSources({ VITE_ENABLE_MOCKS: 'true' });
-    expect(
-      sources.some((source) => /setupWorker/.test(source)),
-      'the preview build has no MSW worker, so a deployed storefront has no endpoints',
-    ).toBe(true);
-    expect(
-      sources.some((source) => source.includes('Fontanería Gómez')),
-      'the handlers are bundled but the seeded catalogue is not',
-    ).toBe(true);
+  it('W3-T01 — no build carries msw, with or without the old flag', { timeout: 180_000 }, () => {
+    for (const source of bundledSources({ VITE_ENABLE_MOCKS: 'true' })) {
+      expect(source, 'a chunk bundles msw').not.toMatch(/setupWorker|mockServiceWorker\.js/);
+      expect(source, 'a chunk contains a seeded provider').not.toContain('Fontanería Gómez');
+    }
   });
 
   /**
