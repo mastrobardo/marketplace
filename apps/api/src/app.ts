@@ -18,6 +18,8 @@ import { type CategoryRepository } from './modules/categories/repository.js';
 import { providerRoutes } from './modules/providers/routes.js';
 import { jobRoutes } from './modules/jobs/routes.js';
 import { type JobRepository } from './modules/jobs/repository.js';
+import { quoteRoutes } from './modules/quotes/routes.js';
+import { type QuoteRepository } from './modules/quotes/repository.js';
 import { type ProviderRepository } from './modules/providers/repository.js';
 import {
   type ProviderOwnRepository,
@@ -77,6 +79,7 @@ export interface BuildAppOptions {
    * there is no public half to fall back to, unlike `providers`.
    */
   jobs?: JobRepository;
+  quotes?: QuoteRepository;
   /** The Prisma client the session guard reads liveness from — `W2-T03` §3.3. */
   prisma?: ProviderLivenessClient;
 }
@@ -121,6 +124,7 @@ export function buildApp({
   providerOwn,
   providerWriter,
   jobs,
+  quotes,
   prisma,
 }: BuildAppOptions): FastifyInstance {
   const app = Fastify({
@@ -215,6 +219,17 @@ export function buildApp({
     app.register(
       jobRoutes({
         repository: jobs,
+        guards: buildGuards({ resolveSession: buildSessionResolver({ auth, prisma }) }),
+      }),
+      { prefix: '/api' },
+    );
+  }
+
+  /** `W4-T03` — quotes. Same fail-closed shape as `jobs`: no principal, no routes. */
+  if (quotes !== undefined && auth !== undefined && prisma !== undefined) {
+    app.register(
+      quoteRoutes({
+        repository: quotes,
         guards: buildGuards({ resolveSession: buildSessionResolver({ auth, prisma }) }),
       }),
       { prefix: '/api' },

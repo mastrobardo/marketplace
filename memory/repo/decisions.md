@@ -370,3 +370,33 @@ this file records the *why* an agent would otherwise have to rediscover.
 - **evidence**: operator, 2026-09-20; `TODO.md` `W0-T32`; `W0-T31` spec §3.4;
   `scripts/secrets/generate.ts` `rotationNote`
 - **status**: active
+
+### The platform states the facts and lets people choose — it does not enforce
+
+- **id**: MEM-2026-09-20-20
+- **scope**: repo
+- **fact**: Where this product could either **block** a user or **tell them something and let them
+  decide**, it tells them. Four decisions, four tickets, one rule:
+  - `W4-T01` — one required field to publish. *"I dont want to policy the users."*
+  - `W3-T01` §3.5.2 — a licence flag marks a verification, **never** an exclusion.
+  - ADR-013 — disintermediation is priced and attested, not policed; the platform does not enforce
+    the parties' invoicing.
+  - `W4-T03` — no category gate on who may quote; the gap between what a job needs and what a
+    provider lists is **shown** instead. Operator: *"i might not be verified as an electrician, but
+    given my rates and past jobs recorded is up to the client to pick me or not. Nothing enforces,
+    but stated clearly."*
+- **why**: every one of those gates would also block the legitimate case — the plumber who brings an
+  electrician, the client who knows what they want without filling in a form, the two people who
+  settle in cash. A rule that stops the bad case by stopping the good one is a rule that makes the
+  product worse at its job. What is left, and what makes it work, is that the platform must then
+  **say the true thing plainly**: an unenforced gap that is also hidden is not this principle, it is
+  negligence.
+- **apply**: when a ticket reaches "should we block X", the answer here is usually "show it".
+  Reach for enforcement only where the harm is irreversible or somebody else's — money leaving,
+  a safety claim nobody can check, a person being misled about who they are dealing with. And
+  whenever you choose to show rather than block, **check that the thing you are showing is true
+  today**: `W4-T03` nearly shipped a `verified` field that nothing in the schema could populate,
+  which would have been the appearance of this principle without the substance.
+- **evidence**: `docs/specs/S4/W4-T03-quote-submission.md` §2.2, §2.3;
+  `docs/adr/ADR-013-engagement-reconciliation.md` §4.1; `W3-T01` §3.5.2; `W4-T01` §1.1
+- **status**: active

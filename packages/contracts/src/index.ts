@@ -10,5 +10,6 @@ export * from './job.js';
 export * from './money.js';
 export * from './pagination.js';
 export * from './provider.js';
+export * from './quote.js';
 export * from './search.js';
 export * from './state-machine.js';

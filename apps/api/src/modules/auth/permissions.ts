@@ -57,6 +57,24 @@ export const PERMISSIONS = {
   'job:update-own': ['CLIENT'],
   'job:publish-own': ['CLIENT'],
   'job:cancel-own': ['CLIENT'],
+
+  /**
+   * `W4-T03`. **Three for the provider, one for the client, and the split is the point.**
+   *
+   * A client reading the quotes on their own job and a provider reading their own quotes are not
+   * the same capability. One permission covering both would make *"can a provider see a
+   * competitor's price?"* a question about a `WHERE` clause somewhere, rather than a question a
+   * reader can answer from this file.
+   *
+   * `quote:create` is `PROVIDER` because quoting is a professional capacity — and, unlike the job
+   * permissions above, the role is not enough on its own: the repository also requires a
+   * `ProviderProfile`, since a quote is written *by a profile*, which is what carries the rating
+   * and the rate a client weighs it by.
+   */
+  'quote:create': ['PROVIDER'],
+  'quote:read-own': ['PROVIDER'],
+  'quote:withdraw-own': ['PROVIDER'],
+  'quote:read-for-own-job': ['CLIENT'],
 } as const satisfies PermissionMatrix;
 
 export type Permission = keyof typeof PERMISSIONS;
