@@ -145,19 +145,39 @@ describe('AC4 — captured output aborts before anything is generated', () => {
   });
 });
 
-describe('AC5 — --write prints no value', () => {
-  it('has no console call carrying the value in the write branch', () => {
+describe('AC5 — what --write shows depends on who needs to read it', () => {
+  // The bug this replaces: `--write` hid *every* value, including the demo-account password whose
+  // entire purpose is for QA to sign in with it. A credential nobody knows does not make staging
+  // safer, it makes it unusable. The TTY guard is what makes showing it safe — a TTY is a person.
+  it('classifies a signing key as nobody-reads-it and a demo password as human-readable', () => {
+    expect(recipeFor('STAGING_BETTER_AUTH_SECRET')?.audience).toBe('nobody');
+    expect(recipeFor('PREVIEW_BETTER_AUTH_SECRET')?.audience).toBe('nobody');
+    expect(recipeFor('STAGING_SEED_DEMO_PASSWORD')?.audience).toBe('humans');
+    expect(recipeFor('PREVIEW_SEED_DEMO_PASSWORD')?.audience).toBe('humans');
+  });
+
+  it('gives every generatable secret an audience, so a new one has to decide', () => {
+    for (const name of generatableSecrets()) {
+      expect(['nobody', 'humans'], `${name} has no audience`).toContain(recipeFor(name)?.audience);
+    }
+  });
+
+  it('prints the value only on the humans branch of --write', () => {
     const source = readFileSync(join(root, 'scripts/secrets/generate.ts'), 'utf8');
     const write = source.slice(
       source.indexOf('if (options.write)'),
       source.indexOf('console.log(`\\n${name}  ('),
     );
-    expect(write, 'the write branch mentions the value').not.toMatch(
-      /console\.log\([^)]*\bvalue\b/,
+
+    // Guarded by the audience, never unconditional: a signing key must not be printed even here.
+    expect(write, 'the write branch prints without checking the audience').toMatch(
+      /audience === 'humans'/,
     );
-    // The print-only branch is the *only* place a value is allowed to reach stdout.
-    const printOnly = source.slice(source.indexOf('console.log(`\\n${name}  ('));
-    expect(printOnly).toMatch(/\$\{value\}/);
+    const humans = write.slice(write.indexOf("audience === 'humans'"), write.indexOf('} else'));
+    expect(humans, 'the human branch does not print the value').toMatch(/\$\{value\}/);
+
+    const nobody = write.slice(write.indexOf('} else'));
+    expect(nobody, 'the signing-key branch prints the value').not.toMatch(/\$\{value\}/);
   });
 });
 
@@ -230,15 +250,36 @@ describe('AC7 — a write goes to exactly one environment', () => {
 });
 
 describe('AC8 — the rotation note tells the truth about seeded passwords', () => {
-  it('warns that a seed password does not rotate on its own', () => {
+  it('hedges when nobody has said whether the environment is seeded', () => {
     const note = rotationNote(
       'STAGING_SEED_DEMO_PASSWORD',
       recipeFor('STAGING_SEED_DEMO_PASSWORD')!,
     );
-    // W0-T30: the seeder is skipped for ever once its ledger row exists, so setting a new value
-    // changes nothing about accounts that already exist. A tool implying otherwise is worse than none.
-    expect(note).toMatch(/NOT immediate/);
+    // A conditional — "If this environment has already been seeded" — because the tool does not know.
+    expect(note).toMatch(/If this environment has already been seeded/);
     expect(note).toMatch(/_seed_run|re-seed/);
+  });
+
+  it('says there is nothing to rotate on an environment that has never seeded', () => {
+    // The failure this replaces: the operator set STAGING_SEED_DEMO_PASSWORD for the very first
+    // time, on an environment whose every deploy had skipped at preflight, and was told the new
+    // secret would change nothing. The tool was wrong, not the secret.
+    const note = rotationNote(
+      'STAGING_SEED_DEMO_PASSWORD',
+      recipeFor('STAGING_SEED_DEMO_PASSWORD')!,
+      false,
+    );
+    expect(note).toMatch(/not been seeded yet/);
+    expect(note, 'warned about rotation where there is nothing to rotate').not.toMatch(/\u26a0/);
+  });
+
+  it('warns when the environment is known to be seeded', () => {
+    const note = rotationNote(
+      'STAGING_SEED_DEMO_PASSWORD',
+      recipeFor('STAGING_SEED_DEMO_PASSWORD')!,
+      true,
+    );
+    expect(note).toMatch(/_seed_run/);
   });
 
   it('says an auth secret rotates immediately', () => {
@@ -337,6 +378,19 @@ describe('AC10 — the shell wrappers cannot capture what they run', () => {
       for (const name of new Set(named)) {
         expect(generatable, `${file} names ${name}, which cannot be generated`).toContain(name);
       }
+    }
+  });
+
+  it('does not tell the reader the password is hidden, because it is not', () => {
+    // The wrappers used to explain at length that nobody would ever learn the value — which was
+    // true, and was the bug. A stale explanation is worse than none: it is what the operator reads
+    // and believes before discovering the environment is unusable.
+    for (const file of wrappers) {
+      const source = shell(file);
+      expect(source, `${file} still says the password is not shown`).not.toMatch(
+        /NOT shown|is not shown|Nobody — including whoever runs this/i,
+      );
+      expect(source, `${file} does not tell the reader to write it down`).toMatch(/write it down/i);
     }
   });
 

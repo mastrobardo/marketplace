@@ -375,9 +375,16 @@ It picks the strength from the secret's name, refuses to invent a vendor credent
 a CI job or an agent session gets a refusal rather than a credential (`W0-T31`). With `--write` the
 value goes to `gh` over stdin, so it never appears in your shell history or in `ps`.
 
-⚠ It also prints what rotation does and does not do. Changing a `*_SEED_DEMO_PASSWORD` does **not**
-change an already-seeded environment: the seeder runs once per database and the ledger skips it
-afterwards. That is `W0-T32`.
+**A `*_SEED_DEMO_PASSWORD` is shown to you even with `--write`**, because somebody has to sign in
+with it — write it down, GitHub will not show it again. A `*_BETTER_AUTH_SECRET` is never shown,
+because nobody signs in with a signing key. That distinction is the secret's `audience` in
+`scripts/secrets/strength.ts`, and showing one is safe for the same reason writing it was: the tool
+only runs when stdout is a terminal, and a terminal is a person.
+
+⚠ On an environment that has **already been seeded**, changing a `*_SEED_DEMO_PASSWORD` does not
+change the existing accounts — the seeder runs once per database and the ledger skips it afterwards
+(`W0-T32`). On one that has never seeded, the new value is simply the value it will use. The tool
+says which, and `--not-seeded` tells it when you know.
 
 The two `*_SEED_DEMO_PASSWORD` values are new in `W0-T30` and **unset everywhere**. Until each
 exists, the guard reports that environment unconfigured and *skips* its deploy — nothing is created

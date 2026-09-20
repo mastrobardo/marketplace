@@ -52,6 +52,13 @@ export interface Options {
   readonly list: boolean;
   /** Which environment to write to, when a secret belongs to more than one. */
   readonly env?: string;
+  /**
+   * `--seeded` / `--not-seeded`: has the target already run the seeder?
+   *
+   * Only affects the rotation note. Undefined is "nobody checked", which is hedged rather than
+   * guessed — the wrappers pass it because they know which environment they are talking about.
+   */
+  readonly seeded?: boolean;
 }
 
 /** Parse argv. Deliberately tiny — a flag parser is not worth a dependency in a secrets path. */
@@ -65,11 +72,18 @@ export function parseArgs(argv: readonly string[]): Options {
         ? argv[envFlag]?.slice('--env='.length)
         : argv[envFlag + 1];
 
+  const seeded = argv.includes('--seeded')
+    ? true
+    : argv.includes('--not-seeded')
+      ? false
+      : undefined;
+
   return {
     ...(positional[0] === undefined ? {} : { name: positional[0] }),
     write: argv.includes('--write'),
     list: argv.includes('--list'),
     ...(env === undefined ? {} : { env }),
+    ...(seeded === undefined ? {} : { seeded }),
   };
 }
 
@@ -172,19 +186,37 @@ export function writeSecret(
   }
 }
 
-/** The rotation note for a secret, which is the part people get wrong. */
-export function rotationNote(name: string, recipe: Recipe): string {
+/**
+ * The rotation note, which is the part people get wrong — this tool included, at first.
+ *
+ * `seeded` says whether the target has **already run the seeder**, and it matters because the
+ * warning below is irrelevant and actively alarming on an environment that never has: there, a new
+ * value is simply *the* value, and the next deploy uses it. The first version printed the warning
+ * unconditionally and told an operator their brand-new secret would not take effect, which was
+ * false and read as "this tool just wasted your time".
+ *
+ * `undefined` means nobody checked, and gets a hedged note rather than a confident claim either way.
+ */
+export function rotationNote(name: string, recipe: Recipe, seeded?: boolean): string {
   if (recipe.rotation === 'immediate') {
     return (
       `Rotation is immediate: this signs sessions, so every signed-in user in that environment\n` +
       `is signed out as soon as the app restarts. That is correct for a key you suspect is leaked.`
     );
   }
+
+  if (seeded === false) {
+    return (
+      `This environment has not been seeded yet, so this value is simply the one it will use:\n` +
+      `the next deploy runs the seeder and creates the accounts with it. Nothing to rotate.`
+    );
+  }
+
   return (
-    `⚠ Rotation is NOT immediate. ${name} is written by a seeder, and a seeder runs once per\n` +
-    `database — the ledger (_seed_run) skips it for ever after. Setting a new value here changes\n` +
-    `nothing about accounts that already exist; the next deploy will read it and skip the seeder.\n` +
-    `To actually rotate, delete the seeder's ledger row and re-seed, or branch a fresh database.`
+    `\u26a0 If this environment has already been seeded, a new value does NOT change existing accounts.\n` +
+    `${name} is written by a seeder, and a seeder runs once per database — the ledger (_seed_run)\n` +
+    `skips it for ever after, so the next deploy reads the new value and skips the seeder.\n` +
+    `To actually rotate: delete that seeder's ledger row and re-seed, or branch a fresh database.`
   );
 }
 
@@ -250,14 +282,23 @@ export function main(argv: readonly string[]): void {
 
   if (options.write) {
     writeSecret(name, environment, value);
-    // The value is deliberately never printed here. gh has already confirmed the write by name.
     console.log(`\n${name} → ${environment}: set.\n`);
-    console.log(
-      `Not shown, by design — it went to gh over a pipe and was never in a command line.`,
-    );
-    console.log(`If you need to know it, someone has to be able to read it: generate without`);
-    console.log(`--write instead, and paste it in yourself.\n`);
-    console.log(rotationNote(name, recipe));
+
+    if (recipe.audience === 'humans') {
+      // Printed **because** somebody has to use it. A demo-account password nobody knows does not
+      // make staging safer; it makes it unusable, which is what the first version of this tool
+      // shipped. Showing it is safe for the same reason writing it was: stdout is a TTY, and a TTY
+      // is a person looking at a terminal.
+      console.log(`  ${value}\n`);
+      console.log(`Write this down now — GitHub will not show it to you again, and neither will`);
+      console.log(`this tool. It is the password for the demo accounts on ${environment}.\n`);
+    } else {
+      // Not shown, and correctly so: nobody signs in with a signing key.
+      console.log(`Not shown, and nobody needs it: this is a signing key, not a password.`);
+      console.log(`It went to gh over a pipe and was never in a command line.\n`);
+    }
+
+    console.log(rotationNote(name, recipe, options.seeded));
     console.log('');
     return;
   }
@@ -269,7 +310,7 @@ export function main(argv: readonly string[]): void {
   console.log(
     `Or:    tsx scripts/secrets/generate.ts ${name} --write   (sets it without showing it)`,
   );
-  console.log(`\n${rotationNote(name, recipe)}`);
+  console.log(`\n${rotationNote(name, recipe, options.seeded)}`);
   console.log(
     `\nThis value is now in your terminal scrollback. Clear it when you are done: \`clear && printf '\\033[3J'\`\n`,
   );

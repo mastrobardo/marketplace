@@ -24,20 +24,19 @@ cat <<'EXPLANATION'
 Setting STAGING_SEED_DEMO_PASSWORD
 ────────────────────────────────────────────────────────────────────────
 
-This creates a random password and stores it in GitHub, for the "staging"
-environment. It is the password for the two demo accounts that the staging
-database is seeded with:
+This creates a random password, stores it in GitHub for the "staging"
+environment, and then SHOWS IT TO YOU. Write it down — GitHub will not show
+it again, and neither will this script.
+
+It is the password for the two demo accounts the staging database is seeded
+with, so somebody has to know it:
 
   client@marketplace.local     (a customer)
   provider@marketplace.local   (a tradesperson)
 
-The password is NOT shown, here or anywhere. It goes straight to GitHub.
-Nobody — including whoever runs this — ends up knowing what it is.
-
-If you need a password somebody can actually use, stop and run this instead,
-which prints one for you to copy:
-
-  pnpm exec tsx scripts/secrets/generate.ts STAGING_SEED_DEMO_PASSWORD
+It is shown because you are at a terminal. This script refuses to run when
+anything could be recording its output — a pipe, a log, a CI job, an AI
+assistant — so the only thing that ever sees the password is a person.
 
 EXPLANATION
 

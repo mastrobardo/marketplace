@@ -386,3 +386,43 @@ Keep it to facts that changed how you would work. Task-specific detail stays in 
   asking what input would make the expression false; if there is none, there is no test.
 - **evidence**: `W0-T31` run record deviation 1; `scripts/secrets/strength.ts` `ISSUED_ELSEWHERE`
 - **status**: active
+
+### A credential tool has two questions, and mechanism is only the first
+- **id**: MEM-2026-09-20-8
+- **scope**: slice:S0
+- **fact**: `W0-T31` built a secret generator whose every mechanism was right — value never in
+  `argv`, never on stdout, never on disk, refuses unless stdout is a TTY — and whose first real use
+  produced a staging environment with a demo password **nobody could read**, including the operator
+  who set it. The fix was `Recipe.audience`: `*_BETTER_AUTH_SECRET` is `nobody` (a signing key; the
+  correct number of people who know it is zero), `*_SEED_DEMO_PASSWORD` is `humans` (a password
+  somebody types into a login form; hiding it defeats it).
+- **why**: The guard was never *"never show a secret"* — it was *"never show one to something that
+  records it"*. `isTTY` already proves a person is looking, which is exactly when printing is safe.
+  The line got drawn one step too far and hid the value from the only audience that needed it.
+- **apply**: For anything that produces a credential, answer **two** questions, not one: *can it
+  leak?* and **_can the person who needs it obtain it?_** Every test in the original suite asked the
+  first; none asked the second, and they all passed. When a path cannot be exercised from an agent
+  session, that is a **design-review** gap and not only a testing one — walk through what the human
+  has in their hands afterwards.
+- **evidence**: `W0-T31` run record Amendment (2026-09-20); `scripts/secrets/strength.ts`
+  `Audience`; `tests/secrets-generate.test.ts` AC5
+- **status**: active
+
+### A warning that is wrong half the time trains people to ignore it
+- **id**: MEM-2026-09-20-9
+- **scope**: slice:S0
+- **fact**: `generate.ts` printed the `*_SEED_DEMO_PASSWORD` rotation warning unconditionally — *"a
+  new value does NOT change existing accounts; delete the ledger row and re-seed"*. True on a seeded
+  environment. The operator saw it while setting the secret for the **first** time, on a staging
+  environment whose every deploy had skipped at preflight, so there was no `_seed_run` row and
+  nothing to rotate. `rotationNote` now takes `seeded?: boolean` and hedges when it does not know.
+- **why**: The warning was correct in general and false in the case it actually fired in — which is
+  the worst combination, because it is indistinguishable from a real problem and erodes trust in
+  every other warning the tool prints.
+- **apply**: Before making a caveat unconditional, ask which state the *first* user will be in. If
+  the caveat is false in that state, it needs a condition or a hedge — "if X, then…" costs one line
+  and keeps the warning worth reading. Prefer `undefined` meaning *unknown* over a confident default
+  in either direction.
+- **evidence**: `W0-T31` run record Amendment; `scripts/secrets/generate.ts` `rotationNote`;
+  `tests/secrets-generate.test.ts` AC8
+- **status**: active
