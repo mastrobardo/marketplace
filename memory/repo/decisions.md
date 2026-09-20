@@ -254,3 +254,60 @@ this file records the *why* an agent would otherwise have to rediscover.
 - **evidence**: `W0-T30` spec §2, §3.3; `apps/api/prisma/seed/auth-demo-users.ts`;
   `apps/api/tests/seed-filter.test.ts` AC8–AC11
 - **status**: active
+
+### An admin arrives from the back of the project, never through the front of the app
+- **id**: MEM-2026-09-20-1
+- **scope**: repo
+- **fact**: Admin accounts are provisioned by a **separate process** — by hand, by script, by
+  whatever `W9-T07` decides — and deliberately **outside the normal auth flow**. Operator,
+  2026-09-20: *"we need to keep it outside normal generation of auth. An admin will be someone
+  joining the project from the back, not the front of the app."* There is therefore **no admin
+  registration route**, and no path by which a storefront signup can end in an `ADMIN` role.
+- **why**: A self-service route to a privileged role is a privilege-escalation surface that has to
+  be defended for ever. Not having one is cheaper and stronger than guarding one. It also matches
+  who an admin actually is here: someone on the project, not a customer.
+- **apply**: Never add `ADMIN` to anything reachable from `apps/web`'s signup, and never let a role
+  grant ride along with a profile write. A seeded admin is fine and is wanted (`W9-T07`) — but it
+  inherits `MEM-2026-09-19-3`: the password comes from a secret and the seeder refuses a non-local
+  target without one. This is a privilege boundary, not merely an account.
+- **evidence**: operator, 2026-09-20; `TODO.md` `W9-T07`; `apps/api/src/modules/auth/permissions.ts`
+  (*"`ADMIN` is not implicit"*)
+- **status**: active
+
+### Admin actions get their own table — `AuditRecord` is a state-machine ledger, not an audit log
+- **id**: MEM-2026-09-20-2
+- **scope**: repo
+- **fact**: Two separate records, on purpose. `AuditRecord` stays what it is: a **state-machine**
+  ledger, `fromState`/`toState` non-null, *"written only through `transition()` in
+  `@marketplace/contracts`"*. Admin actions get a **different table**, owned by `W9-T08`. Operator,
+  2026-09-20: *"Admin action deserves it's own table. We must keep records for all users, but
+  actions taken by an admin need their own flow."*
+- **why**: An admin renaming a category is not a state transition, and there is no honest
+  `fromState` for it. Forcing it into `AuditRecord` means either inventing pseudo-states
+  (`"requiresLicence:false"`) or making the columns nullable — and the moment they are nullable, the
+  guarantee that every row describes a real transition is gone, which is the only reason that table
+  is worth trusting.
+- **apply**: Do not reach for `AuditRecord` to log an admin action, a config change or anything
+  without a state machine behind it. If `W9-T08` has not landed yet, the honest move is to leave the
+  action unlogged and say so in the ticket — not to half-write it into the wrong table.
+- **evidence**: operator, 2026-09-20; `apps/api/prisma/schema.prisma` `model AuditRecord`;
+  `TODO.md` `W9-T08`
+- **status**: active
+
+### A working website comes before the audit trail, and before the back office
+- **id**: MEM-2026-09-20-3
+- **scope**: repo
+- **fact**: Ordering set by the operator on 2026-09-20: *"the audit is not so important to get to an
+  [MVP]. First thing, before getting a designer on board, is to have a full functional website"* —
+  and *"Fully funtional: the feature of the websites (presupuestos, auctions, search) should be
+  fully developed."* So `W4` and `W6` come first; `W9` (admin & ops) and `W3-T11` (back-office
+  taxonomy CRUD) wait, however ready they are.
+- **why**: A design pass on a site whose funnels do not work reviews the wrong thing, and an audit
+  trail records actions nobody can yet take. Both are real work whose value is unlocked by the
+  feature work, not the other way round.
+- **apply**: When a ticket is blocked on something in `W9`, check whether it is *really* blocked or
+  merely un-audited — `W9-T08` is explicitly not MVP-blocking. Do not propose back-office work as
+  "next" while a funnel is unfinished. This ordering is a judgement about sequence, not about
+  whether the deferred work matters; revisit it when the funnels close.
+- **evidence**: operator, 2026-09-20; `TODO.md` §6 `▶ NEXT` banner
+- **status**: active

@@ -346,25 +346,28 @@ Promotion happens in the same PR as the work. A separate "memory PR" never gets 
 
 Task IDs are stable — use them as board card titles.
 
-> ### ▶ NEXT — `W3-T11`: let the back office write the taxonomy
+> ### ▶ NEXT — `W4-T01`, and the presupuestos funnel behind it
 >
-> **`W0-T30` shipped on 2026-09-19 and the blocker is gone**: preview and staging both seed the
-> taxonomy, the demo users and the demo provider world, so there is something in a deployed database
-> for an admin to edit. Two secrets have to exist before that pipeline runs — see `W0-T30` §6.
+> **The operator reset the ordering on 2026-09-20**: *"Fully funtional: the feature of the websites
+> (presupuestos, auctions, search) should be fully developed."* Search shipped (`W3-T05`); the other
+> two have not started. **Everything back-office moves behind them** — `W3-T11` and the whole of
+> `W9` are not front-of-app, and *"before getting a designer on board"* the site has to work.
 >
-> **`W3-T11` reverses `W3-T01` §9 on purpose.** That section argued an admin CRUD *"makes `BD-07`'s
-> answer editable by whoever holds an admin session, which is the opposite of a legal boundary"*.
-> The operator has now asked for it twice and it is their call; the objection does not need
-> re-litigating, but it does need **answering in the design** — an audit trail, and a considered
-> position on who may flip `requiresLicence`, are the least this needs. `W9-T01` (admin auth +
-> audit trail on every admin action) is the natural dependency, and `AuditRecord` already exists.
+> So: **`W4-T01`** (job posting: category, description, photos, location, budget, urgency), then the
+> `W4` chain to `W4-T05`, then `W6` auctions. `W4-T01` is `[A]`, has no open product question, and
+> sits upstream of both things `W13` will touch — so it can start before that ADR exists.
 >
-> **Two open questions to settle at ticket start, not mid-build**: whether this lives in
-> `modules/categories/` (`agent-providers` owns the taxonomy) or `modules/admin/` (`agent-admin`
-> owns the back office, and its charter's mission is *"leave a trail of everything they did"*); and
-> whether `W3-T11` settles `MEM-2026-09-18-13` — an admin-authored taxonomy and compile-checked i18n
-> keys are mutually exclusive for the same string, so a runtime-editable name means the `nameEs`/
-> `nameEn` columns are **correct as they are** and the i18n idea does not apply to them.
+> **`W13` is filed and deliberately unstarted** — the DM / contact-gating epic, ADR first and in its
+> own session (§W13). It reframes `W4-T08`, which is now marked `[SUPERSEDED-PENDING]`: **do not
+> build contact masking as written.** `W4-T06`'s job-scoped thread is also in its blast radius.
+>
+> **`W3-T11` is deprioritised, not cancelled.** Its blocker cleared — preview and staging hold the
+> taxonomy since `W0-T30` — and its three open questions still stand at §W3. It also no longer
+> depends on an audit trail to *start*: `W9-T08` owns that and is explicitly not MVP-blocking. But
+> it should not claim to have answered `W3-T01` §9 until `W9-T08` exists.
+>
+> **Still needs a human:** `STAGING_SEED_DEMO_PASSWORD` is unset —
+> `./scripts/secrets/set-staging-seed-password.sh`. Preview was set on 2026-09-20.
 >
 > ### Also ready — the storefront half, now that every endpoint it needs is real
 >
@@ -537,7 +540,7 @@ for data), so no feature is blocked waiting for an account that is not needed ye
 - `W4-T05` `[A]` Award → creates Booking (hand-off to S9)
 - `W4-T06` `[A]` Job-scoped message thread + attachments
 - `W4-T07` `[A]` Job feed for providers: matched by category + radius + licence status
-- `W4-T08` `[M]` `[B]` Anti-disintermediation: mask contact details until booking is paid *(human: how aggressive to be — product call)*
+- `W4-T08` `[M]` `[B]` `[SUPERSEDED-PENDING]` Anti-disintermediation: mask contact details until booking is paid *(human: how aggressive to be — product call)*. ⚠ **Do not build this as written.** Operator, 2026-09-20, described a different model: seeing a contact is a **subscription** feature, not a reward for a paid booking, and non-paying users reach a professional through **in-app messaging** instead of being blocked. Transaction-gated and access-gated are different products with different revenue logic. `W13` owns the reconciliation and must land its ADR before this ticket means anything
 
 ### W5 — Money (`agent-money`) — *the highest-risk slice, staff it first*
 - `W5-T01` `[M]` Stripe Connect Express onboarding for providers, KYC status sync *(human: Stripe account, Connect config, branding)*
@@ -580,7 +583,9 @@ for data), so no feature is blocked waiting for an account that is not needed ye
 - `W8-T07` `[A]` Moderation: report content, hide/remove, appeal trail
 
 ### W9 — Admin & ops (`agent-admin`)
-- `W9-T01` `[A]` Admin auth + audit trail on every admin action
+- `W9-T01` `[A]` **Admin auth** — a session that proves `ADMIN`, and the permission rows that go with it. **Narrowed on 2026-09-20**: the audit trail was in this line and is now `W9-T08`, because the two are independent and only one of them blocks anything. Today `ADMIN` is a role nobody wears and nothing grants: `permissions.ts` has a single row (`provider-profile:update-own`) and states that *"`ADMIN` is not implicit… an admin is allowed exactly what lists it, which is currently nothing"* (`MEM-2026-09-18-2`). Needs `W9-T07` for an account to exist at all
+- `W9-T07` `[A]` `[M]` **Admin account provisioning — deliberately not part of signup.** Operator, 2026-09-20: *"this would be a separate process, either by hand, script or whatever, but we need to keep it outside normal generation of auth. An admin will be someone joining the project from the back, not the front of the app."* So there is **no admin registration route**, ever, and no path from the storefront to an `ADMIN` role. A seeded admin is wanted now so `W9-T01` and `W3-T11` have something to authenticate as; real provisioning comes later. Inherits `W0-T30`'s lesson exactly — the seeded admin's password must come from a secret and refuse a non-local target, since this one is a *privilege* boundary and not just an account (`MEM-2026-09-19-3`, `scripts/secrets/`). `[M]` for whoever holds that secret
+- `W9-T08` `[A]` **The admin-action audit contract, and its own table.** Operator, 2026-09-20: *"Admin action deserves it's own table. We must keep records for all users, but actions taken by an admin need their own flow."* **Not `AuditRecord`** — that model is a *state-machine* ledger (`fromState`/`toState` non-null, *"written only through `transition()` in `@marketplace/contracts`"*), and an admin renaming a category is not a state transition; forcing it in would mean faking states or loosening the rule that keeps that ledger trustworthy. This ticket owns the new model, who writes it, and what an admin action *is*. **Explicitly not MVP-blocking** (operator, same day: *"the audit is not so important to get to an [MVP]"*), so it does not gate `W3-T11` or anything front-of-app — but it is the thing that answers `W3-T01` §9's objection, so `W3-T11` should not claim to have answered it until this exists
 - `W9-T02` `[M]` `[B]` Verification queue, user search, impersonate-for-support (logged) *(human: approve the impersonation policy — GDPR sensitive)*
 - `W9-T03` `[A]` Dispute & refund console
 - `W9-T04` `[A]` Content moderation queue
@@ -686,6 +691,43 @@ finished pages is how the accessibility and SSR bills both come due at once.
 
 ---
 
+### W13 — Messaging & contact gating (`agent-jobs` + `agent-money`) — *ADR first, and its own session*
+
+> **Filed 2026-09-20 by the operator, and deliberately not started.** *"This DM part need an adr, and
+> dedicated epic. So, creating adr and ticket should be done in its own session."* What follows is the
+> brief for that session, not a design.
+
+**The problem, in the operator's words:** *"Non payng users need to be able to contact professionals
+ONLY through the app. This means some sort of internal messaging system. 'Able to see contact' should
+be a payed feature. If we let people be able to contact by phone or personal email whoever on the
+search result, the users will have no incentive to buy subscriptions."*
+
+**Two things make this an epic rather than a ticket.**
+
+1. **It reframes `W4-T08`, which is already written.** That ticket masks contact details until a
+   **booking is paid** — transaction-gated. This is **subscription**-gated, and adds a channel
+   (in-app DM) that `W4-T08` does not have. Different revenue logic, different product. `BD-08` is
+   now this epic's question.
+2. **The existing messaging is job-scoped.** `W4-T06` is a thread that exists once a job exists. The
+   case here is contact **from a search result**, before any job — which nothing covers today.
+
+**What the ADR has to settle, at minimum:**
+- What a non-subscriber can do: message freely, a capped number, or request-and-accept?
+- What subscribing unlocks — the raw phone/email, or just more messaging?
+- Which side subscribes. The operator's framing says *users*; `subscriptionTier` in §3 hangs off the
+  **provider** profile, and `S9`'s line says *"Stripe Billing for pro subscriptions"*. **These
+  disagree, and it is the first thing to resolve.**
+- Whether contact details are masked in *data* or only in *presentation* — the second is a leak
+  waiting for anyone who opens dev tools.
+- How leakage is measured (`R4` asks for a leak rate), given messages are the place people paste a
+  phone number anyway.
+
+**Known dependency, and it may block:** nothing in the codebase knows whether anyone is subscribed.
+`subscriptionTier` is in the domain sketch and unbuilt; billing is `S9`, which has not started. The
+ADR should say what this epic does while that is true — a feature flag, a stub predicate, or waiting.
+
+**Not blocked by** `W9-T08` (audit) or `W3-T11` (back office), neither of which is front-of-app.
+
 ## 7. Testing strategy
 
 TDD is not optional here: the red phase is a **Definition-of-Done artifact** (§5.3) and every slice
@@ -773,7 +815,7 @@ Staff `agent-money` from M0 so Stripe Connect onboarding is already in review wh
 | R1 | Holding client funds until job completion may make us a payment intermediary under Spanish/EU rules | Blocks launch | Legal review before M8. Stripe Connect with delayed transfers is the mitigation, but confirm |
 | R2 | Licence verification: is there a usable registry API per colegio/comunidad, or is it manual forever? | Ops cost, trust | Research during M2; MVP assumes manual review |
 | R3 | Marketplace cold start — no pros means no clients | Existential | Seeded supply strategy (manual pro recruitment) before beta; not a code task |
-| R4 | Disintermediation: users take the job off-platform after matching | Revenue | Mask contact details pre-payment (W4-T08); measure the leak rate |
+| R4 | Disintermediation: users take the job off-platform after matching | Revenue | In-app messaging as the only contact channel until a subscription unlocks details (`W13`, ADR pending; was `W4-T08`); measure the leak rate |
 | R5 | Auction abuse: lowball bids, bid-and-run | Trust | Bid caps by tier, ratings-gated bidding, cancellation penalties |
 | R6 | Emergency SLA — promising fast response we can't fulfil | Reputation, legal | No hard SLA promise in MVP copy; fallback path in W7-T06 |
 | R7 | VAT/IVA and invoicing for autónomos, plus platform reporting duties (DAC7) | Compliance | Scope with an accountant before M8 (W5-T09 is `[H]` for this reason) |
@@ -804,7 +846,7 @@ rule: build the mechanism, read the value from config, ship nothing with an inve
 | `BD-05` | Emergency pricing — call-out fee + hourly, or a premium multiplier? | `W7-T01` | Affects the whole urgency flow's UX |
 | `BD-06` | Do **manitas** need verification (ID check), or only licensed pros? | `W8` scope, `W2-T05` | Trust vs. supply-side friction; affects cold start |
 | ~~`BD-07`~~ ✅ | Which categories legally require a licence in Spain? | `W3-T01`, `W3-T08` | **Answered 2026-09-18: five trades** — `electricidad`, `gas`, `climatizacion`, `telecomunicaciones`, `placas-solares`. And a rule worth more than the list: **a licence attaches to the trade performed, not to the umbrella above it** — `reforma-integral` is *not* gated, because tiling and wall work need nothing and rewiring is gated as `electricidad`. `W3-T08` inherits the evasion that permits, stated in `docs/specs/S3/W3-T01-category-tree.md` §3.5.1/§10.3. `desatascos` is `false` **provisionally** — the operator is checking with the gremio, and asking whether it exposes an API for registration lookups, which would turn `W8-T02`'s human review into a call |
-| `BD-08` | How aggressive is anti-disintermediation? | `W4-T08` | Too strict harms UX, too loose leaks revenue |
+| `BD-08` | How aggressive is anti-disintermediation? | `W13` (was `W4-T08`) | Too strict harms UX, too loose leaks revenue. **Reframed 2026-09-20**: the question is no longer only *how much to mask* but *what unlocks it* — a paid booking or a subscription — and what non-paying users can do instead |
 | `BD-09` | Auction defaults: sealed vs open, anti-sniping window, bid caps per tier | `W6-T04`, `W6-T07` | |
 | `BD-10` | Badge qualifying rules + minimum reviews before an average is shown | `W8-T04`, `W8-T06` | |
 | `BD-11` | Support impersonation policy (GDPR-sensitive) | `W9-T02` | Consent, time-box, audit |
