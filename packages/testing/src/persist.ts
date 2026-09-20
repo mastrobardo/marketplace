@@ -23,6 +23,8 @@ import {
   type ClientProfileInput,
   type ProviderCategoryInput,
   type ProviderProfileInput,
+  buildQuote,
+  type QuoteRowInput,
   type UserInput,
   buildJob,
   buildJobCategory,
@@ -44,6 +46,7 @@ export interface FactoryClient {
   auditRecord: CreateDelegate<AuditRecordInput>;
   job: CreateDelegate<JobInput>;
   jobCategory: CreateDelegate<JobCategoryInput>;
+  quote: CreateDelegate<QuoteRowInput>;
 }
 
 export async function createUser(
@@ -119,6 +122,19 @@ export async function createJob(
 ): Promise<JobInput> {
   const clientId = overrides.clientId ?? (await createUser(client)).id;
   return client.job.create({ data: buildJob({ ...overrides, clientId }) });
+}
+
+/**
+ * Persist a quote — `W4-T03`. Composes **both** parents, because a quote is meaningless without
+ * either: it answers a job, and it is written by a provider profile.
+ */
+export async function createQuote(
+  client: FactoryClient,
+  overrides: Partial<QuoteRowInput> = {},
+): Promise<QuoteRowInput> {
+  const jobId = overrides.jobId ?? (await createJob(client)).id;
+  const providerId = overrides.providerId ?? (await createProviderProfile(client)).id;
+  return client.quote.create({ data: buildQuote({ ...overrides, jobId, providerId }) });
 }
 
 /** Link a job to a trade, creating either side that was not supplied. */

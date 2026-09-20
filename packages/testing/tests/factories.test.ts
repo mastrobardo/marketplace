@@ -11,6 +11,7 @@ import {
   buildClientProfile,
   buildJob,
   buildJobCategory,
+  buildQuote,
   buildProviderCategory,
   buildProviderProfile,
   buildUser,
@@ -20,6 +21,7 @@ import {
   createClientProfile,
   createJob,
   createJobCategory,
+  createQuote,
   createProviderCategory,
   createProviderProfile,
   createUser,
@@ -45,6 +47,7 @@ const BUILDERS = {
   AuditRecord: buildAuditRecord,
   Job: buildJob,
   JobCategory: buildJobCategory,
+  Quote: buildQuote,
 } as const;
 
 const CREATORS = {
@@ -57,6 +60,7 @@ const CREATORS = {
   AuditRecord: createAuditRecord,
   Job: createJob,
   JobCategory: createJobCategory,
+  Quote: createQuote,
 } as const;
 
 /**
