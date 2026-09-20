@@ -490,4 +490,48 @@ this file records the *why* an agent would otherwise have to rediscover.
   correctly for search: a provider with no rating sorts as *unrated*, never as `0.00`, because a
   zero would rank a new provider below a bad one.
 - **evidence**: `docs/adr/ADR-014-who-pays.md` §7; `packages/contracts/src/search.ts` `ratingAvg`
+### Reputation is two numbers that may disagree, plus tags the platform refuses to weight
+
+- **id**: MEM-2026-09-20-25
+- **scope**: repo
+- **fact**: A provider carries a **satisfaction** score (about the person, shown as given) and a
+  **competence** score **per trade** (its own row, optional per review). Neither is derived from the
+  other and they are allowed to disagree. A trade with no scores is **absent from every average** —
+  never zero, never a midpoint — and where an aggregate is shown it is the **mean of the per-trade
+  means**, not of all reviews. Alongside them, **positive-only tags** (*tidy*, *quiet*, *on time*)
+  that aggregate into counts. ADR-015.
+- **why**: operator, 2026-09-20 — *"i could be the best electrician in the world, doing things in
+  half the time, but leaving a mess behind me. How would the next user know?"* One figure cannot
+  hold that, and averaging the trades together reproduces the same fault one level down: *"a score
+  that catch all might be easier to read, but hide real bottlenecks."* Mean-of-means rather than
+  mean-of-reviews is the difference between 4.0 and 4.92 for a provider who is excellent at fifty
+  plumbing jobs and poor at two electrical ones — the second hides exactly what a client asking for
+  electrical work needs.
+- **apply**: **never introduce a blended reputation number**, however much easier it is to render;
+  the blending is the defect. Do not weight the tags either — *"if i have a cleaner, the mess might
+  not be a problem"*, so the weighting lives in the client's circumstances and the platform's job is
+  to carry the facts. The one place a weighting is unavoidable is an ordered list (ADR-014 §4), and
+  there the client can re-sort. Tags are positive-only on purpose: an absence of `tidy` says what is
+  needed without publishing a negative claim about a named tradesperson.
+- **evidence**: `docs/adr/ADR-015-reputation.md` §1, §3, §4; `TODO.md` `BD-10`, `W8-T05`, `W8-T06`
+- **status**: active
+
+### A tag vocabulary cannot be extended later without lying about history
+
+- **id**: MEM-2026-09-20-26
+- **scope**: repo
+- **fact**: The review tag list in ADR-015 §4 is effectively permanent. **Old reviews cannot be
+  retro-tagged**, so a tag introduced in year two shows near-zero counts on every established
+  provider and reads as a weakness they do not have — while a genuinely new provider starts level.
+  Adding a tag redistributes reputation backwards.
+- **why**: the counts are the signal (*tidy (14)*), and a count is only meaningful against the
+  number of reviews that *could* have carried it. Nothing in the data distinguishes "nobody thought
+  this" from "this tag did not exist yet", and reconstructing it means storing the vocabulary's
+  history and every review's exposure to it — machinery nobody will build retroactively.
+- **apply**: choose the initial set deliberately and small, and treat any later addition as a
+  migration problem rather than a config change: at minimum record the date a tag was introduced and
+  exclude reviews written before it from that tag's denominator. **The same trap applies to any
+  count-based signal introduced after launch** — badges with qualifying rules (`W8-T04`) and the
+  no-show findings in ADR-013 §6 have the same shape.
+- **evidence**: `docs/adr/ADR-015-reputation.md` §4.1; `TODO.md` `BD-10`
 - **status**: active
