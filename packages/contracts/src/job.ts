@@ -9,8 +9,12 @@
  * That split is the whole design. A schema that required a category would make a draft impossible;
  * a machine that did not would make an `OPEN` job that reaches nobody.
  *
+ * `W4-T02` adds the way out. A job that nobody is going to do is `CANCELLED`, which is what finally
+ * gives `OPEN` an exit — and the edit rule moves here from the repository, where nothing tied it to
+ * the states it is about (`MEM-2026-09-20-11`).
+ *
  * Frozen seam — changing a shape here costs an ADR (`agents/policies/contract-change.md`).
- * Spec: `docs/specs/S4/W4-T01-job-posting.md`.
+ * Specs: `docs/specs/S4/W4-T01-job-posting.md`, `docs/specs/S4/W4-T02-job-state-machine.md`.
  */
 import { z } from 'zod';
 
@@ -22,18 +26,24 @@ import { defineMachine, type GuardResult } from './state-machine.js';
  * ------------------------------------------------------------------------------------------- */
 
 /**
- * Two states, and `W4-T02` owns the rest of the lifecycle.
+ * Three states, and the three still missing each belong to the ticket that can *produce* them.
  *
- * Declaring `AWARDED`, `IN_PROGRESS`, `COMPLETED` and `CANCELLED` here would put four values in a
- * Postgres enum that nothing can produce and no route can reach — the same empty promise
- * `permissions.ts` refuses when it declines to hold a row for a route that does not exist yet.
+ * The rule `W4-T01` set and this one follows: a value here that no route can reach is the empty
+ * promise `permissions.ts` refuses when it declines to hold a row for a route that does not exist.
  * `ALTER TYPE … ADD VALUE` is a cheap migration; a machine that lies about what it supports is not.
+ *
+ * So `AWARDED` waits for something to award — an accepted quote (`W4-T03`) reaching an award
+ * (`W4-T05`) — and `IN_PROGRESS` / `COMPLETED` wait for a `Booking`, because they are facts about
+ * an engagement rather than about a posting, and completion is what triggers capture (`W5-T04`).
+ * `W4-T02` §6.1 carries the table, and the question `W4-T05` inherits with it.
+ *
+ * `CANCELLED` needs none of that. A client who changed their mind is reachable today.
  */
-export const JobStatusSchema = z.enum(['DRAFT', 'OPEN']);
+export const JobStatusSchema = z.enum(['DRAFT', 'OPEN', 'CANCELLED']);
 export type JobStatus = z.infer<typeof JobStatusSchema>;
 
-/** The only event this ticket ships. `W4-T02` adds `AWARD`, `CANCEL` and the rest. */
-export const JobEventSchema = z.enum(['PUBLISH']);
+/** `AWARD` and everything after it arrive with the states they lead to — see `JobStatusSchema`. */
+export const JobEventSchema = z.enum(['PUBLISH', 'CANCEL']);
 export type JobEvent = z.infer<typeof JobEventSchema>;
 
 /**
@@ -54,13 +64,17 @@ export type JobUrgency = z.infer<typeof JobUrgencySchema>;
  * ------------------------------------------------------------------------------------------- */
 
 /**
- * What the publish guard needs to decide, loaded by the caller before it asks.
+ * What this machine's guards need to decide, loaded by the caller before it asks.
  *
  * Guards are synchronous and pure by the state machine's own contract — *"a guard that could query
  * is a guard that decides differently depending on when it runs"* — so the count arrives here
  * already known.
+ *
+ * One shape for the whole machine, because `defineMachine` is generic over a single context type.
+ * `CANCEL` has no guard and does not read `categoryCount`, but its caller still loads it rather
+ * than passing a `0` that is not true: a context that lies is a context somebody will later guard on.
  */
-export interface JobPublishContext {
+export interface JobContext {
   readonly categoryCount: number;
 }
 
@@ -71,7 +85,7 @@ export interface JobPublishContext {
  * category — so a job with none reaches nobody and the client experiences that as silence. Every
  * other field stays optional, description included (spec §2.3).
  */
-export function hasAnyCategory(context: JobPublishContext): GuardResult {
+export function hasAnyCategory(context: JobContext): GuardResult {
   return (
     context.categoryCount > 0 || {
       reason:
@@ -85,22 +99,81 @@ export function hasAnyCategory(context: JobPublishContext): GuardResult {
  * `entity: 'job'` is written into every audit row this machine produces, so
  * `SELECT * FROM audit_record WHERE entity = 'job'` is the history of every job that ever moved.
  */
-export const jobMachine = defineMachine<JobStatus, JobEvent, JobPublishContext>({
+export const jobMachine = defineMachine<JobStatus, JobEvent, JobContext>({
   name: 'job',
   initial: 'DRAFT',
-  states: ['DRAFT', 'OPEN'],
+  states: ['DRAFT', 'OPEN', 'CANCELLED'],
   /**
-   * `OPEN` is terminal **in this machine**, and that is a statement about `W4-T01`, not about the
-   * product. `defineMachine` refuses a state with no way out that is not declared terminal, and it
-   * is right to: an undeclared dead end is almost always a rule somebody forgot to write.
+   * `OPEN` was here, and `W4-T01` promised it would leave in the same change that gave it an exit.
+   * This is that change — the promise is kept in one edit rather than left to be noticed later,
+   * because a `terminal` list that is stale reads exactly like one that is deliberate.
    *
-   * Here it is deliberate — `W4-T02` owns `AWARDED` and everything after it, and will remove
-   * `OPEN` from this list in the same change that gives it an exit. Declaring it keeps the machine
-   * honest about what it can actually do today rather than hinting at transitions it does not have.
+   * `CANCELLED` is terminal for good. Reopening a cancelled job is a *new* job: a lifecycle that
+   * can restart is one whose audit trail has to be read backwards before it means anything.
    */
-  terminal: ['OPEN'],
-  transitions: [{ from: 'DRAFT', on: 'PUBLISH', to: 'OPEN', guard: hasAnyCategory }],
+  terminal: ['CANCELLED'],
+  transitions: [
+    { from: 'DRAFT', on: 'PUBLISH', to: 'OPEN', guard: hasAnyCategory },
+    /**
+     * One rule from two states, not two rules. A client cancelling a draft and a client cancelling
+     * a published job are the same decision — *nobody is going to do this work* — and the refusal
+     * a second attempt gets should not depend on which it was.
+     *
+     * Unguarded: there is nothing to check. Cancelling is always allowed while the job is the
+     * client's and has not been awarded, and `AWARDED` is not a state that exists yet. When it
+     * does, cancelling past it is a refund decision (`W5-T05`) and arrives with its own rule.
+     */
+    { from: ['DRAFT', 'OPEN'], on: 'CANCEL', to: 'CANCELLED' },
+  ],
 });
+
+/* ------------------------------------------------------------------------------------------- *
+ * Editing
+ * ------------------------------------------------------------------------------------------- */
+
+/**
+ * Which states still allow the client to change the job's own fields.
+ *
+ * This lived in `repository.update` as `if (existing.status !== 'DRAFT')` until `W4-T02`, and the
+ * problem was never where it sat — it was that **nothing connected it to the set of states**. It
+ * would have gone on refusing `AWARDED` and `CANCELLED` correctly, by accident, because they are
+ * not `DRAFT` either; and correct-by-accident is the failure mode with nothing red to notice
+ * (`MEM-2026-09-20-11`).
+ *
+ * `Record<JobStatus, boolean>` is the whole mechanism: **adding a state to `JobStatusSchema` stops
+ * this package compiling until somebody decides whether that state is editable.** The decision
+ * cannot be made by silence, which is the one thing the `if` allowed.
+ *
+ * Not an `EDIT` event on the machine: every `transition()` writes an `audit_record` row, and a row
+ * per save is noise rather than history — while an event in the table that nothing transitions with
+ * is the same kind of lie this ticket exists to remove.
+ */
+const EDITABLE_IN: Record<JobStatus, boolean> = {
+  /** A work in progress, visible to its owner and nobody else. */
+  DRAFT: true,
+  /**
+   * Providers are reading it. Editing underneath them changes what they answered, and once
+   * `W4-T03` lands it silently invalidates quotes that were priced against something else.
+   * Amendment is a real feature and it needs quote invalidation, so it waits for quotes to exist
+   * (operator, 2026-09-20: *"no — drafts only, expressed in the machine"*).
+   */
+  OPEN: false,
+  /** Terminal. Editing a cancelled job is asking for a job, and that is `POST /api/jobs`. */
+  CANCELLED: false,
+};
+
+/**
+ * Whether this job's fields may still be edited, in the machine's own rejection shape so the route
+ * and the message come from one place.
+ */
+export function canEditJob(status: JobStatus): GuardResult {
+  return (
+    EDITABLE_IN[status] || {
+      reason: `only a draft can be edited — this job is ${status}`,
+      code: 'CONFLICT',
+    }
+  );
+}
 
 /* ------------------------------------------------------------------------------------------- *
  * Money
@@ -174,6 +247,23 @@ export const JobUpdateInputSchema = z.object({
 
 export type JobUpdateInput = z.infer<typeof JobUpdateInputSchema>;
 
+/**
+ * Cancelling. The body is optional and so is everything in it.
+ *
+ * `reason` is written to `audit_record.metadata` — the column whose own comment says it holds
+ * *"whatever makes the row legible for its machine"* — and to **no column on `job`**. The audit row
+ * already records who cancelled it, when, and from which state; a `cancellation_reason` column
+ * would be a second home for one fact, and two homes drift the moment anything writes one of them.
+ *
+ * Optional because *"I don't want to policy the users"* (spec §1.1) applies to the way out as much
+ * as to the way in. Somebody who abandons a job owes nobody an explanation.
+ */
+export const JobCancelInputSchema = z.object({
+  reason: z.string().trim().min(1).max(500).optional(),
+});
+
+export type JobCancelInput = z.infer<typeof JobCancelInputSchema>;
+
 /** A category as a job carries it — the same flat shape `GET /api/categories` serves. */
 export const JobCategorySchema = z.object({
   slug: z.string(),
@@ -210,6 +300,12 @@ export const JobSchema = z.object({
   budget: z.object({ minCents: z.int().nullable(), maxCents: z.int().nullable() }),
   location: JobLocationSchema.nullable(),
   publishedAt: z.iso.datetime().nullable(),
+  /**
+   * Set once, on the transition. Mirrors `publishedAt` for the reason `W4-T01` gave that one: it is
+   * the timestamp a list screen needs without joining `audit_record`. The *reason* is not here —
+   * that is audit metadata (`JobCancelInputSchema`).
+   */
+  cancelledAt: z.iso.datetime().nullable(),
   createdAt: z.iso.datetime(),
   updatedAt: z.iso.datetime(),
 });

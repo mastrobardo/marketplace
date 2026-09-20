@@ -1,5 +1,5 @@
 /**
- * `W4-T01` — the job data layer.
+ * `W4-T01` — the job data layer, with `W4-T02`'s way out of `OPEN`.
  *
  * Everything that knows about rows. The routes above it know only the contract, and the machine in
  * `@marketplace/contracts` knows only a category count — which is what keeps the publish rule
@@ -11,11 +11,17 @@ import { type Prisma, type PrismaClient } from '@prisma/client';
 import {
   AppError,
   TransitionRejected,
+  canEditJob,
   jobMachine,
   transition,
   type Job,
+  type JobCancelInput,
+  type JobContext,
   type JobDraftInput,
+  type JobEvent,
+  type JobStatus,
   type JobUpdateInput,
+  type TransitionRequest,
 } from '@marketplace/contracts';
 
 /** The shape every read returns before it becomes a `Job`. */
@@ -65,6 +71,7 @@ export function toJob(row: JobRow): Job {
             postalCode: row.address.postalCode,
           },
     publishedAt: row.publishedAt?.toISOString() ?? null,
+    cancelledAt: row.cancelledAt?.toISOString() ?? null,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
@@ -121,6 +128,34 @@ async function setCategories(
   await db.jobCategory.createMany({ data: ids.map((categoryId) => ({ jobId, categoryId })) });
 }
 
+/**
+ * `transition()` bound to this machine, with the rejection mapped once.
+ *
+ * Both writers that move a job need the same three things — the audit row written through *this*
+ * transaction, `TransitionRejected` turned into the envelope a route can send, and anything else
+ * rethrown untouched. Written twice, the two copies would eventually disagree about which of those
+ * is a client error.
+ *
+ * The recorder is bound to `db`, not to `prisma`: the audit row and the status change commit
+ * together or not at all, which is the guarantee `state-machine.ts` asks every caller to provide.
+ */
+async function move(
+  db: Prisma.TransactionClient,
+  request: TransitionRequest<JobStatus, JobEvent, JobContext>,
+): Promise<void> {
+  try {
+    await transition(jobMachine, request, async (audit) => {
+      await db.auditRecord.create({ data: audit });
+    });
+  } catch (error) {
+    if (error instanceof TransitionRejected) {
+      // The machine already decided both the reason and whether it is a 409 or a 403.
+      throw new AppError(error.code, error.reason);
+    }
+    throw error;
+  }
+}
+
 export interface JobRepository {
   createDraft(clientId: string, input: JobDraftInput): Promise<Job>;
   /** `null` when the job does not exist **or** belongs to somebody else — the caller cannot tell. */
@@ -128,6 +163,7 @@ export interface JobRepository {
   listOwn(clientId: string, limit: number): Promise<Job[]>;
   update(clientId: string, jobId: string, input: JobUpdateInput): Promise<Job | null>;
   publish(clientId: string, jobId: string): Promise<Job | null>;
+  cancel(clientId: string, jobId: string, input: JobCancelInput): Promise<Job | null>;
 }
 
 export function createJobRepository(prisma: PrismaClient): JobRepository {
@@ -184,13 +220,12 @@ export function createJobRepository(prisma: PrismaClient): JobRepository {
         });
         if (existing === null) return null;
 
-        // A published job is not a draft, and editing one silently changes what providers already
-        // read. `W4-T02` owns whatever amendment looks like.
-        if (existing.status !== 'DRAFT') {
-          throw new AppError(
-            'CONFLICT',
-            `only a draft can be edited — this job is ${existing.status}`,
-          );
+        // Asked, not decided. `canEditJob` is exhaustive over `JobStatus`, so a new state cannot
+        // reach this line without someone having said whether it is editable — which is the whole
+        // difference from the `if` that stood here (`MEM-2026-09-20-11`, W4-T02 §2.3).
+        const editable = canEditJob(existing.status);
+        if (editable !== true) {
+          throw new AppError(editable.code ?? 'CONFLICT', editable.reason);
         }
 
         await db.job.update({
@@ -247,34 +282,51 @@ export function createJobRepository(prisma: PrismaClient): JobRepository {
         }
 
         const now = new Date();
-        try {
-          await transition(
-            jobMachine,
-            {
-              entityId: jobId,
-              from: existing.status,
-              event: 'PUBLISH',
-              actor: { type: 'USER', id: clientId },
-              context: { categoryCount: existing._count.categories },
-              now: () => now,
-            },
-            // Bound to *this* transaction, so the audit row and the status move together or not at
-            // all — the guarantee the state machine's own docs ask the caller to provide.
-            async (audit) => {
-              await db.auditRecord.create({ data: audit });
-            },
-          );
-        } catch (error) {
-          if (error instanceof TransitionRejected) {
-            // The machine already decided both the reason and whether it is a 409 or a 403.
-            throw new AppError(error.code, error.reason);
-          }
-          throw error;
-        }
+        await move(db, {
+          entityId: jobId,
+          from: existing.status,
+          event: 'PUBLISH',
+          actor: { type: 'USER', id: clientId },
+          context: { categoryCount: existing._count.categories },
+          now: () => now,
+        });
 
         await db.job.update({
           where: { id: jobId },
           data: { status: 'OPEN', publishedAt: now, addressId },
+        });
+
+        const row = await db.job.findUniqueOrThrow({ where: { id: jobId }, include: JOB_INCLUDE });
+        return toJob(row);
+      });
+    },
+
+    async cancel(clientId, jobId, input) {
+      return prisma.$transaction(async (db) => {
+        const existing = await db.job.findFirst({
+          where: { id: jobId, clientId },
+          select: { id: true, status: true, _count: { select: { categories: true } } },
+        });
+        if (existing === null) return null;
+
+        const now = new Date();
+        await move(db, {
+          entityId: jobId,
+          from: existing.status,
+          event: 'CANCEL',
+          actor: { type: 'USER', id: clientId },
+          // `CANCEL` has no guard and does not read this, but the count is loaded rather than
+          // faked: a context carrying a `0` that is not true is one somebody later guards on.
+          context: { categoryCount: existing._count.categories },
+          // Omitted rather than null when absent — `AuditRecord.metadata` is a nullable Json
+          // column, and an absent key is what produces a NULL there (`state-machine.ts`).
+          ...(input.reason === undefined ? {} : { metadata: { reason: input.reason } }),
+          now: () => now,
+        });
+
+        await db.job.update({
+          where: { id: jobId },
+          data: { status: 'CANCELLED', cancelledAt: now },
         });
 
         const row = await db.job.findUniqueOrThrow({ where: { id: jobId }, include: JOB_INCLUDE });

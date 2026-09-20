@@ -1,5 +1,5 @@
 /**
- * `W4-T01` — the job posting routes.
+ * `W4-T01` — the job posting routes, with `W4-T02`'s cancellation.
  *
  * The HTTP boundary: parse the body, ask the repository, parse the answer on the way out. The one
  * rule worth stating here is the refusal shape — a job belonging to somebody else is **`404`, not
@@ -10,6 +10,7 @@
 import { type FastifyInstance, type FastifyPluginAsync, type FastifyRequest } from 'fastify';
 import {
   AppError,
+  JobCancelInputSchema,
   JobDraftInputSchema,
   JobSchema,
   JobUpdateInputSchema,
@@ -35,7 +36,10 @@ export interface JobRoutesDeps {
   readonly guards?: Guards<typeof PERMISSIONS>;
 }
 
-/** The cap on `GET /api/jobs/me`. Deliberately small; `W4-T02` can paginate properly when asked. */
+/**
+ * The cap on `GET /api/me/jobs`. Deliberately small, and still uncursored: `W4-T01`'s run record
+ * asks for a cursor *with the screen that needs one*, and there is still no screen.
+ */
 const LIST_LIMIT = 50;
 
 function jobIdOf(request: FastifyRequest): string {
@@ -93,10 +97,18 @@ export function jobRoutes(deps: JobRoutesDeps): FastifyPluginAsync {
       },
     );
 
-    // Registered **before** `/jobs/:id`, so `me` is never read as an id. `W3-T02` found this the
-    // hard way: a shared path space answers `/me` as a malformed uuid if the order is wrong.
+    /**
+     * `/me/jobs`, not `/jobs/me` — `W2-T03` §3.6 as amended by `W4-T02` §2.4: a **singleton** the
+     * principal owns is `/providers/me`, a **collection** is `/me/jobs`. `jobs` is not a job whose
+     * id is `me`.
+     *
+     * The spelling is doing work beyond consistency. `/jobs/me` shares a path space with
+     * `/jobs/:id` and survives only while it is registered first — a hazard `W3-T02` found the hard
+     * way and `W4-T01` carried a test for. This shares no path space with anything, so registration
+     * order here is a preference rather than a load-bearing fact.
+     */
     app.get(
-      '/jobs/me',
+      '/me/jobs',
       { preHandler: guards.requirePermission('job:read-own') },
       async (request) => {
         const jobs = await repository.listOwn(principalOf(request).userId, LIST_LIMIT);
@@ -128,6 +140,22 @@ export function jobRoutes(deps: JobRoutesDeps): FastifyPluginAsync {
       { preHandler: guards.requirePermission('job:publish-own') },
       async (request) => {
         const job = await repository.publish(principalOf(request).userId, jobIdOf(request));
+        return JobSchema.parse(orNotFound(job));
+      },
+    );
+
+    // A body at all is optional, which is why `parseBody` is given `request.body ?? {}` — a client
+    // cancelling without explaining themselves sends nothing, and that is the common case (§2.5).
+    app.post(
+      '/jobs/:id/cancel',
+      { preHandler: guards.requirePermission('job:cancel-own') },
+      async (request) => {
+        const input = parseBody(
+          JobCancelInputSchema,
+          request.body,
+          'The cancellation is not valid.',
+        );
+        const job = await repository.cancel(principalOf(request).userId, jobIdOf(request), input);
         return JobSchema.parse(orNotFound(job));
       },
     );

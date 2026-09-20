@@ -261,6 +261,20 @@ row, and the answer is `403` if the resource's existence is already public (a pr
 and `404` if it is not (a booking, a message thread). Stated here so that the two halves of the
 decision live in one place; enforced by whichever ticket writes such a route.
 
+**Amended 2026-09-20 by `W4-T02` — singular and plural take different spellings.** §3.7 below writes
+both of them (`app.put('/providers/me')` and `app.get('/me/addresses')`) without naming the rule
+that separates them, and `W4-T01` then picked the wrong half for a collection. The rule:
+
+> A **singleton** the principal owns is `/<resource>/me` — the profile *is* the resource and `me`
+> says which one. A **collection** the principal owns is `/me/<collection>` — `/me/jobs`,
+> `/me/addresses`. `jobs` is not a job whose id is `me`.
+
+Not style. `/jobs/me` shares a path space with `/jobs/:id`, so it survives only while the static
+route is registered first — a fact `W3-T02` found the hard way and `W4-T01` had to carry a test for.
+`/me/jobs` shares no path space with anything, so the hazard is absent rather than defended against.
+`GET /api/jobs/me` moved to `GET /api/me/jobs` in `W4-T02` while it had no callers;
+`PUT /api/providers/me` is the singleton half and does not move.
+
 ### 3.7 A build without `auth` has no guarded routes — it does not have open ones
 
 `buildApp` takes `auth` as optional, so that `/health` and the boundary tests can build an app with

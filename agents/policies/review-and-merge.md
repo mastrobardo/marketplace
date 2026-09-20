@@ -24,6 +24,12 @@ yourself, that is a `MANUAL_FIX` intervention and needs a ledger entry.
 All gates green. Required approvals present. Squash merge.
 Subject: `feat(quotes): submit quote [W4-T03]`.
 
+**A docs-only PR is merged as soon as its checks are green** — operator, 2026-09-20. It carries no
+code, so the three axes above have nothing to weigh, and the cost of leaving one open is real: the
+next ticket either stacks on an unmerged branch or resolves `TODO.md` and `memory/` twice. This is
+the *only* exemption, and it holds only while the diff is documentation and memory alone: one source
+file, one migration, one workflow makes it an ordinary PR again.
+
 **Running today**: `typecheck` · `lint` · `unit` · `build` · `database` · `workflows` · `gates`.
 The last one is `W0-T12`'s four — `spec-present` · `intervention-logged` · `author-identity` ·
 `agents-drift` — in a single job since `W0-T29`, each reported by name in the run summary and

@@ -38,19 +38,25 @@ export const PERMISSIONS = {
   'provider-profile:update-own': ['PROVIDER'],
 
   /**
-   * `W4-T01`. All four are `CLIENT`, and that is a statement about *capacity*, not about people:
-   * `roles` is a set and a provider is normally `['CLIENT','PROVIDER']`, so a tradesperson posting
-   * a job is a client doing it and passes.
+   * `W4-T01`, and `job:cancel-own` from `W4-T02`. All five are `CLIENT`, and that is a statement
+   * about *capacity*, not about people: `roles` is a set and a provider is normally
+   * `['CLIENT','PROVIDER']`, so a tradesperson posting a job is a client doing it and passes.
    *
-   * "Own" is **not** enforced here either. Three of these address `/:id`, where it cannot be
+   * "Own" is **not** enforced here either. Four of these address `/:id`, where it cannot be
    * structural, so the repository scopes every query by `clientId` and a stranger's job is `404`
    * (spec §3). A permission that needed the row to decide would not be a permission — it would be
-   * a query, and guards run before any repository.
+   * a query, and guards run before any repository. `job:read-own` is the exception and now reads
+   * as one: it guards `GET /api/me/jobs`, where the principal *is* the scope (`W4-T02` §2.4).
+   *
+   * Cancelling is its own permission rather than part of `job:update-own`, because they are not
+   * the same capability: editing changes what a job says, cancelling ends it. A subscription tier
+   * or a moderation rule that wanted to restrict one of those would have no way to name it.
    */
   'job:create': ['CLIENT'],
   'job:read-own': ['CLIENT'],
   'job:update-own': ['CLIENT'],
   'job:publish-own': ['CLIENT'],
+  'job:cancel-own': ['CLIENT'],
 } as const satisfies PermissionMatrix;
 
 export type Permission = keyof typeof PERMISSIONS;

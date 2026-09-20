@@ -1,22 +1,25 @@
 /**
- * `W4-T01` — the job contract, and the one rule that guards publishing.
+ * `W4-T01` and `W4-T02` — the job contract, the rule that guards publishing, and the way out.
  *
  * The interesting assertions here are about **what is not required**. The operator's instruction
  * (spec §1.1) is that a user completes a minimal flow with missing parameters, so a schema that
  * quietly demanded a description would be the defect — and it would be invisible, because a test
  * suite that only sends complete objects never notices.
  *
- * Spec: `docs/specs/S4/W4-T01-job-posting.md` §5.
+ * Specs: `docs/specs/S4/W4-T01-job-posting.md` §5, `docs/specs/S4/W4-T02-job-state-machine.md` §5.
  */
 import { describe, expect, it } from 'vitest';
 
 import {
   BudgetRangeSchema,
+  JobCancelInputSchema,
   JobDraftInputSchema,
+  JobEventSchema,
   JobSchema,
   JobStatusSchema,
   JobUpdateInputSchema,
   JobUrgencySchema,
+  canEditJob,
   hasAnyCategory,
   jobMachine,
 } from '../src/job.js';
@@ -80,9 +83,9 @@ describe('AC3/AC5 — publishing requires one thing, and it is the category set'
 });
 
 describe('AC4/AC12 — the machine', () => {
-  it('starts at DRAFT and knows only the two states this ticket ships', () => {
+  it('starts at DRAFT and knows only the states something can reach', () => {
     expect(jobMachine.initial).toBe('DRAFT');
-    expect([...jobMachine.states].sort()).toEqual(['DRAFT', 'OPEN']);
+    expect([...jobMachine.states].sort()).toEqual(['CANCELLED', 'DRAFT', 'OPEN']);
   });
 
   it('is named `job`, which is what lands in every audit row', () => {
@@ -102,10 +105,85 @@ describe('AC4/AC12 — the machine', () => {
     expect(result).not.toBe(true);
   });
 
-  it('declares OPEN terminal — true of this machine, not of the product', () => {
-    // `defineMachine` refuses an undeclared dead end, and it is right to: within W4-T01 there is
-    // genuinely no way out of OPEN. W4-T02 removes this in the same change that adds AWARDED.
-    expect(jobMachine.terminal).toEqual(['OPEN']);
+  it('AC1 — OPEN is no longer terminal, and CANCELLED is', () => {
+    // The promise `W4-T01` made when it declared OPEN terminal: the declaration leaves in the same
+    // change that gives OPEN an exit. This is the assertion that it was kept — a stale `terminal`
+    // list reads exactly like a deliberate one, so it is worth a test rather than a review.
+    expect(jobMachine.terminal).toEqual(['CANCELLED']);
+    expect(jobMachine.terminal).not.toContain('OPEN');
+  });
+});
+
+describe('AC2/AC3/AC4 — cancelling', () => {
+  it('moves a DRAFT to CANCELLED', () => {
+    expect(can(jobMachine, 'DRAFT', 'CANCEL', { categoryCount: 0 })).toBe(true);
+  });
+
+  it('moves an OPEN job to CANCELLED — this is the exit OPEN was missing', () => {
+    expect(can(jobMachine, 'OPEN', 'CANCEL', { categoryCount: 2 })).toBe(true);
+  });
+
+  it('is unguarded: a job with no categories cancels as readily as one with three', () => {
+    // Publishing has a floor. Leaving does not — a requirement to cancel would be the policing
+    // §1.1 rules out, applied to the way out instead of the way in.
+    for (const count of [0, 1, 9]) {
+      expect(can(jobMachine, 'DRAFT', 'CANCEL', { categoryCount: count })).toBe(true);
+    }
+  });
+
+  it('refuses a second cancel, and says the state is final', () => {
+    const result = check(jobMachine, 'CANCELLED', 'CANCEL', { categoryCount: 0 });
+    expect(result).not.toBe(true);
+    expect((result as { reason: string }).reason).toMatch(/final state/i);
+  });
+
+  it('AC9 — a cancelled job cannot be published', () => {
+    expect(can(jobMachine, 'CANCELLED', 'PUBLISH', { categoryCount: 3 })).toBe(false);
+  });
+
+  it('declares only the events something can fire', () => {
+    expect(JobEventSchema.options).toEqual(['PUBLISH', 'CANCEL']);
+    expect(JobEventSchema.safeParse('AWARD').success).toBe(false);
+  });
+});
+
+describe('AC7/AC8 — the edit rule is exhaustive over the states', () => {
+  it('allows editing a DRAFT and refuses every other state', () => {
+    expect(canEditJob('DRAFT')).toBe(true);
+    for (const status of ['OPEN', 'CANCELLED'] as const) {
+      const result = canEditJob(status);
+      expect(result, `${status} is editable`).not.toBe(true);
+      expect(result).toMatchObject({ code: 'CONFLICT' });
+      expect((result as { reason: string }).reason).toMatch(new RegExp(status));
+    }
+  });
+
+  it('answers for every state the machine declares, with none missed', () => {
+    // Iterating `jobMachine.states` rather than a literal list is the point: a state added to the
+    // machine and forgotten here fails this test, and fails the compiler first — `EDITABLE_IN` is
+    // a `Record<JobStatus, boolean>`, so it cannot be left incomplete (`MEM-2026-09-20-11`).
+    for (const status of jobMachine.states) {
+      const result = canEditJob(status);
+      expect(typeof result === 'boolean' || typeof result.reason === 'string').toBe(true);
+    }
+    expect(jobMachine.states.length).toBe(JobStatusSchema.options.length);
+  });
+});
+
+describe('AC5 — a cancellation reason is optional, and bounded when given', () => {
+  it('accepts an empty body', () => {
+    expect(JobCancelInputSchema.safeParse({}).success).toBe(true);
+  });
+
+  it('accepts a reason', () => {
+    const parsed = JobCancelInputSchema.safeParse({ reason: '  lo arreglé yo mismo  ' });
+    expect(parsed.success).toBe(true);
+    expect(parsed.success && parsed.data.reason).toBe('lo arreglé yo mismo');
+  });
+
+  it('refuses whitespace and a runaway paste', () => {
+    expect(JobCancelInputSchema.safeParse({ reason: '   ' }).success).toBe(false);
+    expect(JobCancelInputSchema.safeParse({ reason: 'x'.repeat(501) }).success).toBe(false);
   });
 });
 
@@ -146,6 +224,7 @@ describe('the wire shape', () => {
     budget: { minCents: null, maxCents: null },
     location: null,
     publishedAt: null,
+    cancelledAt: null,
     createdAt: '2026-09-20T10:00:00.000Z',
     updatedAt: '2026-09-20T10:00:00.000Z',
   };
@@ -178,8 +257,24 @@ describe('the wire shape', () => {
     expect(parsed.success).toBe(true);
   });
 
-  it('knows only the states this ticket ships', () => {
+  it('AC6 — a cancelled job carries the timestamp and nothing else new', () => {
+    const cancelled = {
+      ...minimal,
+      status: 'CANCELLED' as const,
+      cancelledAt: '2026-09-20T10:30:00.000Z',
+    };
+    expect(JobSchema.safeParse(cancelled).success).toBe(true);
+    // The *reason* is not on the wire shape at all — it is `audit_record.metadata` (§2.5), so a
+    // field appearing here later means one fact acquired a second home.
+    expect(Object.keys(JobSchema.shape)).not.toContain('cancellationReason');
+  });
+
+  it('knows only the states something can reach', () => {
+    // `AWARDED` is not a gap to fill in later without noticing: it arrives with `W4-T05`, which is
+    // what can produce it. `W4-T02` §6.1 has the table.
     expect(JobStatusSchema.safeParse('AWARDED').success).toBe(false);
-    expect(JobStatusSchema.options).toEqual(['DRAFT', 'OPEN']);
+    expect(JobStatusSchema.safeParse('IN_PROGRESS').success).toBe(false);
+    expect(JobStatusSchema.safeParse('COMPLETED').success).toBe(false);
+    expect(JobStatusSchema.options).toEqual(['DRAFT', 'OPEN', 'CANCELLED']);
   });
 });
