@@ -349,3 +349,24 @@ this file records the *why* an agent would otherwise have to rediscover.
 - **evidence**: `W4-T01` run record deviation 2; `apps/api/src/modules/jobs/repository.ts`
   `JOB_INCLUDE`; `apps/api/tests/job-live.test.ts` AC8
 - **status**: active
+
+### Credential rotation runs on a 30-to-60-day cadence, which is what makes `W0-T32` deferrable
+- **id**: MEM-2026-09-20-10
+- **scope**: repo
+- **fact**: Operator, 2026-09-20: *"a rotation shall happen every 30/60 days max, so no biggie."*
+  That sets a cadence the repo did not have, and it is the reason `W0-T32` — making a seeded
+  credential genuinely rotatable — is deferred rather than urgent: a procedure run six to twelve
+  times a year can be manual.
+- **why**: `W0-T31` found that a `*_SEED_DEMO_PASSWORD` cannot be rotated by changing the secret,
+  because the seeder runs once per database and `_seed_run` skips it for ever after. That is a real
+  defect, but its cost is a function of how often anyone hits it. At this cadence, hand-deleting a
+  ledger row or re-branching is annoying, not blocking.
+- **apply**: Deferred is **not** open-ended, and this entry exists so the deadline is not lost. The
+  preview and staging demo passwords were set on **2026-09-20**, so the first rotation falls due
+  between **2026-10-20 and 2026-11-19**. Until `W0-T32` lands, that rotation is manual ledger
+  surgery on an environment QA is using — so `W0-T32` wants to land inside that window, not
+  whenever the funnels happen to be finished. The cadence also applies to `*_BETTER_AUTH_SECRET`,
+  where rotation *is* immediate and needs no ticket.
+- **evidence**: operator, 2026-09-20; `TODO.md` `W0-T32`; `W0-T31` spec §3.4;
+  `scripts/secrets/generate.ts` `rotationNote`
+- **status**: active

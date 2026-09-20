@@ -346,28 +346,34 @@ Promotion happens in the same PR as the work. A separate "memory PR" never gets 
 
 Task IDs are stable — use them as board card titles.
 
-> ### ▶ NEXT — `W4-T01`, and the presupuestos funnel behind it
+> ### ▶ NEXT — `W4-T02`: the rest of the job state machine
 >
-> **The operator reset the ordering on 2026-09-20**: *"Fully funtional: the feature of the websites
-> (presupuestos, auctions, search) should be fully developed."* Search shipped (`W3-T05`); the other
-> two have not started. **Everything back-office moves behind them** — `W3-T11` and the whole of
-> `W9` are not front-of-app, and *"before getting a designer on board"* the site has to work.
+> **`W4-T01` shipped on 2026-09-20.** A job exists: `Job` + `JobCategory`, `0010_job_posting`, the
+> contract, and `DRAFT → OPEN` through the shared `transition()` seam. A draft asks for nothing; a
+> publish asks for one category and nothing else (`MEM-2026-09-20-4`).
 >
-> So: **`W4-T01`** (job posting: category, description, photos, location, budget, urgency), then the
-> `W4` chain to `W4-T05`, then `W6` auctions. `W4-T01` is `[A]`, has no open product question, and
-> sits upstream of both things `W13` will touch — so it can start before that ADR exists.
+> **`W4-T02` has two jobs that are not optional**, both left deliberately by `W4-T01` and both
+> load-bearing:
 >
-> **`W13` is filed and deliberately unstarted** — the DM / contact-gating epic, ADR first and in its
-> own session (§W13). It reframes `W4-T08`, which is now marked `[SUPERSEDED-PENDING]`: **do not
-> build contact masking as written.** `W4-T06`'s job-scoped thread is also in its blast radius.
+> 1. **Remove `OPEN` from `jobMachine.terminal`** in the same change that gives it an exit.
+>    `defineMachine` rejects a dead end that is not declared terminal, so the list is honest today —
+>    and becomes a lie the moment `AWARDED` exists.
+> 2. **Move "only a draft may be edited" out of `repository.update`.** It is a hand-written `if`
+>    that nothing ties to the machine's states. With four more states it keeps refusing correctly
+>    *by accident* rather than by design, and no test would notice.
 >
-> **`W3-T11` is deprioritised, not cancelled.** Its blocker cleared — preview and staging hold the
-> taxonomy since `W0-T30` — and its three open questions still stand at §W3. It also no longer
-> depends on an audit trail to *start*: `W9-T08` owns that and is explicitly not MVP-blocking. But
-> it should not claim to have answered `W3-T01` §9 until `W9-T08` exists.
+> Then `W4-T03` (quotes), which inherits the question `W4-T01` §2.4 deliberately did not answer:
+> **a three-trade job — one quote covering everything, or three covering parts?** The data model
+> does not prejudge it, and choosing wrong there is expensive.
 >
-> **Still needs a human:** `STAGING_SEED_DEMO_PASSWORD` is unset —
-> `./scripts/secrets/set-staging-seed-password.sh`. Preview was set on 2026-09-20.
+> **Not blocking anything:** `W0-T32` (rotating a seeded credential) is deferred by the operator,
+> 2026-09-20 — rotation is a 30-to-60-day cadence, so a manual procedure is survivable. It is not
+> open-ended: the first rotation of the secrets set on 2026-09-20 falls due between **2026-10-20 and
+> 2026-11-19**, and until `W0-T32` lands that rotation means deleting a `_seed_run` row by hand or
+> re-branching the database. `W9` and `W3-T11` stay behind the funnels (`MEM-2026-09-20-3`).
+>
+> **`W13` remains filed and unstarted** — the DM / contact-gating epic, ADR first, its own session.
+> `W4-T08` is `[SUPERSEDED-PENDING]`: do not build contact masking as written.
 >
 > ### Also ready — the storefront half, now that every endpoint it needs is real
 >
@@ -521,7 +527,7 @@ for data), so no feature is blocked waiting for an account that is not needed ye
 
 - `W0-T31` `[A]` ✅ **Generating a deploy secret without anybody reading it.** `tsx scripts/secrets/generate.ts <NAME> [--write]`, asked for at `W0-T30`'s close (*"this will come in hand when rotation is needed"*). The feature is twenty lines; **the requirement is that the tool cannot leak into an agent session**, which the operator raised and doubted was achievable. Three paths, each closed by construction, not policy: the value goes to `gh secret set` on **stdin** so it is never in `argv` (`ps`, shell history, process listings); `--write` prints **no value at all**; and both modes **refuse unless stdout is a TTY** — `isTTY` is a fact about where bytes go, not a guess about the caller, and there is no captured-output path that also has one. The refusal happens *before* `randomBytes`, so a refused run leaves no value in existence. Proven from inside an agent session, which could not make it emit one. Strength comes from the **name** (`*_BETTER_AUTH_SECRET` 32 bytes, `*_SEED_DEMO_PASSWORD` 24, both base64url, both asserted against the floors `EnvSchema` declares) — there is no `--length`, because a caller who can pick the strength can pick a weak one. Vendor credentials are listed **explicitly** in `ISSUED_ELSEWHERE` rather than inferred from "has no recipe", so a new entry in `REQUIRED` fails the suite until a human classifies it; `FLY_API_TOKEN` is refused by name, since random bytes of the right shape would fail at deploy time far from the cause. Two **argument-free wrappers** came with it — `set-preview-seed-password.sh` and `set-staging-seed-password.sh`, the repo's first `.sh` files — because whoever sets up an environment may not be technical (operator, 2026-09-19); each explains itself, confirms before overwriting, and hands off with `exec` rather than `$(…)`, which would capture the value *and* trip the TTY guard. **Found while writing the rotation note**: `*_SEED_DEMO_PASSWORD` does not actually rotate — see `W0-T32` *(spec: `docs/specs/S0/W0-T31-secret-generation.md`)*
 
-- `W0-T32` `[A]` **Make a seeded credential actually rotatable.** `W0-T31` had to print a warning instead of a rotation: setting a new `*_SEED_DEMO_PASSWORD` changes **nothing** about an environment that is already seeded, because `auth.demo-users` runs once per database and `_seed_run` skips it for ever after (`W0-T30` §3.1). The next deploy reads the new value and skips the seeder, so the old password keeps working and the secret's rotation is a fiction. Two candidate shapes: a `db:seed --force <id>` that deletes one ledger row and re-runs that seeder — which needs an answer for what `auth.demo-users` does when its rows already exist, since it `create`s rather than upserts and the ledger is *why* it may — or an explicit decision that demo credentials rotate by re-branching the database, which is cheap for preview and not for staging. `W0-T20` is the neighbour: a sanitised-data pipeline will want the same primitive for a different reason. Until this lands, treat a leaked staging demo password as *re-branch staging*, not *change the secret*
+- `W0-T32` `[A]` `[DEFERRED]` **Make a seeded credential actually rotatable.** *Deferred by the operator, 2026-09-20: rotation runs on a **30-to-60-day cadence**, so doing it by hand a few times is survivable and this does not block the funnels.* **It is deferred, not open-ended** — the preview and staging demo passwords were set on 2026-09-20, so the first rotation falls due between **2026-10-20 and 2026-11-19**; until this lands, that rotation means deleting a `_seed_run` row by hand or re-branching the database, on an environment QA is using. `W0-T31` had to print a warning instead of a rotation: setting a new `*_SEED_DEMO_PASSWORD` changes **nothing** about an environment that is already seeded, because `auth.demo-users` runs once per database and `_seed_run` skips it for ever after (`W0-T30` §3.1). The next deploy reads the new value and skips the seeder, so the old password keeps working and the secret's rotation is a fiction. Two candidate shapes: a `db:seed --force <id>` that deletes one ledger row and re-runs that seeder — which needs an answer for what `auth.demo-users` does when its rows already exist, since it `create`s rather than upserts and the ledger is *why* it may — or an explicit decision that demo credentials rotate by re-branching the database, which is cheap for preview and not for staging. `W0-T20` is the neighbour: a sanitised-data pipeline will want the same primitive for a different reason. Until this lands, treat a leaked staging demo password as *re-branch staging*, not *change the secret*
 
 - `W3-T11` `[A]` `[B]` **Back-office CRUD for the category tree.** Operator decision, 2026-09-19: the back office becomes the taxonomy's writer, which **reverses `W3-T01` §9** — that section argued a runtime-editable taxonomy is the opposite of a legal boundary, because `requiresLicence` is what `W3-T08` reads as fact. The decision stands; the argument still has to be answered in the design rather than ignored. **`W0-T30` cleared the blocker** on 2026-09-19 — preview and staging now hold the taxonomy, so there is something deployed to edit — and it **depends on `W9-T01`** for admin auth and the audit trail — `AuditRecord` exists and an edit to a legal flag is exactly what it is for. Open at ticket start: **which slice owns it** (`modules/categories/` is `agent-providers`', `modules/admin/` is `agent-admin`'s), whether `requiresLicence` is editable at all or only by a narrower role than `ADMIN` (`W2-T03`'s rule: no implicit admin bypass, and a permission enters with the route that guards with it), and whether a slug may be changed after creation — it is in URLs, in `W3-T02`'s write path, in `provider_category` and in four fixed demo uuids, so renaming one is a breaking change while relabelling is free (`MEM-2026-09-19-1`). Note it also settles `MEM-2026-09-18-13`: runtime-editable names cannot be compile-checked i18n keys, so the `nameEs`/`nameEn` columns stay
 
