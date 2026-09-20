@@ -1,5 +1,5 @@
 /**
- * `W4-T01` — posting a job, against Postgres.
+ * `W4-T01` and `W4-T02` — posting and cancelling a job, against Postgres.
  *
  * `packages/contracts/tests/job.test.ts` asserts the shapes and the publish guard without a
  * database. This asserts the rows and the transition: that a draft with nothing in it exists, that
@@ -11,9 +11,10 @@
  *   STACK_LIVE=1 DATABASE_URL="postgres://marketplace:marketplace_local@127.0.0.1:5433/marketplace" \
  *     pnpm --filter @marketplace/api exec vitest run job-live
  *
- * Spec: `docs/specs/S4/W4-T01-job-posting.md` §5.
+ * Specs: `docs/specs/S4/W4-T01-job-posting.md` §5, `docs/specs/S4/W4-T02-job-state-machine.md` §5.
  */
 import { execFileSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -29,6 +30,7 @@ const describeLive = live ? describe : describe.skip;
 const apiRoot = fileURLToPath(new URL('..', import.meta.url));
 const repoRoot = fileURLToPath(new URL('../..', import.meta.url));
 const SCHEMA = join(apiRoot, 'prisma', 'schema.prisma');
+const MIGRATIONS = join(apiRoot, 'prisma', 'migrations');
 
 function dc(...args: string[]): string {
   return execFileSync('docker', ['compose', ...args], {
@@ -146,7 +148,7 @@ describeLive('AC2/AC10 — editing a draft', () => {
     expect(updated?.title).toBeNull();
   });
 
-  it('refuses to edit a job that is no longer a draft', async () => {
+  it('AC7 — refuses to edit a job that is no longer a draft', async () => {
     const created = await jobs.createDraft(client, { categorySlugs: ['w4t01-fontaneria'] });
     await jobs.publish(client, created.id);
 
@@ -302,6 +304,7 @@ describeLive('AC11 — a stranger cannot see, edit or publish', () => {
     expect(await jobs.findOwn(stranger, created.id)).toBeNull();
     expect(await jobs.update(stranger, created.id, { title: 'Mine now' })).toBeNull();
     expect(await jobs.publish(stranger, created.id)).toBeNull();
+    expect(await jobs.cancel(stranger, created.id, {})).toBeNull();
   });
 
   it('leaves the job untouched after all three attempts', async () => {
@@ -327,4 +330,187 @@ describeLive('AC13 — the owner list', () => {
       expect.objectContaining({ id: first.id }),
     );
   });
+});
+
+/* ------------------------------------------------------------------------------------------- *
+ * W4-T02 — the way out
+ * ------------------------------------------------------------------------------------------- */
+
+describeLive('AC2/AC6 — cancelling a draft', () => {
+  it('moves it to CANCELLED and stamps cancelled_at', async () => {
+    const created = await jobs.createDraft(client, { title: 'Ya no hace falta' });
+    expect(created.cancelledAt, 'a fresh draft was born cancelled').toBeNull();
+
+    const cancelled = await jobs.cancel(client, created.id, {});
+
+    expect(cancelled?.status).toBe('CANCELLED');
+    expect(cancelled?.cancelledAt).not.toBeNull();
+    expect(cancelled?.publishedAt, 'cancelling published it').toBeNull();
+    expect(JobSchema.safeParse(cancelled).success).toBe(true);
+  });
+
+  it('records it through the shared machine, with no category requirement', async () => {
+    // A draft with nothing in it can still be abandoned. Publishing has a floor; leaving does not.
+    const created = await jobs.createDraft(client, {});
+    await jobs.cancel(client, created.id, {});
+
+    const audit = await prisma.auditRecord.findFirst({ where: { entityId: created.id } });
+    expect(audit?.entity).toBe('job');
+    expect(audit?.action).toBe('CANCEL');
+    expect(audit?.fromState).toBe('DRAFT');
+    expect(audit?.toState).toBe('CANCELLED');
+    expect(audit?.actorId).toBe(client);
+  });
+});
+
+describeLive('AC3 — cancelling an OPEN job, which is the exit OPEN was missing', () => {
+  it('moves a published job to CANCELLED and keeps published_at', async () => {
+    const created = await jobs.createDraft(client, { categorySlugs: ['w4t01-fontaneria'] });
+    await jobs.publish(client, created.id);
+
+    const cancelled = await jobs.cancel(client, created.id, {});
+
+    expect(cancelled?.status).toBe('CANCELLED');
+    expect(cancelled?.cancelledAt).not.toBeNull();
+    // Both timestamps stand. The job *was* published, and a cancellation does not unsay that —
+    // `audit_record` holds the same two facts in the same order.
+    expect(cancelled?.publishedAt).not.toBeNull();
+  });
+
+  it('writes the second transition from OPEN, not from DRAFT', async () => {
+    const created = await jobs.createDraft(client, { categorySlugs: ['w4t01-fontaneria'] });
+    await jobs.publish(client, created.id);
+    await jobs.cancel(client, created.id, {});
+
+    const audits = await prisma.auditRecord.findMany({
+      where: { entityId: created.id },
+      orderBy: { at: 'asc' },
+    });
+    expect(audits.map((row) => [row.fromState, row.toState])).toEqual([
+      ['DRAFT', 'OPEN'],
+      ['OPEN', 'CANCELLED'],
+    ]);
+  });
+});
+
+describeLive('AC4 — cancelling twice', () => {
+  it('is refused as a final state and writes no second audit row', async () => {
+    const created = await jobs.createDraft(client, {});
+    await jobs.cancel(client, created.id, {});
+
+    await expect(jobs.cancel(client, created.id, {})).rejects.toMatchObject({ code: 'CONFLICT' });
+
+    const audits = await prisma.auditRecord.count({ where: { entityId: created.id } });
+    expect(audits, 'a refused cancel wrote an audit row').toBe(1);
+  });
+
+  it('says the state is final rather than naming a missing rule', async () => {
+    const created = await jobs.createDraft(client, {});
+    await jobs.cancel(client, created.id, {});
+
+    await expect(jobs.cancel(client, created.id, {})).rejects.toThrow(/final state/i);
+  });
+});
+
+describeLive('AC5 — the reason lives in the audit row', () => {
+  it('writes it to metadata when given', async () => {
+    const created = await jobs.createDraft(client, {});
+    await jobs.cancel(client, created.id, { reason: 'lo arreglé yo mismo' });
+
+    const audit = await prisma.auditRecord.findFirst({ where: { entityId: created.id } });
+    expect(audit?.metadata).toEqual({ reason: 'lo arreglé yo mismo' });
+  });
+
+  it('leaves metadata NULL when not', async () => {
+    // Omitted rather than `{}` or a null-valued key: an absent key is what produces a NULL column,
+    // and "no reason given" should read as nothing recorded, not as a recorded nothing.
+    const created = await jobs.createDraft(client, {});
+    await jobs.cancel(client, created.id, {});
+
+    const audit = await prisma.auditRecord.findFirst({ where: { entityId: created.id } });
+    expect(audit?.metadata).toBeNull();
+  });
+});
+
+describeLive('AC7/AC9 — a cancelled job is finished', () => {
+  it('cannot be edited', async () => {
+    const created = await jobs.createDraft(client, { title: 'Antes' });
+    await jobs.cancel(client, created.id, {});
+
+    await expect(jobs.update(client, created.id, { title: 'Después' })).rejects.toMatchObject({
+      code: 'CONFLICT',
+    });
+
+    const after = await jobs.findOwn(client, created.id);
+    expect(after?.title, 'a refused edit landed anyway').toBe('Antes');
+  });
+
+  it('cannot be published, even with the categories publishing would need', async () => {
+    const created = await jobs.createDraft(client, { categorySlugs: ['w4t01-fontaneria'] });
+    await jobs.cancel(client, created.id, {});
+
+    await expect(jobs.publish(client, created.id)).rejects.toMatchObject({ code: 'CONFLICT' });
+
+    const after = await jobs.findOwn(client, created.id);
+    expect(after?.status).toBe('CANCELLED');
+    expect(after?.publishedAt).toBeNull();
+  });
+});
+
+describeLive('AC13 — the rollback refuses data it cannot honestly undo', () => {
+  it('fails loudly when a CANCELLED job exists, rather than rewriting it', async () => {
+    // `db.test.ts` AC10 rolls every migration back against an *empty* database, which is the half
+    // that proves the SQL is valid. This is the other half: Postgres cannot drop an enum value, so
+    // 0011's down.sql rebuilds the type — and that is only safe while nothing holds the value.
+    // Silently moving cancelled jobs to DRAFT would republish work their owners abandoned while
+    // `audit_record` still said CANCEL, leaving the history and the column contradicting one
+    // another. The rollback is supposed to stop instead.
+    const db = migrated('w4t02_rollback');
+    const scratch = new PrismaClient({ datasources: { db: { url: urlFor(db) } } });
+
+    try {
+      const owner = await createUser(scratch as unknown as FactoryClient, { roles: ['CLIENT'] });
+      const repository = createJobRepository(scratch);
+      const created = await repository.createDraft(owner.id, {});
+      await repository.cancel(owner.id, created.id, {});
+      await scratch.$disconnect();
+
+      const down = readFileSync(join(MIGRATIONS, '0011_job_cancellation', 'down.sql'), 'utf8');
+
+      expect(() =>
+        execFileSync(
+          'docker',
+          [
+            'compose',
+            'exec',
+            '-T',
+            'db',
+            'psql',
+            '-U',
+            'marketplace',
+            '-d',
+            db,
+            '-v',
+            'ON_ERROR_STOP=1',
+            '-c',
+            down,
+          ],
+          { cwd: repoRoot, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] },
+        ),
+      ).toThrow(/cannot roll back 0011/);
+
+      // And it stopped *before* touching anything: a rollback that half-ran would be worse than
+      // one that refused, because the next attempt would start from a schema nobody described.
+      expect(psql(db, `SELECT count(*) FROM "job" WHERE "status" = 'CANCELLED'`)).toBe('1');
+      expect(
+        psql(
+          db,
+          `SELECT count(*) FROM information_schema.columns WHERE table_name = 'job' AND column_name = 'cancelled_at'`,
+        ),
+      ).toBe('1');
+    } finally {
+      await scratch.$disconnect().catch(() => undefined);
+      psql('marketplace', `DROP DATABASE IF EXISTS "w4t02_rollback" WITH (FORCE)`);
+    }
+  }, 120_000);
 });

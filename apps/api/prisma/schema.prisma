@@ -330,9 +330,14 @@ model ProviderCategory {
 ///
 /// Declaring AWARDED/IN_PROGRESS/COMPLETED/CANCELLED now would put four values in this enum that
 /// nothing can produce and no route can reach. `ALTER TYPE ... ADD VALUE` is a cheap migration.
+/// `AWARDED`, `IN_PROGRESS` and `COMPLETED` are deliberately absent, and each is owned by the
+/// ticket that can *produce* it: `W4-T05` (award, once a quote can be accepted), then the booking
+/// lifecycle in `W5` — see `docs/specs/S4/W4-T02-job-state-machine.md` §6.1. A value here that no
+/// route can write is the empty promise this schema keeps refusing.
 enum JobStatus {
   DRAFT
   OPEN
+  CANCELLED
 
   @@map("job_status")
 }
@@ -376,6 +381,11 @@ model Job {
   /// When it became OPEN. Null while DRAFT, and the only column that records the transition
   /// outside `audit_record`.
   publishedAt DateTime? @map("published_at") @db.Timestamptz(3)
+
+  /// When it was cancelled. Mirrors `published_at` — the timestamp a list screen needs without
+  /// joining `audit_record`. The *reason* is not a column: it is `audit_record.metadata`, so that
+  /// one fact has one home (`W4-T02` §2.5).
+  cancelledAt DateTime? @map("cancelled_at") @db.Timestamptz(3)
 
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)

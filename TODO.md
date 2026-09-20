@@ -346,25 +346,32 @@ Promotion happens in the same PR as the work. A separate "memory PR" never gets 
 
 Task IDs are stable — use them as board card titles.
 
-> ### ▶ NEXT — `W4-T02`: the rest of the job state machine
+> ### ▶ NEXT — `W4-T03`: quotes, and the question the data model refused to prejudge
 >
-> **`W4-T01` shipped on 2026-09-20.** A job exists: `Job` + `JobCategory`, `0010_job_posting`, the
-> contract, and `DRAFT → OPEN` through the shared `transition()` seam. A draft asks for nothing; a
-> publish asks for one category and nothing else (`MEM-2026-09-20-4`).
+> **`W4-T02` shipped on 2026-09-20**, and both debts `W4-T01` named are paid: `OPEN` has an exit and
+> is out of `terminal`, and "only a draft may be edited" is now `canEditJob`, an exhaustive
+> `Record<JobStatus, boolean>` that **fails the build** when a state is added without a decision
+> (`MEM-2026-09-20-13`). A client can end a job: `POST /api/jobs/:id/cancel`, `DRAFT`/`OPEN` →
+> `CANCELLED`, reason optional and recorded in `audit_record.metadata` rather than a column.
 >
-> **`W4-T02` has two jobs that are not optional**, both left deliberately by `W4-T01` and both
-> load-bearing:
+> **The lifecycle is deliberately still unfinished, and the remaining states are not this slice's.**
+> `AWARDED` belongs to `W4-T05` (it needs an accepted quote to award to), `IN_PROGRESS` and
+> `COMPLETED` to the booking lifecycle in `W5` — completion is what triggers capture (`W5-T04`) —
+> and cancelling *after* an award is a refund decision (`W5-T05`). `MEM-2026-09-20-14` and
+> `W4-T02` §6.1 carry the table.
 >
-> 1. **Remove `OPEN` from `jobMachine.terminal`** in the same change that gives it an exit.
->    `defineMachine` rejects a dead end that is not declared terminal, so the list is honest today —
->    and becomes a lie the moment `AWARDED` exists.
-> 2. **Move "only a draft may be edited" out of `repository.update`.** It is a hand-written `if`
->    that nothing ties to the machine's states. With four more states it keeps refusing correctly
->    *by accident* rather than by design, and no test would notice.
+> **`W4-T03` inherits the question `W4-T01` §2.4 deliberately did not answer:** a three-trade job —
+> **one quote covering everything, or three covering parts?** The data model does not prejudge it,
+> and choosing wrong there is expensive.
 >
-> Then `W4-T03` (quotes), which inherits the question `W4-T01` §2.4 deliberately did not answer:
-> **a three-trade job — one quote covering everything, or three covering parts?** The data model
-> does not prejudge it, and choosing wrong there is expensive.
+> **And one for `agent-money` before either slice writes a state:** does a job track `IN_PROGRESS`
+> and `COMPLETED` at all, or read them off its `Booking`? Two machines over one engagement can
+> disagree, and a job reading `COMPLETED` while its booking reads `DISPUTED` costs a refund.
+>
+> **One convention changed underfoot:** an own-scoped **collection** is now `/api/me/<collection>`
+> and a **singleton** stays `/api/providers/me` (`W2-T03` §3.6, amended; `MEM-2026-09-20-12`).
+> `GET /api/jobs/me` moved to `GET /api/me/jobs` while it had no callers. `W4-T03`, `W4-T06` and
+> `W6` all have own-scoped collections — use the new spelling.
 >
 > **Not blocking anything:** `W0-T32` (rotating a seeded credential) is deferred by the operator,
 > 2026-09-20 — rotation is a 30-to-60-day cadence, so a manual procedure is survivable. It is not
@@ -544,7 +551,7 @@ for data), so no feature is blocked waiting for an account that is not needed ye
 
 ### W4 — Jobs & presupuestos (`agent-jobs`)
 - `W4-T01` `[A]` ✅ **Job posting flow — a draft that asks for nothing, and a publish that asks for one thing.** The first `W4` row: there was no `Job` in the schema at all, so this carries the model, `0010_job_posting` and the contract, not just routes. **A `DRAFT` requires nothing but an owner** — every column nullable, `{}` is a valid body, `PUT` merges — and **publishing requires exactly one thing: at least one category** (`MEM-2026-09-20-4`). Not because a form should look complete, but because matching is by category and a job with none reaches nobody, which a client experiences as silence. No description, no title, no budget, no location required. **Categories are many-to-many** (`JobCategory`, mirroring `ProviderCategory`): *a reformation of a bathroom might need tiles, plumbing and electricity* — operator, 2026-09-20. Location is **inferred** from the client's default address at publish and stays null if there is none. Two states only — `W4-T02` owns the rest, and `defineMachine` **rejected the first declaration** because `OPEN` had no exit and was not declared terminal, which the spec had argued against; the contract was right. **Photos deferred** by the operator, with no column: object storage is unbuilt and a nullable column nothing writes is the empty promise this repo keeps refusing. `transition()`'s first consumer, so every publish writes an `audit_record` row inside the same transaction as the status change *(spec: `docs/specs/S4/W4-T01-job-posting.md`)*
-- `W4-T02` `[A]` Job state machine: `DRAFT → OPEN → AWARDED → IN_PROGRESS → COMPLETED / CANCELLED`
+- `W4-T02` `[A]` ✅ **The exit from `OPEN`, and an edit rule that stops being an accident.** The board line here said `DRAFT → OPEN → AWARDED → IN_PROGRESS → COMPLETED / CANCELLED`; this ticket shipped **`CANCELLED` and stopped**, because three of the other states are `agent-money`'s and the fourth needs a quote to award to (`MEM-2026-09-20-14`, spec §6.1 — `AWARDED` → `W4-T05`, `IN_PROGRESS`/`COMPLETED` → `W5`, cancelling after an award → `W5-T05`). A state nothing can write is the empty promise this repo keeps refusing. **Both of `W4-T01`'s named debts are paid in the change that made them wrong:** `OPEN` left `terminal` in the same edit that gave it an exit, and the hand-written `if (status !== 'DRAFT')` became `canEditJob`, an exhaustive `Record<JobStatus, boolean>` — **adding `AWARDED` now fails the compiler** at the edit rule instead of being silently refused for the wrong reason, which is the whole point and was verified by doing it (`MEM-2026-09-20-13`). `POST /api/jobs/:id/cancel` + `job:cancel-own`, one rule from two states, terminal for good: reopening is a new job. The **reason is `audit_record.metadata`, not a column** (`MEM-2026-09-20-15`) — the audit row already holds who, when and from where; `cancelled_at` is a column only because a list screen needs it without a join. **`GET /api/jobs/me` became `GET /api/me/jobs`** on the operator's instinct, which the repo already agreed with: `W2-T03` §3.7 wrote both spellings and named neither rule, so §3.6 now carries it (`MEM-2026-09-20-12`). Not style — `/jobs/me` only ever worked while registered before `/jobs/:id`, and the new spelling deletes the hazard instead of testing for it. `0011`'s rollback **refuses rather than repairs**: rebuilding the enum would need cancelled rows rewritten, which republishes abandoned work while the audit trail still says `CANCEL` *(spec: `docs/specs/S4/W4-T02-job-state-machine.md`)*
 - `W4-T03` `[A]` Quote submission (one active quote per pro per job, validity window)
 - `W4-T04` `[A]` Quote comparison UI for the client + accept/reject
 - `W4-T05` `[A]` Award → creates Booking (hand-off to S9)

@@ -134,7 +134,7 @@ first-accept-wins flow, and a job marked urgent stays an ordinary job.
 | Route | Permission | Does |
 |---|---|---|
 | `POST /api/jobs` | `job:create` | Creates a `DRAFT`. Body may be `{}` |
-| `GET /api/jobs/me` | `job:read-own` | The caller's jobs, newest first, paginated |
+| ~~`GET /api/jobs/me`~~ | `job:read-own` | The caller's jobs, newest first. **Moved to `GET /api/me/jobs` by `W4-T02` §2.4** — a collection the principal owns is `/me/<collection>`, and `/jobs/me` only worked while it was registered before `/jobs/:id` |
 | `GET /api/jobs/:id` | `job:read-own` | One job, owner only while `DRAFT` |
 | `PUT /api/jobs/:id` | `job:update-own` | Partial update. Refused once not `DRAFT` |
 | `POST /api/jobs/:id/publish` | `job:publish-own` | `DRAFT → OPEN` through `transition()` |
@@ -178,7 +178,8 @@ client doing it, and `roles` is a set, so that is not a restriction on people, o
 - **AC11** — Every route refuses an unauthenticated caller, and a job belonging to another user is
   `404` on `GET`, `PUT` and `publish`.
 - **AC12** — Publishing an already-`OPEN` job is refused and does not write a second audit row.
-- **AC13** — `GET /api/jobs/me` paginates per `pagination.ts` and is ordered newest first.
+- **AC13** — `GET /api/me/jobs` (`GET /api/jobs/me` when this ticket shipped — moved by `W4-T02`
+  §2.4) paginates per `pagination.ts` and is ordered newest first.
 - **AC14** — The four permissions exist in `PERMISSIONS` and each is asserted denied for a role
   that should not have it.
 - **AC15** — The migration is reversible, and `prisma migrate diff` reports no drift.
