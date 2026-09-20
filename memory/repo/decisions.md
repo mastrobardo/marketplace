@@ -396,10 +396,12 @@ this file records the *why* an agent would otherwise have to rediscover.
 
 - **id**: MEM-2026-09-20-18
 - **scope**: repo
-- **fact**: `R4` (users taking a job off-platform) is answered in this order: **make it cost
-  something** (awarding captures a forfeitable fee), **attest the start** (the handshake), then
-  **detect the residue** (`W5-T11` reconciles lifecycle against money, on the four signatures in
-  ADR-013 §8). Contact masking (`W4-T08`) is superseded, and **message scanning is rejected**.
+- **fact**: `R4` (users taking a job off-platform) is answered in this order: **charge before the
+  work** (platform revenue is realised when the client approves the start, not at completion),
+  **attest that moment** (the handshake), then **detect the residue** (`W5-T11`). Contact masking
+  (`W4-T08`) is superseded, and **message scanning is rejected**. Because revenue lands at the
+  start, a pair that goes off-platform *afterwards* costs the platform nothing — the leak shrinks
+  to one signature: introduced, never approved, and the work happened anyway (ADR-013 §8).
   Supersedes the open question recorded as `MEM-2026-09-20-14` — a job *does* track `IN_PROGRESS`
   and `COMPLETED`, cross-verified rather than derived.
 - **why**: scanning messages for phone numbers is evadable by anyone who writes *llámame al seis
@@ -415,24 +417,33 @@ this file records the *why* an agent would otherwise have to rediscover.
 - **evidence**: `docs/adr/ADR-013-engagement-reconciliation.md` §8, §9; `TODO.md` `R4`, `BD-08`
 - **status**: active
 
-### The platform never holds client funds, and the flag is the riskiest thing it publishes
+### The job's price never touches the platform, and a ban needs evidence a refund does not
 
 - **id**: MEM-2026-09-20-19
 - **scope**: repo
-- **fact**: Two constraints from ADR-013 that are cheap to honour and expensive to retrofit.
-  **(1)** Money sits with Stripe between capture and transfer; the platform directs it and keeps
-  none of it — operator: *"something that doesnt put me in a position as a financial entity"*.
-  **(2)** A professional is publicly flagged for no-shows only on a **pattern** (N in a window), and
-  the flag is appealable and time-bounded.
-- **why**: (1) holding client money is what turns a marketplace into a regulated entity, and it is
-  an architectural property, not a feature — once payouts run from the platform's own balance,
-  unwinding it is a rebuild. (2) the attack on a first-incident rule is a client who falsely claims
-  a no-show: they get a refund *and* publicly mark somebody who was standing outside a locked door.
-  A public flag on a named tradesperson's reliability is personal data about their livelihood.
-- **apply**: never design a flow where the platform's balance is the resting place for a client's
-  money — `R1`'s legal review before `M8` confirms the shape, but the code should not have to change
-  for it. Any published negative signal about a person needs a verified event behind it, an appeal
-  (`W8-T07`), and an expiry. Note the related trap in ADR-013 §4: **card authorizations expire after
-  roughly a week**, so "authorize at award, capture later" cannot cover work scheduled weeks out.
-- **evidence**: `docs/adr/ADR-013-engagement-reconciliation.md` §4, §6; `TODO.md` `BD-01`
+- **fact**: Three constraints from ADR-013, cheap to honour and expensive to retrofit.
+  **(1)** **One payment passes through this platform** — the call-out fee, captured at award and
+  released when the client approves the start of work. What the job costs is settled between the two
+  people, in cash if they choose; the platform does not see it and does not police their invoicing
+  (operator, 2026-09-20: *"I cannot and i should not enforce a correct facturation"*).
+  **(2)** Revenue is realised at the start of work, never at completion.
+  **(3)** A no-show claim **always refunds the client**, but flags the professional on the first
+  upheld claim and bans on the second — and those are different decisions with different bars.
+- **why**: (1) and (2) are what keep this a marketplace rather than a financial entity: there is no
+  third-party money resting anywhere, so the question of holding it never arises. (3) is about
+  asymmetric cost — refunding a false claim costs a call-out fee, while removing a tradesperson ends
+  their income here and cannot be undone by an apology. And the client side cannot be defended by
+  pattern detection at all: someone who remodels a bathroom once a decade never accumulates enough
+  events, which the operator put as *"less than 1% of users will need to remode their bathrooms 4
+  times per year"*.
+- **apply**: never design a flow where a client's payment for the *work* rests anywhere in this
+  system — the only money it handles is its own fee. Keep refund and sanction as separate decisions
+  wherever a claim triggers both. A low sanction threshold is survivable **only if verification is
+  cheap**, so the arrival attestation in `W4-T09` is a requirement of the two-strike rule rather
+  than an enhancement to it. The one client-side detector worth having is a repeat-claim counter:
+  it catches multi-property owners, who are the only clients with the volume to scam repeatedly —
+  the operator's own observation. Related trap in ADR-013 §4: **card authorizations expire after
+  roughly a week**, so the fee is captured, not held.
+- **evidence**: `docs/adr/ADR-013-engagement-reconciliation.md` §4, §4.1, §6, §6.1; `TODO.md`
+  `BD-01`
 - **status**: active
