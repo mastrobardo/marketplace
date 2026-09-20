@@ -208,6 +208,12 @@ is the decision that gets contested. Same trigger, same evidence, different cons
 | 1st | **public flag** — it stays visible, and clients decide for themselves |
 | 2nd | **ban** |
 
+Those counts, and the contest window below, are **configuration with their reasoning beside them**
+rather than literals (`MEM-2026-09-20-27`) — and because they decide a *sanction* rather than a
+display, they apply **forward-only**. Lowering the ban threshold must not remove professionals who
+were never at risk under the rule in force at the time, and a flag records which threshold produced
+it. ADR-013's appeal cannot work otherwise.
+
 That matches the operator's bar — *"a professional not showing 1 or 2 time will be banned. Dont need
 unreliable or scammy people here. Quality / Precision / On time approach is what we want to push"* —
 and their earlier preference for visibility over quiet removal: *"or better, HE WILL STAYS FLAGGED

@@ -6,6 +6,12 @@ Read this first, every task. Then your slice file. Then check `sessions/` for an
 your task ID.
 
 ## Repo-wide
+- **The product's shape, decided 2026-09-20**: [ADR-013](../docs/adr/ADR-013-engagement-reconciliation.md)
+  (an engagement has three sources of truth; the handshake attests the start) ·
+  [ADR-014](../docs/adr/ADR-014-who-pays.md) (the demand side pays; the queue is never for sale) ·
+  [ADR-015](../docs/adr/ADR-015-reputation.md) (satisfaction and per-trade competence, allowed to
+  disagree). Read these before touching `W4`, `W5`, `W6`, `W8` or `W13` — they rewrote several
+  backlog rows out from under their own descriptions.
 - [Decisions](repo/decisions.md) — non-obvious constraints and why they exist
 - [Conventions](repo/conventions.md) — how we do things beyond what lint enforces
 - [Gotchas](repo/gotchas.md) — traps found the hard way, with evidence

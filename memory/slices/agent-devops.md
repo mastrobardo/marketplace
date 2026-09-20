@@ -72,6 +72,7 @@ Keep it to facts that changed how you would work. Task-specific detail stays in 
 - **apply**: Loopback bind + `${VAR:-default}` for every new port. In tests, resolve the address at
   runtime. Overrides go in a gitignored `.env`, never in the committed compose file.
 - **evidence**: `docs/specs/S0/W0-T02-local-stack.run.md` (deviation 3)
+- **status**: active
 ### Fastify's own `logger` option, not a pino instance
 - **id**: MEM-2026-09-09-07
 - **scope**: slice:S0
@@ -99,6 +100,7 @@ Keep it to facts that changed how you would work. Task-specific detail stays in 
 - **apply**: New app packages: `build: tsup`, tsconfig includes `src` **and** `tests`. Preset
   packages that other packages `extends` still need real JSON on disk (`W0-T01`).
 - **evidence**: `docs/specs/S0/W0-T03-api-skeleton.run.md` (deviation 5)
+- **status**: active
 ### `setupFiles` runs for every suite, including the ones pinned to another environment
 - **id**: MEM-2026-09-09-11
 - **scope**: slice:S0

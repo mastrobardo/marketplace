@@ -257,6 +257,13 @@ How we do things here, beyond what lint and CI enforce automatically.
   on the docs branch and `git rebase --onto origin/main <old-base>` after the squash merge —
   a squashed base commit is no longer an ancestor, so a plain `git rebase main` replays nothing
   useful.
+
+  **And the handoff lags: `TODO.md`'s `▶ NEXT` banner on `main` is only true when nothing is open.**
+  A ticket that has shipped into an unreviewed PR is still advertised as next by `main`, so a fresh
+  session that trusts the banner rebuilds finished work. **Check `gh pr list` before starting
+  anything**, and read the banner as "next, unless an open PR already did it". On 2026-09-20 this
+  was live: `main` said `W4-T03` was next while `W4-T02` and `W4-T03` sat complete and green in
+  #277 and #279, waiting on reviewers.
 - **evidence**: PR #276 (merged 2026-09-20, ten checks green, no review);
   `agents/policies/review-and-merge.md` "Merge requirements"
 - **status**: active

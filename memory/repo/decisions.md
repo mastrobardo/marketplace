@@ -310,6 +310,7 @@ this file records the *why* an agent would otherwise have to rediscover.
   "next" while a funnel is unfinished. This ordering is a judgement about sequence, not about
   whether the deferred work matters; revisit it when the funnels close.
 - **evidence**: operator, 2026-09-20; `TODO.md` §6 `▶ NEXT` banner
+- **status**: active
 ### A draft asks for nothing; publishing asks for one thing
 - **id**: MEM-2026-09-20-4
 - **scope**: repo
@@ -566,4 +567,87 @@ this file records the *why* an agent would otherwise have to rediscover.
   which would have been the appearance of this principle without the substance.
 - **evidence**: `docs/specs/S4/W4-T03-quote-submission.md` §2.2, §2.3;
   `docs/adr/ADR-013-engagement-reconciliation.md` §4.1; `W3-T01` §3.5.2; `W4-T01` §1.1
+- **status**: active
+
+### A threshold is configuration, and a threshold that sanctions somebody is forward-only
+
+- **id**: MEM-2026-09-20-27
+- **scope**: repo
+- **fact**: Every tuned number this product decides with — `N` reviews before an average is shown
+  (ADR-015 §3), `N` no-show findings before a flag (ADR-013 §6), the quote allowance in a tier
+  (ADR-014 §2) — is **configuration with its reasoning written beside it**, never a literal at the
+  call site. Operator, 2026-09-20: *"thresholds, N gates, are configurable. They should be coming
+  from a config ( either an env var, or a dedicated PR )."* And the distinction that matters more
+  than where the value lives: **a threshold that decides what is *displayed* may change freely; a
+  threshold that decides whether somebody is *sanctioned* applies forward-only**, and a sanction
+  records which threshold was in force when it was applied.
+- **why**: lowering a display threshold reveals data that was already true. Lowering a sanctioning
+  one **retroactively flags providers who were never flagged** — a moderation decision taken by
+  editing a config value, with nobody reviewing it as one. ADR-013 §6 requires the flag to be
+  appealable, and an appeal is meaningless if the rule that produced it cannot be reconstructed.
+  **And the operating pattern makes this immediate rather than theoretical.** Operator, 2026-09-20:
+  *"most probably, we will start with High threshold and lower as time passes to fit what we see on
+  everyday usage."* Downward is the dangerous direction for a sanction and the harmless one for a
+  display: every loosening of a ban rule would sweep in people who were never at risk under the rule
+  in force at the time, while every loosening of a display rule simply reveals scores that were
+  always true. The asymmetry is not a corner case here — it is the planned direction of travel.
+- **apply**: **do not build a config module until something reads a threshold.** Nothing does today
+  — reviews, the no-show flag and tier allowances are all unbuilt — and a config system with no
+  consumer is the empty promise this repo keeps refusing (`W4-T01`'s photos column, `W4-T02`'s
+  unreachable states). The first ticket that needs one builds it, as named constants in a single
+  module with the *why* next to each value, and an env override only where an environment must
+  genuinely differ. **Not `ADR-007`'s Flagsmith**: that is for flags, and a rating calculation
+  should not acquire a third-party availability dependency.
+- **evidence**: operator, 2026-09-20; `docs/adr/ADR-013-engagement-reconciliation.md` §6;
+  `docs/adr/ADR-015-reputation.md` §3; `docs/adr/ADR-007-feature-flags.md`
+- **status**: active
+
+### Not every convention earns a gate — enforcement is proportional to what decay costs
+
+- **id**: MEM-2026-09-20-28
+- **scope**: repo
+- **fact**: The memory format has a checker (`pnpm memory:check`) and **no gate**. It is not in CI,
+  not in `pnpm gates`, not in `pnpm verify`, and it lives in `scripts/memory/` rather than
+  `scripts/gates/` so that a later tidy-up cannot quietly wire it into `run.ts --all`. Operator,
+  2026-09-20: *"better to have a format, but should not be a blocker. And ABSOLUTELY not a CI gate.
+  We are still in the realm of a personal project nobody uses. In a more corporative setup, i would
+  agree this is a conditio sine qua non."*
+- **why**: this **reads as a contradiction of `MEM-2026-09-11-04`** — *"if a required artifact
+  section is not asserted by a gate, assume it is already gone"* — and the two reconcile on what
+  decay costs. That entry is about run records, whose decaying section was **verbatim prompts,
+  which cannot be reconstructed afterwards**: the loss is permanent and invisible. A memory entry
+  missing its `status` loses nothing — the fact is still there and still readable, and the repair is
+  one line whenever anybody notices. The evidence agrees: **189 of 196 entries carried `status`
+  with nothing at all enforcing it**, which is a 96% hold rate over two weeks. That is a measured
+  decay rate, and it is slow.
+- **apply**: before proposing a gate, ask what a violation *costs* and who it reaches — not whether
+  the rule is good. Permanent, unrecoverable loss (prompts, audit rows, money) earns teeth;
+  recoverable untidiness in a corpus read by a handful of agents does not, **at this stage**. The
+  stage is part of the decision and will change: revisit this the first time somebody outside the
+  project depends on the corpus.
+- **evidence**: `scripts/memory/check.ts` header; `MEM-2026-09-11-04`; the 7 entries it found and
+  this PR fixed
+- **status**: active
+
+### Build it when a feature needs it, never in anticipation of one
+
+- **id**: MEM-2026-09-20-29
+- **scope**: repo
+- **fact**: Machinery is built by the ticket that has a consumer for it, and not before. Operator,
+  2026-09-20: *"It is fine to dont have a config now: we build things feature based. When this will
+  be needed, it will be implemented."* The phrase this repo has used ad hoc for the violation is
+  **the empty promise**: a shape that implies a capability nothing can deliver.
+- **why**: the rule was derived independently at least five times before anybody wrote it down —
+  `W4-T01` refused a photos column while object storage was unbuilt; `W4-T02` refused the four
+  lifecycle states nothing could produce; `W4-T03` refused a `verified` field on coverage because
+  `W8` cannot populate one; `permissions.ts` refuses a row for a route that does not exist; and
+  `MEM-2026-09-20-27` refused a config module because nothing reads a threshold. Five derivations
+  of one rule is a rule worth stating once.
+- **apply**: the test is **"what reads this today?"** — not "will we want it". A nullable column
+  nothing writes, an enum value no route can produce, a config key no code reads and a service with
+  one caller that is a test are the same defect wearing different clothes, and each one costs a
+  reader time forever while looking like progress. The cost of adding it later is usually one
+  migration; the cost of carrying a lie is every future reader believing it.
+- **evidence**: operator, 2026-09-20; `docs/specs/S4/W4-T01-job-posting.md` §4;
+  `docs/specs/S4/W4-T02-job-state-machine.md` §2.1; `docs/specs/S4/W4-T03-quote-submission.md` §2.3
 - **status**: active

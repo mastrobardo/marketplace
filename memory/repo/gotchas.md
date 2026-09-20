@@ -84,6 +84,7 @@ come from real experience.
 - **apply**: Any test that shells out, polls, or touches the network gets
   `{ timeout: <ms> }` as the **second** argument.
 - **evidence**: `docs/specs/S0/W0-T02-local-stack.run.md` (AC10 test-side correction)
+- **status**: active
 ### `app.register` encapsulates — a hook added inside one covers only that context
 - **id**: MEM-2026-09-09-05
 - **scope**: repo
@@ -111,6 +112,7 @@ come from real experience.
   then observe red. Never build a `Config` or any other module-level value at import scope in a
   test file — it takes the whole file out of collection when it throws.
 - **evidence**: `docs/specs/S0/W0-T03-api-skeleton.run.md` red phase
+- **status**: active
 ### A `@ts-expect-error` comment is a directive even when the rest of it is prose
 - **id**: MEM-2026-09-09-09
 - **scope**: repo
@@ -324,6 +326,7 @@ come from real experience.
 - **evidence**: audit 2026-09-11 across 13 tasks; `docs/adr/ADR-010-agent-telemetry.md` §Context;
   `docs/specs/S0/W0-T01-monorepo-skeleton.run.md` §Prompts vs
   `docs/specs/S1/W1-T06-money-value-object.run.md` (no such section)
+- **status**: active
 ### `prisma migrate diff` with a shadow database cannot get past migration `0000`
 - **id**: MEM-2026-09-10-12
 - **scope**: repo
