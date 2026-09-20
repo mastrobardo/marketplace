@@ -350,3 +350,39 @@ Keep it to facts that changed how you would work. Task-specific detail stays in 
 - **evidence**: `W0-T30` run record deviation 2; `scripts/deploy/config.ts`;
   `tests/cd-workflows.test.ts` AC28
 - **status**: active
+
+### A tool that emits a credential needs a TTY guard, not a policy
+- **id**: MEM-2026-09-19-7
+- **scope**: slice:S0
+- **fact**: `agents/policies/human-boundaries.md` forbids an agent to create, read, echo or log a
+  secret — but the rule is unenforceable against a *tool* that prints one, because the moment an
+  agent runs the tool the value arrives as ordinary command output. `scripts/secrets/generate.ts`
+  closes it structurally: the value reaches `gh` on **stdin** (never `argv`, so never `ps` or shell
+  history), `--write` prints nothing, and both modes refuse unless `process.stdout.isTTY`. The check
+  happens **before** `randomBytes`, so a refused run leaves no value in existence.
+- **why**: `isTTY` is a fact about where the bytes go, not a guess about who is calling — and no
+  capture path (pipe, redirect, CI runner, agent session) has a TTY on stdout. The operator asked for
+  this guarantee explicitly and doubted it was achievable; a promise would not have answered it.
+- **apply**: Any future tool that produces or displays a credential gets the same three properties.
+  Never `--body "$VALUE"` on a CLI that accepts stdin. Never generate first and guard second. And
+  verify the refusal *from an agent session*, which is a real test rather than a thought experiment.
+- **evidence**: `W0-T31` spec §2; `scripts/secrets/generate.ts`; `tests/secrets-generate.test.ts`
+  AC3–AC5
+- **status**: active
+
+### An "is it handled?" assertion over a derived set is usually a tautology
+- **id**: MEM-2026-09-19-8
+- **scope**: slice:S0
+- **fact**: `tests/secrets-generate.test.ts` AC6 first read
+  `generatable.has(name) || recipeFor(name) === undefined`. Since `generatableSecrets()` is *defined*
+  as the names where `recipeFor` is not undefined, that expression is `X || !X` — true for every
+  input, including a secret nobody had classified. It passed, and asserted nothing.
+- **why**: The shape is seductive because it reads like coverage: *every name is either A or not-A*.
+  It only bites when the two branches come from **independent** sources. The fix was an explicit
+  `ISSUED_ELSEWHERE` list, so a secret added to `REQUIRED` fails until a human classifies it.
+- **apply**: When asserting "everything is accounted for", check that the two categories are not
+  derived from the same predicate. If they are, one of them has to become a hand-maintained list —
+  and the test's job is then to keep that list complete, which is a real assertion. Sanity-check by
+  asking what input would make the expression false; if there is none, there is no test.
+- **evidence**: `W0-T31` run record deviation 1; `scripts/secrets/strength.ts` `ISSUED_ELSEWHERE`
+- **status**: active
