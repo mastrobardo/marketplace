@@ -490,6 +490,8 @@ this file records the *why* an agent would otherwise have to rediscover.
   correctly for search: a provider with no rating sorts as *unrated*, never as `0.00`, because a
   zero would rank a new provider below a bad one.
 - **evidence**: `docs/adr/ADR-014-who-pays.md` §7; `packages/contracts/src/search.ts` `ratingAvg`
+- **status**: active
+
 ### Reputation is two numbers that may disagree, plus tags the platform refuses to weight
 
 - **id**: MEM-2026-09-20-25
