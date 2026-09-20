@@ -447,3 +447,47 @@ this file records the *why* an agent would otherwise have to rediscover.
 - **evidence**: `docs/adr/ADR-013-engagement-reconciliation.md` §4, §4.1, §6, §6.1; `TODO.md`
   `BD-01`
 - **status**: active
+
+### The queue is never for sale — the supply side does not pay for position
+
+- **id**: MEM-2026-09-20-23
+- **scope**: repo
+- **fact**: A professional never pays to quote, to be seen, or to be seen **first**. The demand side
+  pays: *una tantum* per quote request or auction, or a client subscription, **metered per quote
+  that actually arrives**. Position — the head start on a lead, and the prominent five on a job — is
+  earned from completion rate, response time, no-show record, verified licence and fit, and cannot
+  be bought at any price. Search and radius are never paywalled. ADR-014.
+- **why**: the operator researched the incumbents from the demand side and found the mechanism, not
+  just the price: *"credits system doesnt work, also because almost all platforms here in spain are
+  pushed by big companies that can cover all the jobs."* Credits let capital buy the queue — a firm
+  with a budget takes every lead, the autónomo cannot outspend it and leaves. A platform paid per
+  *application* also earns more the worse each application's odds are, so the product degrades as it
+  succeeds.
+- **apply**: **any proposal to charge a provider must pass one test — would a firm with a budget end
+  up ahead of a better small provider? If yes, it is the queue again**, whatever it is called. This
+  catches the obvious form (credits) and the subtle one: a "PLUS provider fee" buying a three-hour
+  head start on leads was proposed and rejected for exactly this reason, in the same conversation
+  that diagnosed it. Charging the client is only allowed under the mirror rule: never bill for
+  something that did not arrive, which is the same broken promise pointed the other way.
+- **evidence**: `docs/adr/ADR-014-who-pays.md` §1, §2, §4; `TODO.md` `BD-02`, `BD-03`
+- **status**: active
+
+### Merit-based ranking has nothing to rank on day one
+
+- **id**: MEM-2026-09-20-24
+- **scope**: repo
+- **fact**: ADR-014 §4 gives position to completion rate, response time, no-show record and reviews
+  — **all of which are history, and at launch there is none**. Until it exists, position comes from
+  the signals that need no history: **fit** (category match, distance, availability) and **verified
+  licence**, which is earned on day one by uploading a document. Response time accrues within days.
+- **why**: a principle that only works in year two is a principle that is absent exactly when first
+  impressions are formed, and the silent failure mode is worse than an obvious one — merit-ordering
+  with no data does not error, it just quietly falls through to whatever the tiebreak is, which in
+  practice means insertion order or a random uuid — and `MEM-2026-09-20-5` is the proof that this
+  class of bug ships: `W4-T01`'s category ordering looked correct and shuffled between reads.
+- **apply**: whenever a design ranks by earned reputation, **write down what it does before anyone
+  has any**, and make the fallback explicit rather than incidental. `W3-T05` already answers this
+  correctly for search: a provider with no rating sorts as *unrated*, never as `0.00`, because a
+  zero would rank a new provider below a bad one.
+- **evidence**: `docs/adr/ADR-014-who-pays.md` §7; `packages/contracts/src/search.ts` `ratingAvg`
+- **status**: active

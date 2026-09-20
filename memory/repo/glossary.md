@@ -16,6 +16,10 @@ write one product. Code identifiers are English; user-facing copy is ES-first wi
 | **colegio profesional** | professional body | Issues/registers licences. `Certification.issuingBody`. |
 | **IVA** | VAT | Spanish VAT. Invoicing rules are `[H]` — accountant-defined (`W5-T09`). |
 | **fianza / señal** | deposit | Not in MVP. Do not introduce the concept without an ADR. |
+| **petición de presupuesto** | request for quotes (RFQ) | What a **client** buys: the right to receive quotes on a job. The demand side pays; a provider never pays to answer one (ADR-014 §1). |
+| **una tantum** | one-off | A single payment by a client with no subscription — the alternative to an included allowance (ADR-014 §2). Keep the Latin in ES copy; it is ordinary Spanish commercial usage. |
+| **administrador de fincas** | property manager | Manages a *comunidad de propietarios* and commissions repairs on its behalf. A **client** persona, not a provider, and the strongest B2B channel (ADR-014 §6). Any payback to them is a commission on somebody else's money — see §6 before building it. |
+| **comunidad de propietarios** | homeowners' association | The building's owners as a legal body. The actual client behind an `administrador de fincas`. |
 
 **`requiresLicence` is a verification, not a gate.** Both rows above said otherwise until
 2026-09-18, when the operator settled it: *"my idea was verification, not hard block — while you can
@@ -29,4 +33,8 @@ trades: `docs/specs/S3/W3-T01-category-tree.md` §3.5.2, `TODO.md` §10.1 `BD-07
 - Code, tables, API fields: **English** (`quote`, `auction`, `bid`, `provider`).
 - User-facing copy: **ES primary, EN secondary**, via i18n keys. No hardcoded strings.
 - One word per concept. `quote` never appears as `estimate` or `offer` elsewhere.
+  **Why `quote` and not `estimate`:** in the English trades the two are different products — an
+  *estimate* is an approximate, non-binding figure, a *quote* is a firm price the client can accept.
+  A *presupuesto* here is the second, which is why `Quote` is the model and `accept` is a verb it
+  can take.
 - `provider` covers both manitas and pro; use `manitas`/`pro` only where the distinction matters.

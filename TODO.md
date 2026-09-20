@@ -110,6 +110,8 @@ Frozen early so agents don't each invent a schema. Changes require an ADR.
 - **ProviderProfile** — kind `MANITAS | PRO`, displayName, bio, serviceRadius, baseLocation(geo),
   categories[], hourlyRateCents, responseTimeMins, ratingAvg, ratingCount, stripeAccountId,
   verificationStatus, subscriptionTier, badges[]
+  ⚠ `subscriptionTier` is on the wrong model — ADR-014 §2 puts the subscription on the **client**.
+  `agent-contracts` owns the correction; nothing implements this column yet.
 - **Certification** — providerId, type (fontanería, electricidad, gas, …), licenceNumber,
   issuingBody, issuedAt, expiresAt, documentKey, status `PENDING | APPROVED | REJECTED`, reviewedBy, reviewNote
 - **PortfolioItem** — providerId, title, description, images[], categoryId, completedAt
@@ -153,7 +155,7 @@ files inside another slice's folders; cross-slice needs go through a contract ch
 | S6 Jobs | `agent-jobs` | jobs, quotes/presupuestos, messaging |
 | S7 Auctions | `agent-auctions` | auctions, bids, close/award logic |
 | S8 Emergency | `agent-emergency` | broadcast, accept-race, notifications |
-| S9 Money | `agent-money` | Stripe Connect, bookings, payments, payouts, refunds, subscriptions, invoicing |
+| S9 Money | `agent-money` | Stripe Connect, bookings, payments, payouts, refunds, **client** subscriptions (ADR-014 §2 — not pro subscriptions), invoicing |
 | S10 Design system | `agent-ui` | `packages/ui`, tokens, i18n, a11y |
 | S11 Quality | `agent-qa` | e2e suite, seed data, contract-test harness, flake watch |
 | S12 Admin/Ops | `agent-admin` | back-office: verification review, disputes, refunds, moderation |
@@ -560,8 +562,8 @@ for data), so no feature is blocked waiting for an account that is not needed ye
 - `W5-T04` `[M]` `[B]` `[SUPERSEDED]` ~~Completion → capture → transfer~~ *(human: **decide the take rate** — still needed, but it prices the call-out fee, not a cut of the job)*. ⚠ **Nothing happens at completion** (ADR-013 §4): revenue is realised when the client approves the start of work, and **the job's own price never passes through the platform at all** — operator, 2026-09-20: *"Platform revenues is on the start of work"*. What the work costs is settled between the two people, in cash if they choose, and the platform neither sees it nor polices it (§4.1). The release this row used to describe now lives at `W4-T09`
 - `W5-T05` `[M]` `[B]` Cancellation & refund policy engine + partial refunds *(human: define the policy)*. **Forfeiture is all-or-nothing** — operator, 2026-09-20: a client who cancels after awarding loses the upfront fee whether they cancel ten minutes later or the night before, and the time-based tiers this row used to assume are **not** the model. ADR-013 §5 records the enforceability risk that decision carries. **What is still unmodelled is the split** — operator: *"How to divide them ( platform costs vs reservation of time of professional ) is still up for a serious plan i still didnt have time to model"*. Two claimants on one forfeited amount, and any share reaching the professional is a payout for work not done, so it carries IVA and belongs on `W5-T09`'s list
 - `W5-T06` `[A]` Dispute/hold flow: freeze payout, admin resolves
-- `W5-T07` `[M]` `[B]` Stripe Billing: FREE/PLUS/PREMIUM tiers, proration, dunning *(human: create products/prices, set pricing)*
-- `W5-T08` `[M]` `[B]` Subscription entitlements service *(human: **define what each tier buys**)*
+- `W5-T07` `[M]` `[B]` Stripe Billing for **client** tiers, proration, dunning *(human: create products/prices, set pricing)*. ⚠ **Not "pro subscriptions"** — ADR-014 §2 puts the subscription on the demand side, which resolves the disagreement `W13`'s brief flagged as *"the first thing to resolve"*. Tiers are free (*una tantum* per request) / regular (5 quotes or 1 auction included) / `administrador de fincas` (unlimited + payback, shape open — §6)
+- `W5-T08` `[M]` `[B]` Subscription entitlements service *(human: **define what each tier buys** — the shape is ADR-014, the numbers are yours)*. **The hard part is that this meters rather than sells:** an allowance is consumed **per quote that actually arrives** (§2), so a request attracting two quotes costs two and one attracting none costs nothing. That interacts with `W4-T03`'s `WITHDRAWN` and with expiry — a withdrawn quote almost certainly must not consume an allowance, and ADR-014 leaves that open deliberately. **Forbidden here:** anything that sells position in the queue, and anything that paywalls search (§4, §5)
 - `W5-T09` `[H]` `[B]` Invoices/receipts with Spanish VAT (IVA) + provider payout statements — **needs an accountant**; agent implements only after the rules are written down
 - `W5-T10` `[A]` Ledger table: every money movement double-entered and reconcilable to Stripe
 - `W5-T11` `[A]` Reconciliation job + alert on any mismatch
@@ -725,9 +727,11 @@ search result, the users will have no incentive to buy subscriptions."*
 **What the ADR has to settle, at minimum:**
 - What a non-subscriber can do: message freely, a capped number, or request-and-accept?
 - What subscribing unlocks — the raw phone/email, or just more messaging?
-- Which side subscribes. The operator's framing says *users*; `subscriptionTier` in §3 hangs off the
-  **provider** profile, and `S9`'s line says *"Stripe Billing for pro subscriptions"*. **These
-  disagree, and it is the first thing to resolve.**
+- ~~Which side subscribes~~ — **answered 2026-09-20 by ADR-014 §2: the client.** `subscriptionTier`
+  in §3 still hangs off the **provider** profile and `S9`'s line still says *"Stripe Billing for pro
+  subscriptions"*; both are now wrong and are `agent-contracts`' to correct. What this epic still
+  owns is the **contact-unlock fee** — and ADR-014 §4 constrains it: whatever it charges for, it may
+  not sell position in the queue.
 - Whether contact details are masked in *data* or only in *presentation* — the second is a leak
   waiting for anyone who opens dev tools.
 - ~~How leakage is measured~~ — **answered 2026-09-20 by ADR-013, and from the opposite direction.**
@@ -856,8 +860,8 @@ rule: build the mechanism, read the value from config, ship nothing with an inve
 | ID | Decision | Blocks | Notes |
 |---|---|---|---|
 | `BD-01` | ✅ **Escrow — do we hold client funds until job completion?** | `W5-T02`, `W4-T09` | **Answered 2026-09-20 by ADR-013 §4, and the answer is smaller than either option in this row: there is nothing to escrow.** One payment passes through — the call-out fee, captured at award and released when the client approves the start of work, which is where platform revenue is realised. **The job's own price never touches the platform** (operator: *"Platform revenues is on the start of work"*), so the question of holding it does not arise, and neither does being a financial entity. `R1` before `M8` still applies and should look hardest at `BD-04`'s all-or-nothing forfeiture, plus the platform's own facilitator reporting obligations (§4.1) |
-| `BD-02` | Platform take rate — flat %, or reduced for subscribers? | `W5-T04`, `W5-T08` | Drives unit economics and the tier value proposition |
-| `BD-03` | What do PLUS and PREMIUM actually buy? (quote volume, radius, ranking boost, badge, lead priority) | `W5-T07`, `W5-T08`, `W3-T05` | Ranking boost has a fairness cost — decide deliberately |
+| `BD-02` | ~~Platform take rate~~ → **what the demand side pays** | `W5-T07`, `W5-T08` | **Rewritten 2026-09-20 — the old question had no subject.** ADR-013 removed the take rate: the job's price never passes through the platform, so there is no percentage to take. ADR-014 replaces it: revenue is *una tantum* per quote request or auction, or a client subscription, **metered per quote that actually arrives**. What remains open is every number |
+| `BD-03` | What does a **client** subscription buy? | `W5-T07`, `W5-T08` | **Rewritten 2026-09-20: this asked about the wrong person, and half its answers are now forbidden.** The subscriber is the client (ADR-014 §2), not the provider. **Radius is never paywalled** (§5, operator: *"radius and other parameters are not and should not be behind a paywall"*), and **ranking boost cannot be sold at all** (§4) — selling position is the mechanism that broke every incumbent here. What a tier may contain: included quote requests and auctions, and the `administrador de fincas` terms in §6. *"Ranking boost has a fairness cost"* was the old note; it turned out to be a cost to the business model, not only to fairness |
 | `BD-04` | Cancellation & refund policy | `W5-T05` | **Half answered 2026-09-20: forfeiture is all-or-nothing**, not time-banded (operator, ADR-013 §5). Still open, and unmodelled: **how the fee divides** between platform revenue and the professional's reserved time — and it is **one question with two triggers**, since the same split applies whether the fee is *released* at approval or *forfeited* at cancellation. Modelling it once answers both. The enforceability risk of the all-or-nothing choice is in ADR-013's Consequences |
 | `BD-05` | Emergency pricing — call-out fee + hourly, or a premium multiplier? | `W7-T01` | Affects the whole urgency flow's UX |
 | `BD-06` | Do **manitas** need verification (ID check), or only licensed pros? | `W8` scope, `W2-T05` | Trust vs. supply-side friction; affects cold start |
