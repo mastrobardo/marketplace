@@ -132,6 +132,31 @@ qualified is not the same as fastest to answer, and first-come ordering rewards 
 watching a mailbox, which is the big firms again. `W4-T03`'s slice rule already says it for the
 comparison screen: **sort by rating then price, the client may re-sort, never hide the cheapest.**
 
+### 4.1 And "rating" means the rating **in this job's trades**
+
+A single average over everything is the wrong input to §4, and the operator's example is the
+argument:
+
+> i can be a 5 stars plumbers, with 5 stars jobs. But i get 3 on electricity: if a client have to
+> change electical installation at home, it is worth to contact me?
+
+**A 5-star plumber gets no head start on an electrical job.** Priority and prominence read the
+provider's standing in the categories *this job names*, never a global figure — which would hide the
+weakness exactly when a provider is strong everywhere else, and hide it hardest for the trade the
+client is actually asking about.
+
+`W4-T03`'s `coverage` is already the right shape for this: a per-job-category list carrying
+`listedByProvider` and `requiresLicence`, to which a per-trade standing is one more field.
+
+**How those ratings are produced is not decided here** — it is a reputation model rather than a
+pricing one, and it has its own document. See ADR-015.
+
+One consequence reaches shipped work: `GET /api/search` sorts by **distance**, so no ranking
+changes — but every result card shows the provider's *global* `ratingAvg` while the search itself is
+filtered to one trade. A client searching `electricidad` therefore sees a plumber's plumbing score.
+That is the exact blur this section removes, and fixing it is a change to the frozen
+`SearchResultSchema`, so it belongs to `agent-discovery` and `agent-contracts` with `W8-T06`.
+
 ## 5. What is never behind a paywall
 
 > radius and other parameters are not and should not be behind a paywall
