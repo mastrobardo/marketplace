@@ -33,7 +33,8 @@ import { type Seeder } from './types.js';
 /** Fixed ids, so a `db:reset` rebuilds the same world and a pasted preview link still resolves. */
 const CLIENT_ID = 'f1f1f1f1-1111-4111-8111-f1f1f1f1f1f1';
 const JOB_ID = 'f2f2f2f2-2222-4222-8222-f2f2f2f2f2f2';
-const quoteId = (n: number): string => `f3f3f3f3-3333-4333-8333-f3f3f3f3${String(n).padStart(4, '0')}`;
+const quoteId = (n: number): string =>
+  `f3f3f3f3-3333-4333-8333-f3f3f3f3${String(n).padStart(4, '0')}`;
 
 /** The job's trades. A bathroom needs both, which is why one quote covers the pair (`W4-T03`). */
 const JOB_SLUGS = ['fontaneria', 'electricidad'] as const;

@@ -26,11 +26,7 @@ import {
 import { Component as NotFound } from '../routes/not-found.js';
 import { Component as Account, loader as accountLoader } from '../routes/account.js';
 import { Component as Jobs, loader as jobsLoader } from '../routes/jobs.js';
-import {
-  Component as JobDetail,
-  action as jobAction,
-  loader as jobLoader,
-} from '../routes/job.js';
+import { Component as JobDetail, action as jobAction, loader as jobLoader } from '../routes/job.js';
 import { Component as SignUp, action as signUpAction } from '../routes/signup.js';
 import { Component as Login, action as loginAction } from '../routes/login.js';
 import { Component as VerifyEmail, action as verifyEmailAction } from '../routes/verify-email.js';

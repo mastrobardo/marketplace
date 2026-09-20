@@ -147,7 +147,10 @@ describe('AC8 — expiry is arithmetic, not a state', () => {
 });
 
 describe('the machine', () => {
-  const ANY = { validUntil: new Date('2026-10-20T10:00:00.000Z'), now: new Date('2026-09-20T10:00:00.000Z') };
+  const ANY = {
+    validUntil: new Date('2026-10-20T10:00:00.000Z'),
+    now: new Date('2026-09-20T10:00:00.000Z'),
+  };
 
   it('starts PENDING, and every way out of it is final', () => {
     expect(quoteMachine.initial).toBe('PENDING');
@@ -288,9 +291,7 @@ describe('W4-T04 AC9 — a decision is final', () => {
   for (const from of ['ACCEPTED', 'REJECTED', 'WITHDRAWN'] as const) {
     for (const event of ['ACCEPT', 'REJECT'] as const) {
       it(`refuses ${event} on a ${from} quote`, () => {
-        expect(
-          can(quoteMachine, from, event, { validUntil: TOMORROW, now: NOW }),
-        ).not.toBe(true);
+        expect(can(quoteMachine, from, event, { validUntil: TOMORROW, now: NOW })).not.toBe(true);
       });
     }
   }

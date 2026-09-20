@@ -93,7 +93,10 @@ async function openJob(owner: string = client): Promise<string> {
 }
 
 /** A job with `n` quotes on it, one per provider, and the quotes newest-last. */
-async function jobWithQuotes(n: number, amountFrom = 1000): Promise<{ jobId: string; ids: string[] }> {
+async function jobWithQuotes(
+  n: number,
+  amountFrom = 1000,
+): Promise<{ jobId: string; ids: string[] }> {
   const jobId = await openJob();
   const ids: string[] = [];
   for (let i = 0; i < n; i += 1) {

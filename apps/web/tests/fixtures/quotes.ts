@@ -54,7 +54,8 @@ function quote(
     status: fields.status ?? 'PENDING',
     amountCents: fields.amountCents,
     breakdown: null,
-    validUntil: fields.status === 'EXPIRED' ? '2026-09-01T00:00:00.000Z' : '2026-12-01T00:00:00.000Z',
+    validUntil:
+      fields.status === 'EXPIRED' ? '2026-09-01T00:00:00.000Z' : '2026-12-01T00:00:00.000Z',
     provider: {
       id: `e${String(n).repeat(7)}-1111-4111-8111-eeeeeeeeeeee`,
       displayName: fields.displayName,
@@ -64,8 +65,7 @@ function quote(
     },
     coverage: CATEGORIES.map((category) => ({
       ...category,
-      listedByProvider:
-        category.slug === 'electricidad' ? (fields.listsElectrical ?? true) : true,
+      listedByProvider: category.slug === 'electricidad' ? (fields.listsElectrical ?? true) : true,
     })),
     createdAt: `2026-09-${String(10 + n).padStart(2, '0')}T10:00:00.000Z`,
     updatedAt: `2026-09-${String(10 + n).padStart(2, '0')}T10:00:00.000Z`,
@@ -76,7 +76,12 @@ export function demoQuotes(): Quote[] {
   return [
     // Best rated, and **not** the cheapest — which is what makes the "cheapest is never hidden"
     // rule observable rather than vacuous.
-    quote(1, { displayName: 'Reformas Ruiz', amountCents: 480000, ratingAvg: 4.8, ratingCount: 31 }),
+    quote(1, {
+      displayName: 'Reformas Ruiz',
+      amountCents: 480000,
+      ratingAvg: 4.8,
+      ratingCount: 31,
+    }),
     // The cheapest, mid-rated, and it does not list the licensed trade the job asks for.
     quote(2, {
       displayName: 'Obras Delgado',
@@ -86,7 +91,12 @@ export function demoQuotes(): Quote[] {
       listsElectrical: false,
     }),
     // Cold start: no reviews yet, which is not a zero and must not sort as one.
-    quote(3, { displayName: 'Manitas Rivas', amountCents: 395000, ratingAvg: null, ratingCount: 0 }),
+    quote(3, {
+      displayName: 'Manitas Rivas',
+      amountCents: 395000,
+      ratingAvg: null,
+      ratingCount: 0,
+    }),
     // Lapsed: cheaper than everything and cannot be accepted.
     quote(4, {
       displayName: 'Construcciones Vela',

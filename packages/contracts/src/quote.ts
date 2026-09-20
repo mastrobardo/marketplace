@@ -40,13 +40,7 @@ export const QuoteStatusSchema = z.enum(['PENDING', 'WITHDRAWN', 'ACCEPTED', 'RE
 export type QuoteStatus = z.infer<typeof QuoteStatusSchema>;
 
 /** What a reader sees, which includes the one the database never stores. */
-export const QuoteStateSchema = z.enum([
-  'PENDING',
-  'WITHDRAWN',
-  'ACCEPTED',
-  'REJECTED',
-  'EXPIRED',
-]);
+export const QuoteStateSchema = z.enum(['PENDING', 'WITHDRAWN', 'ACCEPTED', 'REJECTED', 'EXPIRED']);
 export type QuoteState = z.infer<typeof QuoteStateSchema>;
 
 /** `W4-T05` adds `AWARD`, and takes `ACCEPTED` out of `terminal` in the same change (spec §2.6). */

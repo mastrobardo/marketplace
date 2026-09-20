@@ -203,7 +203,9 @@ export function createQuoteRepository(prisma: PrismaClient): QuoteRepository {
       const rows = await prisma.quote.findMany({
         where: {
           jobId,
-          ...(query.cursor === undefined ? {} : whereAfter(keysetPredicate(query.sort, query.cursor))),
+          ...(query.cursor === undefined
+            ? {}
+            : whereAfter(keysetPredicate(query.sort, query.cursor))),
         },
         include: QUOTE_INCLUDE,
         orderBy: orderBy(query.sort),

@@ -88,9 +88,11 @@ export async function loader({ params, context }: LoaderFunctionArgs): Promise<J
  * one it assumed. Both caches are invalidated — the quote list because a status changed, and the
  * job because `W4-T05` will make an award change it.
  */
-export async function action({ params, request, context }: ActionFunctionArgs): Promise<
-  { error: string } | null
-> {
+export async function action({
+  params,
+  request,
+  context,
+}: ActionFunctionArgs): Promise<{ error: string } | null> {
   const form = await request.formData();
   const quoteId = String(form.get('quoteId') ?? '');
   const decision = String(form.get('decision') ?? '');
@@ -190,7 +192,10 @@ export function Component(): ReactElement {
         <h2 id="job-quotes">{t('job.quotes.title')}</h2>
 
         {quotes.length === 0 ? (
-          <EmptyState title={t('job.quotes.empty.title')} description={t('job.quotes.empty.body')} />
+          <EmptyState
+            title={t('job.quotes.empty.title')}
+            description={t('job.quotes.empty.body')}
+          />
         ) : (
           <>
             <p className="mp-meta">{t('job.quotes.count', { count: quotes.length })}</p>

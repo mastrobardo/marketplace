@@ -1265,24 +1265,56 @@ describe('W12-T20 — regenerating the route baselines', () => {
  * Spec: `docs/specs/S0/W0-T30-seed-a-deployed-database.md` §5.
  */
 describe('W0-T30 AC12 — preview and staging seed their databases', () => {
-  /** The seeders a deployed environment is allowed to hold, from the registry's own source. */
+  /**
+   * The seeders a deployed environment is allowed to hold, from the registry's own source.
+   *
+   * **Derived from the registry's imports rather than from a hard-coded list of three files.**
+   * `W4-T04` added a fourth seeder and broke the previous version twice over: its id was missing
+   * from the list, and reformatting the exported array onto several lines defeated a
+   * `/authDemoUsers, categoryTaxonomy, demoProviders/` match that assumed one line.
+   *
+   * Both failures were the *test's*, not the change's — it asserted the registry's **formatting**
+   * while meaning to assert its **contents**. This version reads whatever the registry imports, so
+   * the fifth seeder is covered on the day it is written rather than on the day somebody remembers
+   * this file.
+   */
   function registeredIds(): string[] {
     const source = readFileSync(join(root, 'apps/api/prisma/seed/registry.ts'), 'utf8');
-    const ids = [
-      ...readFileSync(join(root, 'apps/api/prisma/seed/auth-demo-users.ts'), 'utf8').matchAll(
-        /^\s{2}id: '([^']+)'/gm,
-      ),
-      ...readFileSync(join(root, 'apps/api/prisma/seed/categories.ts'), 'utf8').matchAll(
-        /^\s{2}id: '([^']+)'/gm,
-      ),
-      ...readFileSync(join(root, 'apps/api/prisma/seed/demo-providers.ts'), 'utf8').matchAll(
-        /^\s{2}id: '([^']+)'/gm,
-      ),
-    ].map((match) => match[1] as string);
 
-    expect(source, 'the registry no longer exports the three seeders this asserts').toMatch(
-      /authDemoUsers, categoryTaxonomy, demoProviders/,
+    // `import { binding } from './module.js'` — the binding and the file, captured together,
+    // because they do not match: `categories.ts` exports `categoryTaxonomy`. Deriving one from
+    // the other is the guess that made the first version of this fix fail.
+    const imports = [
+      ...source.matchAll(/^import\s+\{\s*([\w,\s]+?)\s*\}\s+from\s+'\.\/([\w-]+)\.js';/gm),
+    ]
+      .map((match) => ({
+        bindings: (match[1] as string).split(',').map((name) => name.trim()),
+        module: match[2] as string,
+      }))
+      .filter((entry) => entry.module !== 'types');
+
+    expect(imports.length, 'the registry imports no seeder modules at all').toBeGreaterThan(0);
+
+    const ids = imports.flatMap((entry) =>
+      [
+        ...readFileSync(join(root, `apps/api/prisma/seed/${entry.module}.ts`), 'utf8').matchAll(
+          /^\s{2}id: '([^']+)'/gm,
+        ),
+      ].map((match) => match[1] as string),
     );
+
+    // Every imported seeder must actually be *registered*. An import that never reaches the
+    // exported array is a seeder nobody runs, which would otherwise pass this suite silently.
+    const registered = /export const seeders[\s\S]*?\];/.exec(source)?.[0] ?? '';
+    for (const entry of imports) {
+      for (const binding of entry.bindings) {
+        expect(registered, `${binding} is imported but not registered in seeders[]`).toContain(
+          binding,
+        );
+      }
+    }
+
+    expect(ids.length, 'no seeder ids were found in the registered modules').toBeGreaterThan(0);
     return ids;
   }
 

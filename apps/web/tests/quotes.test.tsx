@@ -232,7 +232,10 @@ describe('the job list', () => {
   });
 
   it('says so when there is nothing, and offers no button that goes nowhere', async () => {
-    renderApp('/es/jobs', stubApi({ getSession: signedIn(), getMyJobs: () => Promise.resolve([]) }));
+    renderApp(
+      '/es/jobs',
+      stubApi({ getSession: signedIn(), getMyJobs: () => Promise.resolve([]) }),
+    );
 
     expect(await screen.findByText(/todavía no has publicado/i)).not.toBeNull();
     expect(screen.queryByRole('button', { name: /publicar/i })).toBeNull();
@@ -255,12 +258,17 @@ describe('a job that is not yours', () => {
 
 describe('the job detail', () => {
   it('renders the job title and a way back', async () => {
-    renderApp(jobPath, stubApi({ getSession: signedIn(), getJob: () => Promise.resolve(demoJob()) }));
+    renderApp(
+      jobPath,
+      stubApi({ getSession: signedIn(), getJob: () => Promise.resolve(demoJob()) }),
+    );
 
-    expect(await screen.findByRole('heading', { name: 'Reforma del baño', level: 1 })).not.toBeNull();
     expect(
-      screen.getByRole('link', { name: /volver a mis trabajos/i }).getAttribute('href'),
-    ).toBe('/es/jobs');
+      await screen.findByRole('heading', { name: 'Reforma del baño', level: 1 }),
+    ).not.toBeNull();
+    expect(screen.getByRole('link', { name: /volver a mis trabajos/i }).getAttribute('href')).toBe(
+      '/es/jobs',
+    );
   });
 
   it('says there are no quotes yet without pretending the job is broken', async () => {

@@ -231,7 +231,9 @@ export function createApiClient(
     },
 
     async decideQuote(quoteId, decision) {
-      const response = await call(() => http.post<unknown>(`api/quotes/${quoteId}/${decision}`, {}));
+      const response = await call(() =>
+        http.post<unknown>(`api/quotes/${quoteId}/${decision}`, {}),
+      );
       return QuoteSchema.parse(response.data);
     },
 
