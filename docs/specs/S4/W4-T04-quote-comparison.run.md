@@ -49,7 +49,51 @@ new decision; three stale references to the question did need correcting (`MEM-2
 
 ## Red phase
 
-<paste of the failing test run, before implementation>
+Contracts were frozen first (§5.1 step 2), so `packages/contracts` was green before these ran —
+the states, the guard and the list schema exist; **nothing that serves them does.**
+
+```
+$ STACK_LIVE=1 DATABASE_URL=... pnpm --filter @marketplace/api exec vitest run quote-decision
+
+ FAIL  tests/quote-decision-live.test.ts [ tests/quote-decision-live.test.ts ]
+TypeError: Cannot read properties of undefined (reading 'parse')
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 11 ⎯⎯⎯⎯⎯⎯⎯
+ FAIL  tests/quote-decision.test.ts > AC1/AC2 — the client decides > accepts, and reports the new state
+AssertionError: expected 404 to be 200 // Object.is equality
+ FAIL  tests/quote-decision.test.ts > AC1/AC2 — the client decides > rejects, and reports the new state
+AssertionError: expected 404 to be 200 // Object.is equality
+ FAIL  tests/quote-decision.test.ts > AC12 — a provider cannot answer a quote, including their own > refuses accept to a PROVIDER
+ FAIL  tests/quote-decision.test.ts > AC12 — a provider cannot answer a quote, including their own > refuses reject to a PROVIDER
+AssertionError: expected 404 to be 403 // Object.is equality
+ FAIL  tests/quote-decision.test.ts > AC13 — every decision needs a principal > refuses accept to an anonymous caller
+ FAIL  tests/quote-decision.test.ts > AC13 — every decision needs a principal > refuses reject to an anonymous caller
+AssertionError: expected 404 to be 401 // Object.is equality
+ FAIL  tests/quote-decision.test.ts > AC11 — somebody else s quote is not found, not forbidden > answers 404 for a malformed id without telling the caller it was malformed
+AssertionError: expected 'Route POST /api/quotes/not-a-uuid/acc…' not to match /uuid/i
+ FAIL  tests/quote-decision.test.ts > AC16 — the quotes list speaks the page envelope > returns items and a page
+AssertionError: expected 500 to be 200 // Object.is equality
+ FAIL  tests/quote-decision.test.ts > AC16 — the quotes list speaks the page envelope > refuses a limit above the maximum rather than quietly clamping it
+AssertionError: expected 500 to be 400 // Object.is equality
+ FAIL  tests/quote-decision.test.ts > AC16 — the quotes list speaks the page envelope > refuses an unknown query parameter rather than paging in a circle
+AssertionError: expected 500 to be 400 // Object.is equality
+ FAIL  tests/quote-decision.test.ts > AC16 — the quotes list speaks the page envelope > answers an empty page for a job with no quotes, never a 404
+AssertionError: expected 500 to be 200 // Object.is equality
+
+ Test Files  2 failed (2)
+      Tests  11 failed | 1 passed (12)
+```
+
+**Three different shapes of red, and each one is the absence of a different thing.** `404` is a route
+that does not exist. `403`/`401` arriving *as* `404` is the same absence seen through the guard —
+Fastify has nothing to guard. `500` on the list is the route that does exist, handed a query schema
+it has never parsed. The live file does not even import: its repository methods are not on the
+interface yet.
+
+The one test that passed is the malformed-id case, and it passed **for the wrong reason** — Fastify's
+own *"Route POST /api/quotes/not-a-uuid/accept not found"* is a 404 that happens to match. It is
+kept because it stops matching the moment the route exists, which is when the assertion starts doing
+its job.
 
 ## Deviations from spec
 
