@@ -260,3 +260,28 @@ How we do things here, beyond what lint and CI enforce automatically.
 - **evidence**: PR #276 (merged 2026-09-20, ten checks green, no review);
   `agents/policies/review-and-merge.md` "Merge requirements"
 - **status**: active
+
+
+### Merging a stacked PR after its base was squashed orphans it, and GitHub still says MERGED
+
+- **id**: MEM-2026-09-20-30
+- **scope**: repo
+- **fact**: On 2026-09-20 `W4-T02` squash-merged to `main` at 12:23:15 and `W4-T03` merged into its
+  base branch `W4-T02-job-state-machine` ten seconds later. That branch's content was already on
+  `main` as a squash commit, so the second merge landed on a **dead branch**: `W4-T03` was absent
+  from `main` — no `quote.ts`, no `modules/quotes/`, no `0012` migration — while GitHub reported
+  PR #279 as **MERGED**. Recovered by cherry-picking the squash commit onto a fresh branch off
+  `main`.
+- **why**: a squash merge rewrites history, so the base branch stops being an ancestor of `main` the
+  instant it lands. A stacked PR still pointing at it merges into something `main` no longer
+  follows. **The status GitHub shows is about the PR, not about `main`** — which is precisely what
+  makes this invisible: everything reads as done. This repo already carried one scar from the same
+  class of mistake before this one (*"#270 landed on a dead branch"*).
+- **apply**: when stacking, **retarget the child PR's base to `main` before merging the parent**, or
+  merge the child first. Either way, after any stacked merge **verify against `main` itself** rather
+  than against the PR list: `git ls-tree origin/main --name-only <a file the ticket added>`. A
+  MERGED badge is not evidence. And re-read PR state before reporting it — the stale-state half of
+  this incident was an assistant repeating a check it had run an hour earlier.
+- **evidence**: PRs #277, #279; `git log --oneline origin/W4-T02-job-state-machine ^origin/main`;
+  recovery commit on `W4-T03-quote-submission`
+- **status**: active

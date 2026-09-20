@@ -100,7 +100,7 @@ export interface ProviderCategoryInput {
 export interface JobInput {
   id: string;
   clientId: string;
-  status: 'DRAFT' | 'OPEN';
+  status: 'DRAFT' | 'OPEN' | 'CANCELLED';
   title: string | null;
   description: string | null;
   urgency: 'urgente' | 'hoy' | 'semana' | 'flexible' | null;
@@ -117,6 +117,29 @@ export interface JobCategoryInput {
   jobId: string;
   categoryId: string;
   createdAt: Date;
+}
+
+/**
+ * A quote — `W4-T03`.
+ *
+ * **Named `QuoteRowInput`, breaking this file's `<Model>Input` convention on purpose:**
+ * `@marketplace/contracts` already exports a `QuoteInput`, which is the *wire* shape a provider
+ * submits, and the two packages are routinely imported into the same test file. Two different
+ * `QuoteInput`s a single import line apart is a trap worth one inconsistent name.
+ *
+ * `amountCents` has a value because a quote without a price is not a quote — unlike `Job`, where
+ * every optional column is deliberately null (see `buildJob`).
+ */
+export interface QuoteRowInput {
+  id: string;
+  jobId: string;
+  providerId: string;
+  status: 'PENDING' | 'WITHDRAWN';
+  amountCents: number;
+  breakdown: string | null;
+  validUntil: Date;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 /** `example.test` is reserved by RFC 6761 — it can never resolve, so no test can post to it. */
@@ -261,6 +284,28 @@ export function buildJob(overrides: Partial<JobInput> = {}): JobInput {
     budgetMaxCents: null,
     addressId: null,
     publishedAt: null,
+    createdAt,
+    updatedAt: createdAt,
+    ...overrides,
+  };
+}
+
+/**
+ * `validUntil` is thirty days after the fixture clock rather than a fixed date, so a quote built by
+ * a factory is *valid* by default. `quoteStatusOf` reads an expired one as `EXPIRED`, and a builder
+ * whose default silently produced expired quotes would make every test of the ordinary path
+ * assert the exception instead.
+ */
+export function buildQuote(overrides: Partial<QuoteRowInput> = {}): QuoteRowInput {
+  const createdAt = nextAt();
+  return {
+    id: nextId('Quote'),
+    jobId: nextId('Job'),
+    providerId: nextId('ProviderProfile'),
+    status: 'PENDING',
+    amountCents: 250000,
+    breakdown: null,
+    validUntil: new Date(createdAt.getTime() + 30 * 24 * 60 * 60 * 1000),
     createdAt,
     updatedAt: createdAt,
     ...overrides,
