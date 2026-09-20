@@ -2,7 +2,7 @@ import { type ReactElement } from 'react';
 import { useParams } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { AuthWall, Card } from '@marketplace/ui';
-import { type TranslationKey } from '../i18n/locales/es.js';
+import { type TranslationKey } from '../i18n/index.js';
 
 /**
  * The supply side — ADR-011 §2 puts `/:lang/become-a-pro` in `W12-T10` because the home page's CTA

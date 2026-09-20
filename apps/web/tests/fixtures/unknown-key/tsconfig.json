@@ -1,5 +1,0 @@
-{
-  "extends": "@marketplace/config/tsconfig/react.json",
-  "compilerOptions": { "types": [] },
-  "include": ["*.ts", "*.tsx", "../../../src/i18n/**/*.ts"]
-}

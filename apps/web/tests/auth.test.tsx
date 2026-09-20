@@ -15,8 +15,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { changeLanguage, setupI18n } from '../src/i18n/index.js';
-import { es } from '../src/i18n/locales/es.js';
-import { en } from '../src/i18n/locales/en.js';
+import es from '../src/i18n/locales/es.json';
+import en from '../src/i18n/locales/en.json';
 import { ApiError } from '../src/shared/api.js';
 import { renderApp, stubApi, STUB_USER, type SessionUser } from './app-harness.js';
 

@@ -34,7 +34,7 @@ import { searchSchema, type Translate } from '../features/search/schema.js';
 import { searchPath, useSearchSubmission } from '../features/search/navigation.js';
 import { MissingFields } from '../features/search/MissingFields.js';
 import { MapRegion } from '../features/search/MapRegion.js';
-import { type TranslationKey } from '../i18n/locales/es.js';
+import { type TranslationKey } from '../i18n/index.js';
 
 /**
  * The results page — ADR-011 §2, and the third rendering of `W12-T07`'s one declaration.

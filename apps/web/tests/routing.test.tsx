@@ -3,8 +3,8 @@ import { cleanup, render, screen, waitFor, within } from '@testing-library/react
 import { RouterProvider, createMemoryRouter } from 'react-router';
 import userEvent from '@testing-library/user-event';
 import { changeLanguage, setupI18n } from '../src/i18n/index.js';
-import { es } from '../src/i18n/locales/es.js';
-import { en } from '../src/i18n/locales/en.js';
+import es from '../src/i18n/locales/es.json';
+import en from '../src/i18n/locales/en.json';
 import { ErrorBoundary } from '../src/routes/root.js';
 import { renderApp, stubApi } from './app-harness.js';
 

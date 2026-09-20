@@ -11,7 +11,7 @@ import { cleanup, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ApiError } from '../src/shared/api.js';
 import { changeLanguage, setupI18n } from '../src/i18n/index.js';
-import { es } from '../src/i18n/locales/es.js';
+import es from '../src/i18n/locales/es.json';
 import { profileFor, providerIds, renderApp, stubApi } from './app-harness.js';
 
 beforeEach(async () => {

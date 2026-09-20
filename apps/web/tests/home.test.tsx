@@ -3,8 +3,8 @@ import { cleanup, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { serializeSearchQuery, toSearchQuery } from '@marketplace/ui';
 import { changeLanguage, setupI18n } from '../src/i18n/index.js';
-import { es } from '../src/i18n/locales/es.js';
-import { en } from '../src/i18n/locales/en.js';
+import es from '../src/i18n/locales/es.json';
+import en from '../src/i18n/locales/en.json';
 import { searchSchema } from '../src/features/search/schema.js';
 import { categoriesFor, renderApp, stubApi } from './app-harness.js';
 
@@ -103,7 +103,9 @@ describe('AC4..AC6 — category cards are pre-filled searches', () => {
     await screen.findByRole('banner');
 
     const categories = categoriesFor('es');
-    const schema = searchSchema(categories, (key) => es[key]);
+    // A plain lookup: `TranslationKey` is `string` since `W12-T21`, so the catalogue is indexed as
+    // the data it now is rather than as an object with known keys.
+    const schema = searchSchema(categories, (key) => (es as Record<string, string>)[key] ?? key);
     const links = await waitFor(() =>
       within(region(es['home.categories.title'])).getAllByRole('link'),
     );

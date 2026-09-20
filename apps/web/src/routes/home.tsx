@@ -11,7 +11,7 @@ import { queryKeys } from '../shared/query.js';
 import { searchSchema } from '../features/search/schema.js';
 import { searchPath, useSearchSubmission } from '../features/search/navigation.js';
 import { MissingFields } from '../features/search/MissingFields.js';
-import { type TranslationKey } from '../i18n/locales/es.js';
+import { type TranslationKey } from '../i18n/index.js';
 
 /**
  * The storefront's front door — ADR-011 §1: one large search over the schema, category cards as

@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { cleanup, screen, within } from '@testing-library/react';
 import { changeLanguage, i18next, setupI18n } from '../src/i18n/index.js';
-import { es } from '../src/i18n/locales/es.js';
-import { en } from '../src/i18n/locales/en.js';
+import es from '../src/i18n/locales/es.json';
+import en from '../src/i18n/locales/en.json';
 import { renderApp } from './app-harness.js';
 
 beforeEach(async () => {
