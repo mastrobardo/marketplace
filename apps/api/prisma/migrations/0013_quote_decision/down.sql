@@ -20,6 +20,19 @@ BEGIN
   END IF;
 END $$;
 
+-- **The partial index has to go first, and it is not this migration's index.**
+--
+-- `quote_one_active_per_provider_idx` belongs to 0012, and 0014's rollback has just restored it with
+-- 0012's own `WHERE status = 'PENDING'` predicate. That predicate is *typed*: it compares the column
+-- against a literal of the enum being replaced below, so the `ALTER COLUMN … TYPE` fails with
+-- `operator does not exist: quote_status = quote_status_old` while it exists. Found by running this
+-- rollback, not by reading it.
+--
+-- So it is dropped and rebuilt identically. A rollback reaching back into an earlier migration's
+-- object is unusual enough to say out loud: the alternative is 0012 knowing that a later migration
+-- might rebuild the type it names, which is the dependency pointing the wrong way.
+DROP INDEX "quote_one_active_per_provider_idx";
+
 -- Rebuild `quote_status` without the two. The default is dropped first because it is typed by the
 -- enum being replaced, and restored afterwards; `quote.status` is the only column of this type.
 ALTER TYPE "quote_status" RENAME TO "quote_status_old";
@@ -33,6 +46,10 @@ ALTER TABLE "quote" ALTER COLUMN "status" TYPE "quote_status" USING "status"::te
 ALTER TABLE "quote" ALTER COLUMN "status" SET DEFAULT 'PENDING';
 
 DROP TYPE "quote_status_old";
+
+-- 0012's index, restored exactly as it wrote it.
+CREATE UNIQUE INDEX "quote_one_active_per_provider_idx" ON "quote"("job_id", "provider_id")
+    WHERE "status" = 'PENDING';
 
 -- `audit_record` is untouched. The ACCEPT and REJECT rows it holds are history, and history does not
 -- roll back — they record that a transition happened, which remains true whatever the schema says.

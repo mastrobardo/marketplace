@@ -16,7 +16,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { PrismaClient } from '@prisma/client';
-import { QuoteSchema } from '@marketplace/contracts';
+import { QuoteListQuerySchema, QuoteSchema } from '@marketplace/contracts';
 import { createProviderProfile, createUser, type FactoryClient } from '@marketplace/testing';
 
 import { createJobRepository, type JobRepository } from '../src/modules/jobs/repository.js';
@@ -61,6 +61,14 @@ function migrated(name: string): string {
 }
 
 const TOMORROW = new Date(Date.now() + 86_400_000).toISOString();
+
+/**
+ * The default paging request, parsed the way the route parses it.
+ *
+ * `listForJob` takes one since `W4-T04`: the list a job's owner reads is written by other people,
+ * so it is the one that had to stop being unbounded (`W4-T04` §2.7).
+ */
+const FIRST_PAGE = QuoteListQuerySchema.parse({});
 
 let prisma: PrismaClient;
 let jobs: JobRepository;
@@ -219,8 +227,8 @@ describeLive('AC6/AC7 — coverage states the gap and enforces nothing', () => {
       },
     });
 
-    const after = await quotes.listForJob(client, jobId);
-    const electric = after?.[0]?.coverage.find((e) => e.slug === 'w4t03-electricidad');
+    const after = await quotes.listForJob(client, jobId, FIRST_PAGE);
+    const electric = after?.items[0]?.coverage.find((entry) => entry.slug === 'w4t03-electricidad');
     expect(electric?.listedByProvider, 'coverage was stored rather than computed').toBe(true);
 
     await prisma.providerCategory.delete({
@@ -370,8 +378,13 @@ describeLive('AC8 — expiry needs no worker', () => {
       'PENDING',
     );
 
-    const later = await quotes.listForJob(client, jobId, new Date(Date.now() + 120_000));
-    expect(later?.[0]?.status).toBe('EXPIRED');
+    const later = await quotes.listForJob(
+      client,
+      jobId,
+      FIRST_PAGE,
+      new Date(Date.now() + 120_000),
+    );
+    expect(later?.items[0]?.status).toBe('EXPIRED');
   });
 });
 
@@ -381,8 +394,8 @@ describeLive('AC9 — who sees which quotes', () => {
     await quotes.create(plumberUser, jobId, { amountCents: 100, validUntil: TOMORROW });
     await quotes.create(electricianUser, jobId, { amountCents: 200, validUntil: TOMORROW });
 
-    const seen = await quotes.listForJob(client, jobId);
-    expect(seen).toHaveLength(2);
+    const seen = await quotes.listForJob(client, jobId, FIRST_PAGE);
+    expect(seen?.items).toHaveLength(2);
   });
 
   it('a stranger sees nothing, and is told nothing', async () => {
@@ -391,7 +404,7 @@ describeLive('AC9 — who sees which quotes', () => {
 
     const stranger = (await createUser(prisma as unknown as FactoryClient, { roles: ['CLIENT'] }))
       .id;
-    expect(await quotes.listForJob(stranger, jobId)).toBeNull();
+    expect(await quotes.listForJob(stranger, jobId, FIRST_PAGE)).toBeNull();
   });
 
   it('a provider s own list carries only their own quotes', async () => {
