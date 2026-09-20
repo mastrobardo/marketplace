@@ -12,12 +12,31 @@ import { REQUIRED, type DeployTarget } from '../deploy/config.js';
 /** How a value is rendered once random bytes exist. */
 export type Alphabet = 'base64' | 'hex';
 
+/**
+ * Does a human ever need to read this value?
+ *
+ * The distinction `W0-T31` shipped without, and the reason its first real use was useless. Two
+ * secrets this tool generates have **opposite** requirements:
+ *
+ * - `nobody` — `*_BETTER_AUTH_SECRET` signs sessions. Nobody should ever know it, and a tool that
+ *   showed it would be handing out the thing it exists to protect.
+ * - `humans` — `*_SEED_DEMO_PASSWORD` is the password QA signs in with. **A value nobody knows is
+ *   worthless**, and hiding it does not make the environment safer, only unusable.
+ *
+ * Printing a `humans` secret is safe by the same argument that makes `--write` safe: the tool
+ * refuses unless stdout is a TTY, and a TTY *is* a human looking at a terminal. The guard was never
+ * "never show a secret" — it was "never show one to something that records it".
+ */
+export type Audience = 'nobody' | 'humans';
+
 export interface Recipe {
   /** Bytes of entropy drawn from `randomBytes`, before encoding. */
   readonly bytes: number;
   readonly alphabet: Alphabet;
   /** Why this strength, in one line — printed with the value so the reason travels with it. */
   readonly because: string;
+  /** Whether a person has to end up knowing this value. See `Audience`. */
+  readonly audience: Audience;
   /**
    * Does changing this secret actually change anything, on its own?
    *
@@ -41,6 +60,9 @@ const RECIPES: ReadonlyArray<readonly [suffix: string, recipe: Recipe]> = [
       alphabet: 'base64',
       because:
         "better-auth's own floor is 32 characters; this is 32 *bytes* of entropy (W2-T01 §4.8)",
+      // Nobody signs in with this. It is a signing key, and the only correct number of people who
+      // know it is zero.
+      audience: 'nobody',
       // It signs session tokens and verification links, so a new value invalidates every session
       // in that environment the moment the app restarts. That is the correct blast radius for a
       // key you suspect is compromised.
@@ -53,6 +75,9 @@ const RECIPES: ReadonlyArray<readonly [suffix: string, recipe: Recipe]> = [
       bytes: 24,
       alphabet: 'base64',
       because: 'EnvSchema demands at least 12 characters; 24 bytes is well past it (W0-T30 §3.3)',
+      // The whole point is that QA signs in as the demo accounts. A value nobody knows does not
+      // secure staging; it just means nobody can use it.
+      audience: 'humans',
       rotation: 'needs-reseed',
     },
   ],

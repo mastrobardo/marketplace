@@ -94,14 +94,41 @@ makes the weakest of them a way into the others.
 setting a new `*_SEED_DEMO_PASSWORD` changes **nothing** about an environment that is already
 seeded: the next deploy reads the new value and skips the seeder.
 
-The tool says so, every time, next to the value. A rotation tool that implies a rotation happened is
-worse than no tool.
+The tool says so, next to the value — **conditionally**. Amended 2026-09-20 for the same reason as
+§3.4.1: the first version warned unconditionally, so an operator setting the secret for the very
+first time, on an environment whose every deploy had skipped at preflight, was told their brand-new
+value would change nothing. That was false, and it read as "this tool just wasted your time".
+
+`rotationNote` now takes an optional `seeded`. Unknown hedges (*"if this environment has already
+been seeded"*); `false` says plainly that there is nothing to rotate. A warning that is wrong half
+the time trains people to ignore the half that is right.
 
 `*_BETTER_AUTH_SECRET` genuinely does rotate immediately — it signs sessions, so a new value signs
 everyone out of that environment as soon as the app restarts.
 
 **This is a gap in `W0-T30`, not a property of this ticket**, and §7 files it rather than fixing it
 here.
+
+### 3.4.1 Who is allowed to read it — the distinction this ticket first shipped without
+
+**Amended 2026-09-20, after the first real use.** The operator ran
+`set-staging-seed-password.sh`, the secret was written, and nobody — including them — knew what it
+was. Staging had a credential and no way in.
+
+The error was treating every generatable secret the same. They have opposite requirements, and
+`Recipe.audience` now says which:
+
+| Audience | Secret | Why |
+|---|---|---|
+| `nobody` | `*_BETTER_AUTH_SECRET` | It signs sessions. The correct number of people who know it is zero |
+| `humans` | `*_SEED_DEMO_PASSWORD` | It is the password QA signs in with. **A value nobody knows is worthless** |
+
+So `--write` now prints a `humans` secret after setting it, and still hides a `nobody` one.
+
+**This does not weaken §2.** The guard was never *"never show a secret"* — it was *"never show one
+to something that records it"*. `isTTY` already proves a person is looking, which is exactly when
+printing is safe. The same fact that made writing safe makes showing safe; the first version drew
+the line in the wrong place and hid the value from the one audience that needed it.
 
 ### 3.5 The `set-*.sh` wrappers, and why they take no arguments
 
@@ -169,6 +196,10 @@ learn it — and a piped `yes` would otherwise answer a prompt nobody saw.
 - **AC8** — The rotation note for a `*_SEED_DEMO_PASSWORD` says rotation is **not** immediate and
   names the ledger; the note for a `*_BETTER_AUTH_SECRET` says it is.
 - **AC9** — `--env value` and `--env=value` both parse; `--list` needs no name.
+- **AC10a** — Every generatable secret declares an `audience`. `--write` prints the value only on
+  the `humans` branch, and the `nobody` branch prints no value at all.
+- **AC10b** — `rotationNote` hedges when `seeded` is unknown, says there is nothing to rotate when
+  it is `false`, and warns when it is `true`. The wrappers do not claim the password is hidden.
 - **AC10** — The `set-*.sh` wrappers hand off with `exec` and contain no command substitution,
   pipe or redirect around the generator call; they require a terminal before running it; they
   confirm before it; each names a secret that is actually generatable; all set `-euo pipefail`; the

@@ -181,3 +181,76 @@ agent testing its success case — so it stayed a stated gap until a human close
    print-only path needs none of that trust.
 3. **The 24-byte choice for seed passwords.** Arbitrary beyond "well past the floor of 12". The
    floor is enforced; the headroom is judgement.
+
+
+---
+
+# Amendment — 2026-09-20: the tool worked and the outcome was useless
+
+## What happened
+
+The operator ran `./scripts/secrets/set-staging-seed-password.sh`. Every mechanism behaved exactly
+as designed: a TTY, a confirmation, the value to `gh` over stdin, nothing printed. `gh` confirmed
+the write. And then:
+
+> this is a bummer […] The password is NOT shown, here or anywhere. It goes straight to GitHub.
+> Nobody — including whoever runs this — ends up knowing what it is.
+
+Staging had a credential nobody could use. The secret exists so QA can sign in as
+`client@marketplace.local`; a value nobody knows does not secure that environment, it makes it
+unusable.
+
+## The error, stated plainly
+
+I gave every generatable secret the same treatment. They have **opposite** requirements:
+
+- `*_BETTER_AUTH_SECRET` signs sessions. The correct number of people who know it is zero.
+- `*_SEED_DEMO_PASSWORD` is a password a person types into a login form. Hiding it defeats it.
+
+I built the first behaviour, applied it to both, named a wrapper after the second, and recommended
+it in the README. The original script even told the reader to *"stop and run this instead"* if they
+needed a usable password — so the design knew its default was wrong for this secret and shipped it
+anyway. That sentence was the tell, and I wrote it.
+
+The security argument I was most pleased with actually pointed the other way. §2.1 establishes that
+`isTTY` proves *a person is looking at a terminal*. That is precisely the condition under which
+printing is safe. The guard was never "never show a secret" — it was "never show one to something
+that records it". I drew the line one step too far and hid the value from the only audience that
+needed it.
+
+## A second, compounding wrong answer
+
+The rotation warning fired unconditionally, so the operator — setting this secret for the **first**
+time, on an environment whose every deploy had skipped at preflight — was told their brand-new value
+would change nothing and they would need to re-seed or re-branch. False: with no `_seed_run` row,
+the next deploy simply uses it.
+
+A warning that is wrong half the time trains people to ignore the half that is right.
+
+## What changed
+
+1. **`Recipe.audience: 'nobody' | 'humans'`** — the distinction as data, so a new secret must decide.
+2. **`--write` prints a `humans` secret** after setting it, with "write this down". A `nobody`
+   secret is still never shown.
+3. **`rotationNote(name, recipe, seeded?)`** — hedged when unknown, "nothing to rotate" when
+   `false`, the full warning when `true`. `--seeded` / `--not-seeded` on the CLI.
+4. **The wrappers' explanation rewritten.** It described the behaviour that was the bug, and a stale
+   explanation is worse than none: it is what the operator reads and believes.
+5. **AC10a/AC10b**, including an assertion that the wrapper text no longer claims the password is
+   hidden — so the prose cannot drift back to describing the old behaviour.
+
+## Self-assessment
+
+**The tests all passed, and the thing was still wrong.** Every assertion in the original suite was
+about *mechanism* — the value is not in argv, not on stdout, not on disk. Not one asked the only
+question that mattered: **can the person who needs this credential obtain it?** A suite can be
+thorough about how a thing works and silent about whether it is useful, and mine was.
+
+**What I would do differently:** the `--write` path was the one I could not exercise from an agent
+session, and I said so in the original self-assessment — "the first real write is yours". I treated
+that as a testing gap. It was a **design review** gap: the path I could not run was the path whose
+*outcome* I had never thought through end to end. When a mechanism cannot be exercised, the thing to
+check is not just "will it work" but "what does the person have afterwards".
+
+**Still true from the original:** `outputIsCaptured` remains the whole security property, and it is
+unchanged. This amendment does not loosen it by one line.
