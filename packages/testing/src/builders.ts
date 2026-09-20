@@ -88,6 +88,37 @@ export interface ProviderCategoryInput {
   createdAt: Date;
 }
 
+/**
+ * A job — `W4-T01`.
+ *
+ * Nearly every field is nullable in the schema **on purpose**: a `DRAFT` requires nothing but an
+ * owner, because the operator's rule is that a user completes a minimal flow with missing
+ * parameters (`MEM-2026-09-20-4`). The builder honours that — its default is the emptiest job the
+ * product allows, not a fully-populated one — so a test that needs a field says so, and a test of
+ * the minimal path gets the minimal path without opting out of anything.
+ */
+export interface JobInput {
+  id: string;
+  clientId: string;
+  status: 'DRAFT' | 'OPEN';
+  title: string | null;
+  description: string | null;
+  urgency: 'urgente' | 'hoy' | 'semana' | 'flexible' | null;
+  budgetMinCents: number | null;
+  budgetMaxCents: number | null;
+  addressId: string | null;
+  publishedAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+/** A job's link to one of its trades. Composite key, like `ProviderCategory`. */
+export interface JobCategoryInput {
+  jobId: string;
+  categoryId: string;
+  createdAt: Date;
+}
+
 /** `example.test` is reserved by RFC 6761 — it can never resolve, so no test can post to it. */
 const EMAIL_DOMAIN = 'example.test';
 
@@ -208,6 +239,41 @@ export interface AuditRecordInput {
   actorId: string | null;
   metadata: Record<string, unknown> | null;
   at: Date;
+}
+
+/**
+ * The emptiest job the schema permits: a `DRAFT` with an owner and nothing else.
+ *
+ * Deliberately not a "realistic" job. `W4-T01`'s whole design is that this row is legal, so a
+ * builder that quietly filled in a title and a description would make the minimal path the one
+ * case no fixture ever exercises.
+ */
+export function buildJob(overrides: Partial<JobInput> = {}): JobInput {
+  const createdAt = nextAt();
+  return {
+    id: nextId('Job'),
+    clientId: nextId('User'),
+    status: 'DRAFT',
+    title: null,
+    description: null,
+    urgency: null,
+    budgetMinCents: null,
+    budgetMaxCents: null,
+    addressId: null,
+    publishedAt: null,
+    createdAt,
+    updatedAt: createdAt,
+    ...overrides,
+  };
+}
+
+export function buildJobCategory(overrides: Partial<JobCategoryInput> = {}): JobCategoryInput {
+  return {
+    jobId: nextId('Job'),
+    categoryId: nextId('Category'),
+    createdAt: nextAt(),
+    ...overrides,
+  };
 }
 
 export function buildProviderCategory(

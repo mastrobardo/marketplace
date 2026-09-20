@@ -770,3 +770,44 @@ come from real experience.
 - **evidence**: `W3-T01` run record, Green phase; `apps/api/tests/auth.test.ts:114`,
   `apps/api/tests/guard-live.test.ts:91`
 - **status**: active
+
+### `pnpm verify` can pass while CI fails, because turbo does not know about `schema.prisma`
+- **id**: MEM-2026-09-20-6
+- **scope**: repo
+- **fact**: `packages/testing`'s AC10 reads `apps/api/prisma/schema.prisma` and asserts that **every
+  model has a `buildX()` and a `createX()`**. Turbo cannot see that dependency — `packages/testing`
+  does not depend on `apps/api` — so adding a model leaves a **stale cache hit** on
+  `@marketplace/testing#test`. `W4-T01` added `Job` and `JobCategory`, `pnpm verify` reported 10/10
+  locally, and CI failed on the same commit.
+- **why**: Turbo's default inputs are the package's own files plus its declared dependencies. A test
+  that reads a file *outside* its package is invisible to that model, and the failure mode is the
+  worst kind: green locally, red in CI, with no diff between them.
+- **apply**: `turbo.json` now names the schema as an explicit input for that task, so the two agree.
+  **Any future test that reads a file outside its own package needs the same treatment** — check for
+  one whenever a suite does `readFileSync(join(repoRoot, …))`. When a CI failure cannot be
+  reproduced locally, suspect the cache first: `turbo run test --force`, or run the package's own
+  script directly (`pnpm --filter <pkg> test`), which bypasses turbo entirely.
+- **evidence**: `W4-T01` run record; CI run 35497144881 job `unit`; `turbo.json`
+  `@marketplace/testing#test`; `packages/testing/tests/factories.test.ts` AC10
+- **status**: active
+
+### A seeder must not parse the API's whole environment
+- **id**: MEM-2026-09-20-7
+- **scope**: repo
+- **fact**: `apps/api/prisma/seed.ts` called `loadConfig()`, which validates the **entire**
+  `EnvSchema`. The deploy workflows give the seed step a `DATABASE_URL` and a `SEED_DEMO_PASSWORD`
+  — the only two things a seeder uses — so every deployed seed run died on
+  `BETTER_AUTH_SECRET: expected string, received undefined`, a variable it never reads. Fixed with
+  `loadSeedConfig()`, an `EnvSchema.pick()` of the two.
+- **why**: `config.ts`'s rule that every variable is declared in one place is right, but "declared
+  in one place" is not the same as "every process needs all of them". The tempting fix — give the
+  seed step the auth secrets so the parse passes — puts a session signing key into a process with no
+  business holding one, to satisfy a validator rather than a need.
+- **apply**: A non-API entrypoint (seed, reset, a future CLI) gets its own `EnvSchema.pick()` loader
+  rather than `loadConfig()`. Pick from the schema, never redeclare, so there is still one
+  definition. And note what caught it: **nothing local did.** `W0-T30`'s run record had flagged that
+  this path "will first genuinely execute on the first preview deploy", and it did — a deploy step
+  whose environment differs from every local and CI run is untested until it runs.
+- **evidence**: CI run 35497144901 job `deploy`; `apps/api/src/config.ts` `loadSeedConfig`;
+  `apps/api/tests/config.test.ts`
+- **status**: active

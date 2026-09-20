@@ -9,6 +9,8 @@ import {
   buildAuditRecord,
   buildCategory,
   buildClientProfile,
+  buildJob,
+  buildJobCategory,
   buildProviderCategory,
   buildProviderProfile,
   buildUser,
@@ -16,6 +18,8 @@ import {
   createAuditRecord,
   createCategory,
   createClientProfile,
+  createJob,
+  createJobCategory,
   createProviderCategory,
   createProviderProfile,
   createUser,
@@ -39,6 +43,8 @@ const BUILDERS = {
   Category: buildCategory,
   ProviderCategory: buildProviderCategory,
   AuditRecord: buildAuditRecord,
+  Job: buildJob,
+  JobCategory: buildJobCategory,
 } as const;
 
 const CREATORS = {
@@ -49,6 +55,8 @@ const CREATORS = {
   Category: createCategory,
   ProviderCategory: createProviderCategory,
   AuditRecord: createAuditRecord,
+  Job: createJob,
+  JobCategory: createJobCategory,
 } as const;
 
 /**

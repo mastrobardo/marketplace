@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it } from 'vitest';
-import { getConfig, loadConfig } from '../src/config.js';
+import { getConfig, loadConfig, loadSeedConfig } from '../src/config.js';
 
 /**
  * The minimum an environment must supply for the API to boot.
@@ -88,5 +88,43 @@ describe('AC7 — configuration is a value, read once', () => {
 
   it('reads the process environment exactly once', () => {
     expect(getConfig()).toBe(getConfig());
+  });
+});
+
+/**
+ * `W0-T30`, fixed after `W4-T01`'s first preview deploy failed on it.
+ *
+ * The seed entrypoint called `loadConfig()`, which validates the whole schema — so every deployed
+ * seed run died on `BETTER_AUTH_SECRET: expected string, received undefined`, a variable a seeder
+ * never reads. The deploy workflows give the step a database URL and a demo password, which is
+ * exactly right; it was the parse that was wrong.
+ */
+describe('loadSeedConfig — the seeder asks for what it uses, and no more', () => {
+  const DB = 'postgres://marketplace:marketplace_local@127.0.0.1:5432/marketplace';
+
+  it('accepts what the deploy workflows actually set', () => {
+    // This is the whole environment `deploy-staging.yml`'s seed step provides. If this test needs
+    // more variables to pass, the deploy needs more too — and that is the bug, not the test.
+    const config = loadSeedConfig({ DATABASE_URL: DB, SEED_DEMO_PASSWORD: 'a-staging-secret-1' });
+
+    expect(config.DATABASE_URL).toBe(DB);
+    expect(config.SEED_DEMO_PASSWORD).toBe('a-staging-secret-1');
+  });
+
+  it('does not demand an auth signing key', () => {
+    // Handing the seed step BETTER_AUTH_SECRET to satisfy a parse would put a signing key in a
+    // process with no business holding one.
+    expect(() => loadSeedConfig({ DATABASE_URL: DB })).not.toThrow();
+  });
+
+  it('still refuses a missing or malformed database URL', () => {
+    expect(() => loadSeedConfig({})).toThrow(/DATABASE_URL/);
+    expect(() => loadSeedConfig({ DATABASE_URL: 'not-a-url' })).toThrow(/DATABASE_URL/);
+  });
+
+  it('still refuses a demo password below the floor', () => {
+    expect(() => loadSeedConfig({ DATABASE_URL: DB, SEED_DEMO_PASSWORD: 'short' })).toThrow(
+      /SEED_DEMO_PASSWORD/,
+    );
   });
 });

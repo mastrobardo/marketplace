@@ -4,7 +4,7 @@
  * Deliberately thin: everything worth testing lives in `seed/run.ts`, which takes its database URL
  * and its selection as arguments. This file is the only part that knows there is a process.
  */
-import { loadConfig } from '../src/config.js';
+import { loadSeedConfig } from '../src/config.js';
 import { seeders } from './seed/registry.js';
 import { runSeeders } from './seed/run.js';
 
@@ -36,7 +36,10 @@ export function parseOnly(argv: readonly string[]): string[] | undefined {
 }
 
 async function main(): Promise<void> {
-  const config = loadConfig();
+  // `loadSeedConfig`, not `loadConfig`: a seeder needs a database and a password, not an auth
+  // signing key. Asking for the whole schema made every deployed seed run fail on a variable it
+  // does not read — see `config.ts`.
+  const config = loadSeedConfig();
   const only = parseOnly(process.argv.slice(2));
 
   const result = await runSeeders({

@@ -24,6 +24,10 @@ import {
   type ProviderCategoryInput,
   type ProviderProfileInput,
   type UserInput,
+  buildJob,
+  buildJobCategory,
+  type JobInput,
+  type JobCategoryInput,
 } from './builders.js';
 
 export interface CreateDelegate<TInput> {
@@ -38,6 +42,8 @@ export interface FactoryClient {
   category: CreateDelegate<CategoryInput>;
   providerCategory: CreateDelegate<ProviderCategoryInput>;
   auditRecord: CreateDelegate<AuditRecordInput>;
+  job: CreateDelegate<JobInput>;
+  jobCategory: CreateDelegate<JobCategoryInput>;
 }
 
 export async function createUser(
@@ -97,6 +103,32 @@ export async function createCategory(
   overrides: Partial<CategoryInput> = {},
 ): Promise<CategoryInput> {
   return client.category.create({ data: buildCategory(overrides) });
+}
+
+/**
+ * Persist a job — `W4-T01`.
+ *
+ * Creates the owning user unless given one, like every other factory here. It deliberately creates
+ * **no category**: an empty `DRAFT` is a legal row and the common case, and a factory that attached
+ * a trade would make every job fixture publishable, which is the one thing `W4-T01` says a bare
+ * draft is not.
+ */
+export async function createJob(
+  client: FactoryClient,
+  overrides: Partial<JobInput> = {},
+): Promise<JobInput> {
+  const clientId = overrides.clientId ?? (await createUser(client)).id;
+  return client.job.create({ data: buildJob({ ...overrides, clientId }) });
+}
+
+/** Link a job to a trade, creating either side that was not supplied. */
+export async function createJobCategory(
+  client: FactoryClient,
+  overrides: Partial<JobCategoryInput> = {},
+): Promise<JobCategoryInput> {
+  const jobId = overrides.jobId ?? (await createJob(client)).id;
+  const categoryId = overrides.categoryId ?? (await createCategory(client)).id;
+  return client.jobCategory.create({ data: buildJobCategory({ ...overrides, jobId, categoryId }) });
 }
 
 export async function createProviderCategory(
