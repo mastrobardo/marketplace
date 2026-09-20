@@ -370,3 +370,69 @@ this file records the *why* an agent would otherwise have to rediscover.
 - **evidence**: operator, 2026-09-20; `TODO.md` `W0-T32`; `W0-T31` spec §3.4;
   `scripts/secrets/generate.ts` `rotationNote`
 - **status**: active
+
+### An engagement has three sources of truth, and the third is the only honest one
+
+- **id**: MEM-2026-09-20-17
+- **scope**: repo
+- **fact**: A job's lifecycle, its booking and ledger, and **the handshake** (a code the client scans
+  when work starts) are three independent records of one engagement. They are **reconciled, never
+  coupled**: a job does not need its booking's permission to change state. ADR-013 is the decision;
+  `W5-T11` grows the second dimension; `W4-T09` builds the handshake.
+- **why**: money lags reality — a late webhook, a retried capture, a Stripe incident — so coupling
+  the machines means a professional who finished the work cannot close the job because the plumbing
+  is behind, which punishes the party who did nothing wrong. And the first two sources can each be
+  produced by one party alone, so neither settles a dispute. The scan cannot: it takes both people
+  in one place, which is what makes `IN_PROGRESS` *attested* rather than claimed.
+- **apply**: when two lifecycles describe one real-world event, reconcile them and treat divergence
+  as a **finding**, not as something to prevent. Before trusting a state, ask which party could have
+  produced it alone. And do not add a fourth source without asking what it attests that the others
+  cannot — this ADR's whole argument is that a source nobody can fake is worth more than two that
+  agree.
+- **evidence**: `docs/adr/ADR-013-engagement-reconciliation.md` §1, §2, §3
+- **status**: active
+
+### Disintermediation is priced and attested, not policed — and never by reading messages
+
+- **id**: MEM-2026-09-20-18
+- **scope**: repo
+- **fact**: `R4` (users taking a job off-platform) is answered in this order: **make it cost
+  something** (awarding captures a forfeitable fee), **attest the start** (the handshake), then
+  **detect the residue** (`W5-T11` reconciles lifecycle against money, on the four signatures in
+  ADR-013 §8). Contact masking (`W4-T08`) is superseded, and **message scanning is rejected**.
+  Supersedes the open question recorded as `MEM-2026-09-20-14` — a job *does* track `IN_PROGRESS`
+  and `COMPLETED`, cross-verified rather than derived.
+- **why**: scanning messages for phone numbers is evadable by anyone who writes *llámame al seis
+  tres cuatro…*, and it inspects private conversations to solve a revenue problem. An economic
+  footprint cannot be spelled around. The operator's framing, 2026-09-20, is the standard to hold
+  it to: *"I need a mechanism to make this hard ( not completely unavoidable because real life is
+  not 100% enforceable )"* — friction and daylight, not a lock.
+- **apply**: the unit of suspicion is **the pair and the rate, never the single event** — one
+  cancellation is weather. Any detector's output is a finding for a human, because it measures money
+  and attestation and then *infers intent*. `W8-T05` (reviews only after a completed paid booking)
+  is part of this system even though it is filed under trust: do not relax it for review volume
+  without replacing what it does.
+- **evidence**: `docs/adr/ADR-013-engagement-reconciliation.md` §8, §9; `TODO.md` `R4`, `BD-08`
+- **status**: active
+
+### The platform never holds client funds, and the flag is the riskiest thing it publishes
+
+- **id**: MEM-2026-09-20-19
+- **scope**: repo
+- **fact**: Two constraints from ADR-013 that are cheap to honour and expensive to retrofit.
+  **(1)** Money sits with Stripe between capture and transfer; the platform directs it and keeps
+  none of it — operator: *"something that doesnt put me in a position as a financial entity"*.
+  **(2)** A professional is publicly flagged for no-shows only on a **pattern** (N in a window), and
+  the flag is appealable and time-bounded.
+- **why**: (1) holding client money is what turns a marketplace into a regulated entity, and it is
+  an architectural property, not a feature — once payouts run from the platform's own balance,
+  unwinding it is a rebuild. (2) the attack on a first-incident rule is a client who falsely claims
+  a no-show: they get a refund *and* publicly mark somebody who was standing outside a locked door.
+  A public flag on a named tradesperson's reliability is personal data about their livelihood.
+- **apply**: never design a flow where the platform's balance is the resting place for a client's
+  money — `R1`'s legal review before `M8` confirms the shape, but the code should not have to change
+  for it. Any published negative signal about a person needs a verified event behind it, an appeal
+  (`W8-T07`), and an expiry. Note the related trap in ADR-013 §4: **card authorizations expire after
+  roughly a week**, so "authorize at award, capture later" cannot cover work scheduled weeks out.
+- **evidence**: `docs/adr/ADR-013-engagement-reconciliation.md` §4, §6; `TODO.md` `BD-01`
+- **status**: active

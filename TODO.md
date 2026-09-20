@@ -547,17 +547,18 @@ for data), so no feature is blocked waiting for an account that is not needed ye
 - `W4-T02` `[A]` Job state machine: `DRAFT → OPEN → AWARDED → IN_PROGRESS → COMPLETED / CANCELLED`
 - `W4-T03` `[A]` Quote submission (one active quote per pro per job, validity window)
 - `W4-T04` `[A]` Quote comparison UI for the client + accept/reject
-- `W4-T05` `[A]` Award → creates Booking (hand-off to S9)
+- `W4-T05` `[A]` `[B]` Award → creates Booking (hand-off to S9). ⚠ **Now blocked on `W5-T02`** (ADR-013 §4): awarding *is* a payment — the client pays a small fee upfront, captured and forfeitable — so `AWARDED` cannot be reached without Stripe. This stopped being a pure hand-off on 2026-09-20
 - `W4-T06` `[A]` Job-scoped message thread + attachments
 - `W4-T07` `[A]` Job feed for providers: matched by category + radius + licence status
+- `W4-T09` `[A]` `[B]` **The handshake — a code the client scans when work starts** (ADR-013 §3). Filed 2026-09-20 and new: the professional presents a code on their device, the client scans it, and that moment both captures the balance and moves the engagement to `IN_PROGRESS`. **It is the only source of truth neither party can produce alone**, which is what makes the state *attested* rather than claimed — the operator's reference is how Wallapop releases on confirmation. Single-use, short-lived, bound to one booking, **redeemed by the counterparty's authenticated session**: a code that is merely a URL is one the professional can scan themselves, which removes the only property worth building. Blocked on `W5-T02` for the capture. Owns open question 4 — *what happens when the client simply refuses to scan*, given the capture is the moment they pay
 - `W4-T08` `[M]` `[B]` `[SUPERSEDED-PENDING]` Anti-disintermediation: mask contact details until booking is paid *(human: how aggressive to be — product call)*. ⚠ **Do not build this as written.** Operator, 2026-09-20, described a different model: seeing a contact is a **subscription** feature, not a reward for a paid booking, and non-paying users reach a professional through **in-app messaging** instead of being blocked. Transaction-gated and access-gated are different products with different revenue logic. `W13` owns the reconciliation and must land its ADR before this ticket means anything
 
 ### W5 — Money (`agent-money`) — *the highest-risk slice, staff it first*
 - `W5-T01` `[M]` Stripe Connect Express onboarding for providers, KYC status sync *(human: Stripe account, Connect config, branding)*
-- `W5-T02` `[A]` `[B]` Booking creation + PaymentIntent (manual capture) + 3DS handling
+- `W5-T02` `[A]` `[B]` Booking creation + PaymentIntent + 3DS handling. ⚠ **"Manual capture" is superseded by ADR-013 §4.** A hold releases on cancel and so costs the client nothing, which does none of the work the fee is there to do; and **card authorizations expire after roughly a week**, so a hold cannot cover work scheduled three weeks out. The shape is now: fee *captured* at award, balance captured at the handshake (`W4-T09`), transfer at completion, **Stripe holding throughout — the platform never takes possession**. Verify the exact flow and the expiry against current Stripe docs before building; the ADR states the shape, not the API. Unblocks `W4-T05` and `W4-T09`
 - `W5-T03` `[M]` Webhook endpoint: idempotent, signature-verified, replayable, dead-letter queue *(human: register endpoint, supply signing secret)*
-- `W5-T04` `[M]` `[B]` Completion → capture → transfer to provider minus platform fee *(human: **decide the take rate**)*
-- `W5-T05` `[M]` `[B]` Cancellation & refund policy engine (time-based tiers) + partial refunds *(human: define the policy)*
+- `W5-T04` `[M]` `[B]` Completion → **transfer** to provider minus platform fee *(human: **decide the take rate**)*. The capture moved to the handshake (ADR-013 §4), so this is the release, not the charge
+- `W5-T05` `[M]` `[B]` Cancellation & refund policy engine + partial refunds *(human: define the policy)*. **Forfeiture is all-or-nothing** — operator, 2026-09-20: a client who cancels after awarding loses the upfront fee whether they cancel ten minutes later or the night before, and the time-based tiers this row used to assume are **not** the model. ADR-013 §5 records the enforceability risk that decision carries. **What is still unmodelled is the split** — operator: *"How to divide them ( platform costs vs reservation of time of professional ) is still up for a serious plan i still didnt have time to model"*. Two claimants on one forfeited amount, and any share reaching the professional is a payout for work not done, so it carries IVA and belongs on `W5-T09`'s list
 - `W5-T06` `[A]` Dispute/hold flow: freeze payout, admin resolves
 - `W5-T07` `[M]` `[B]` Stripe Billing: FREE/PLUS/PREMIUM tiers, proration, dunning *(human: create products/prices, set pricing)*
 - `W5-T08` `[M]` `[B]` Subscription entitlements service *(human: **define what each tier buys**)*
@@ -588,7 +589,7 @@ for data), so no feature is blocked waiting for an account that is not needed ye
 - `W8-T02` `[A]` Verification queue + admin review UI + approve/reject with reason
 - `W8-T03` `[A]` Expiry tracking + re-verification reminders + auto-revoke on expiry
 - `W8-T04` `[M]` `[B]` Badge engine: VERIFIED_LICENCE, TOP_RATED, FAST_RESPONDER, PREMIUM *(human: qualifying rules)*
-- `W8-T05` `[A]` Reviews: only after a completed paid booking, both directions, edit window
+- `W8-T05` `[A]` Reviews: only after a completed paid booking, both directions, edit window. **Also a revenue control, and labelled so it is not relaxed by accident** (ADR-013 §9): a professional's reputation only grows through on-platform work, which turns leaking from free money into a cost they pay themselves. *"Let clients review any job, we need more reviews"* is a reasonable-sounding growth proposal that would remove it silently
 - `W8-T06` `[M]` `[B]` Rating aggregation + display rules (min N reviews before showing an average) *(human: N and the display policy)*
 - `W8-T07` `[A]` Moderation: report content, hide/remove, appeal trail
 
@@ -729,8 +730,13 @@ search result, the users will have no incentive to buy subscriptions."*
   disagree, and it is the first thing to resolve.**
 - Whether contact details are masked in *data* or only in *presentation* — the second is a leak
   waiting for anyone who opens dev tools.
-- How leakage is measured (`R4` asks for a leak rate), given messages are the place people paste a
-  phone number anyway.
+- ~~How leakage is measured~~ — **answered 2026-09-20 by ADR-013, and from the opposite direction.**
+  This brief assumed message scanning because *"messages are the place people paste a phone number
+  anyway"*. They are, and scanning them is still the wrong instrument: evadable by anyone who spells
+  a number out, and it reads private conversations to solve a revenue problem. ADR-013 measures the
+  economic footprint instead — a forfeitable fee at award, a handshake that attests work started,
+  and `W5-T11` reconciling lifecycle against money. **This epic no longer owes `R4` a method**, only
+  the access rules.
 
 **Known dependency, and it may block:** nothing in the codebase knows whether anyone is subscribed.
 `subscriptionTier` is in the domain sketch and unbuilt; billing is `S9`, which has not started. The
@@ -825,7 +831,7 @@ Staff `agent-money` from M0 so Stripe Connect onboarding is already in review wh
 | R1 | Holding client funds until job completion may make us a payment intermediary under Spanish/EU rules | Blocks launch | Legal review before M8. Stripe Connect with delayed transfers is the mitigation, but confirm |
 | R2 | Licence verification: is there a usable registry API per colegio/comunidad, or is it manual forever? | Ops cost, trust | Research during M2; MVP assumes manual review |
 | R3 | Marketplace cold start — no pros means no clients | Existential | Seeded supply strategy (manual pro recruitment) before beta; not a code task |
-| R4 | Disintermediation: users take the job off-platform after matching | Revenue | In-app messaging as the only contact channel until a subscription unlocks details (`W13`, ADR pending; was `W4-T08`); measure the leak rate |
+| R4 | Disintermediation: users take the job off-platform after matching | Revenue | **Two halves, and the second is now designed.** *Access*: in-app messaging until a subscription unlocks details (`W13`, ADR pending; was `W4-T08`). *Economics and detection*: ADR-013 — awarding costs a forfeitable fee, the handshake attests that work started, and `W5-T11` reconciles lifecycle against money. The leak rate is the four signatures in ADR-013 §8, measured on the **pair and the rate**, never the single event. **Not** message scanning: evadable by anyone who writes *llámame al seis tres cuatro…*, and it reads private conversations to solve a revenue problem |
 | R5 | Auction abuse: lowball bids, bid-and-run | Trust | Bid caps by tier, ratings-gated bidding, cancellation penalties |
 | R6 | Emergency SLA — promising fast response we can't fulfil | Reputation, legal | No hard SLA promise in MVP copy; fallback path in W7-T06 |
 | R7 | VAT/IVA and invoicing for autónomos, plus platform reporting duties (DAC7) | Compliance | Scope with an accountant before M8 (W5-T09 is `[H]` for this reason) |
@@ -849,14 +855,14 @@ rule: build the mechanism, read the value from config, ship nothing with an inve
 
 | ID | Decision | Blocks | Notes |
 |---|---|---|---|
-| `BD-01` | **Escrow — do we hold client funds until job completion?** | `W5-T02`, `W5-T04` | The keystone decision. Yes ⇒ manual capture + delayed transfer, and R1 legal review before M8. No ⇒ pay-on-completion direct to the pro, far simpler, weaker client protection |
+| `BD-01` | ✅ **Escrow — do we hold client funds until job completion?** | `W5-T02`, `W5-T04` | **Answered 2026-09-20 by ADR-013 §4, and neither of the two options it listed.** The platform holds nothing — **Stripe does**, and the platform directs money rather than keeping it, which is what keeps this a marketplace and not a financial entity (operator: *"something that doesnt put me in a position as a financial entity"*). Fee captured at award, balance at the handshake, transfer at completion. `R1` legal review before `M8` still applies, and should look hardest at `BD-04`'s all-or-nothing forfeiture |
 | `BD-02` | Platform take rate — flat %, or reduced for subscribers? | `W5-T04`, `W5-T08` | Drives unit economics and the tier value proposition |
 | `BD-03` | What do PLUS and PREMIUM actually buy? (quote volume, radius, ranking boost, badge, lead priority) | `W5-T07`, `W5-T08`, `W3-T05` | Ranking boost has a fairness cost — decide deliberately |
-| `BD-04` | Cancellation & refund policy tiers | `W5-T05` | Time-based bands, who bears the fee |
+| `BD-04` | Cancellation & refund policy | `W5-T05` | **Half answered 2026-09-20: forfeiture is all-or-nothing**, not time-banded (operator, ADR-013 §5). Still open, and unmodelled: **how the forfeited fee divides** between platform cost and the professional's reserved time. The enforceability risk of the all-or-nothing choice is recorded in ADR-013's Consequences |
 | `BD-05` | Emergency pricing — call-out fee + hourly, or a premium multiplier? | `W7-T01` | Affects the whole urgency flow's UX |
 | `BD-06` | Do **manitas** need verification (ID check), or only licensed pros? | `W8` scope, `W2-T05` | Trust vs. supply-side friction; affects cold start |
 | ~~`BD-07`~~ ✅ | Which categories legally require a licence in Spain? | `W3-T01`, `W3-T08` | **Answered 2026-09-18: five trades** — `electricidad`, `gas`, `climatizacion`, `telecomunicaciones`, `placas-solares`. And a rule worth more than the list: **a licence attaches to the trade performed, not to the umbrella above it** — `reforma-integral` is *not* gated, because tiling and wall work need nothing and rewiring is gated as `electricidad`. `W3-T08` inherits the evasion that permits, stated in `docs/specs/S3/W3-T01-category-tree.md` §3.5.1/§10.3. `desatascos` is `false` **provisionally** — the operator is checking with the gremio, and asking whether it exposes an API for registration lookups, which would turn `W8-T02`'s human review into a call |
-| `BD-08` | How aggressive is anti-disintermediation? | `W13` (was `W4-T08`) | Too strict harms UX, too loose leaks revenue. **Reframed 2026-09-20**: the question is no longer only *how much to mask* but *what unlocks it* — a paid booking or a subscription — and what non-paying users can do instead |
+| `BD-08` | How aggressive is anti-disintermediation? | `W13` (was `W4-T08`) | Too strict harms UX, too loose leaks revenue. **Reframed 2026-09-20**: the question is no longer only *how much to mask* but *what unlocks it* — a paid booking or a subscription — and what non-paying users can do instead. **The detection half is answered by ADR-013** and needs no masking at all: make leaving cost a forfeited fee, attest the start with a handshake, reconcile the rest. What stays with `W13` is *access* — who may contact whom, and what a subscription buys |
 | `BD-09` | Auction defaults: sealed vs open, anti-sniping window, bid caps per tier | `W6-T04`, `W6-T07` | |
 | `BD-10` | Badge qualifying rules + minimum reviews before an average is shown | `W8-T04`, `W8-T06` | |
 | `BD-11` | Support impersonation policy (GDPR-sensitive) | `W9-T02` | Consent, time-box, audit |
