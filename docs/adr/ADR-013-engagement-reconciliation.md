@@ -122,6 +122,12 @@ work."* That single sentence removes escrow, removes the completion transfer, an
 what §8 originally worried about — if the platform is paid when work begins, a pair that goes
 off-platform afterwards costs it nothing.
 
+**Amended 2026-09-20 by [ADR-014](ADR-014-who-pays.md):** that sentence is true of *an engagement*
+and is not the whole revenue model. The client also pays to **ask** — a quote request or an auction,
+*una tantum* or from a subscription allowance — before any of the table above happens, and a contact
+unlock may be a third moment (`W13`). Read this section as "the money inside one engagement", not as
+"the platform's income".
+
 **The platform never takes possession**, and the scope of that is now much narrower than "we hold
 funds in Stripe": the only money that passes through is the call-out fee, which is the platform's
 own charge and the professional's own compensation for turning up. `R1` still confirms the shape
