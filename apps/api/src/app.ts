@@ -16,6 +16,8 @@ import { type SearchRepository } from './modules/search/repository.js';
 import { categoryRoutes } from './modules/categories/routes.js';
 import { type CategoryRepository } from './modules/categories/repository.js';
 import { providerRoutes } from './modules/providers/routes.js';
+import { jobRoutes } from './modules/jobs/routes.js';
+import { type JobRepository } from './modules/jobs/repository.js';
 import { type ProviderRepository } from './modules/providers/repository.js';
 import {
   type ProviderOwnRepository,
@@ -68,6 +70,13 @@ export interface BuildAppOptions {
    */
   providerOwn?: ProviderOwnRepository;
   providerWriter?: ProviderWriter;
+  /**
+   * The job data layer (`W4-T01`).
+   *
+   * Every job route is guarded, so this arrives with `auth` or the routes do not exist at all —
+   * there is no public half to fall back to, unlike `providers`.
+   */
+  jobs?: JobRepository;
   /** The Prisma client the session guard reads liveness from — `W2-T03` §3.3. */
   prisma?: ProviderLivenessClient;
 }
@@ -111,6 +120,7 @@ export function buildApp({
   providers,
   providerOwn,
   providerWriter,
+  jobs,
   prisma,
 }: BuildAppOptions): FastifyInstance {
   const app = Fastify({
@@ -188,6 +198,24 @@ export function buildApp({
               writer: providerWriter,
             }
           : {}),
+      }),
+      { prefix: '/api' },
+    );
+  }
+
+  /**
+   * `W4-T01` — posting a job.
+   *
+   * Unlike `providers`, there is no public half: every route needs a principal, so without `auth`
+   * this registers nothing and `/api/jobs` is a `404`. `jobRoutes` enforces that itself by
+   * returning early when `guards` is absent, which makes the fail-closed property structural
+   * rather than a condition somebody has to remember to write here.
+   */
+  if (jobs !== undefined && auth !== undefined && prisma !== undefined) {
+    app.register(
+      jobRoutes({
+        repository: jobs,
+        guards: buildGuards({ resolveSession: buildSessionResolver({ auth, prisma }) }),
       }),
       { prefix: '/api' },
     );

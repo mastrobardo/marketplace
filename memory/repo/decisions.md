@@ -310,4 +310,42 @@ this file records the *why* an agent would otherwise have to rediscover.
   "next" while a funnel is unfinished. This ordering is a judgement about sequence, not about
   whether the deferred work matters; revisit it when the funnels close.
 - **evidence**: operator, 2026-09-20; `TODO.md` §6 `▶ NEXT` banner
+### A draft asks for nothing; publishing asks for one thing
+- **id**: MEM-2026-09-20-4
+- **scope**: repo
+- **fact**: `W4-T01` split validation in two, and the split is the pattern for every "post something"
+  flow that follows. A `DRAFT` requires **nothing but an owner** — every column nullable, `PUT`
+  merges, `{}` is a valid body. Publishing requires **one thing**: at least one category, enforced
+  by a guard on the `DRAFT → OPEN` transition rather than by the schema. Operator, 2026-09-20: *"A
+  user should be able to complete a minimal flow even with missing parameters. I dont want to policy
+  the users"*, and then *"at least category need to be there"*.
+- **why**: The two instructions only look contradictory. A schema that required a category would
+  make a draft impossible; a publish that did not would make an `OPEN` job that reaches nobody,
+  because matching is by category — and the client would experience that as silence rather than as
+  an error. The floor is *what the feature needs to function*, never *what a form looks complete
+  with*. A description is not on the floor: a job without one is harder to quote, and that is the
+  client's problem, not the platform's.
+- **apply**: When adding a field to any posting flow, ask whether its absence **breaks the feature**
+  or merely makes the result worse. Only the first earns a place at publish. New guard requirements
+  go on the machine, not in a zod schema, so the draft stays reachable. `hasAnyCategory`'s context
+  is a single count on purpose — if that interface grows a field, a requirement has been added.
+- **evidence**: operator, 2026-09-20; `W4-T01` spec §2.2–§2.3; `packages/contracts/src/job.ts`
+  `hasAnyCategory`; `apps/api/tests/job-live.test.ts` AC3/AC5
+- **status**: active
+
+### Rows written in one transaction share a timestamp, so insertion order is not a thing
+- **id**: MEM-2026-09-20-5
+- **scope**: repo
+- **fact**: Postgres gives every row written inside one transaction the same `CURRENT_TIMESTAMP`, so
+  a `created_at DEFAULT now()` column **cannot** order rows written together. `W4-T01` ordered a
+  job's categories that way, fell through to the uuid tiebreak, and the set shuffled between reads.
+- **why**: The bug is invisible in any test that inserts one row at a time, and it looks like it
+  works locally until a second row lands in the same statement batch. It was caught only because an
+  acceptance criterion asserted *stable order across two reads* rather than just "the right members".
+- **apply**: Never order a join or child table by `createdAt` when the rows can be written together.
+  Either add an explicit `position` column, or order by something inherent to the referenced row —
+  `W4-T01` uses the category's own `position`, which also makes a job's categories read the same way
+  the picker showed them. When asserting order, read **twice** and compare; one read cannot catch it.
+- **evidence**: `W4-T01` run record deviation 2; `apps/api/src/modules/jobs/repository.ts`
+  `JOB_INCLUDE`; `apps/api/tests/job-live.test.ts` AC8
 - **status**: active

@@ -111,6 +111,7 @@ model User {
   addresses       Address[]
   sessions        Session[]
   accounts        Account[]
+  jobs            Job[]
 
   @@index([createdAt(sort: Desc), id(sort: Desc)], map: "app_user_created_at_id_idx")
   @@index([status], map: "app_user_status_idx")
@@ -266,6 +267,7 @@ model Address {
   user            User              @relation(fields: [userId], references: [id], onDelete: Cascade)
   clientDefaultOf ClientProfile[]   @relation("ClientDefaultAddress")
   providerBaseOf  ProviderProfile[] @relation("ProviderBaseAddress")
+  jobsAt          Job[]             @relation("JobAddress")
 
   @@index([userId], map: "address_user_id_idx")
   @@index([location], map: "address_location_gist", type: Gist)
@@ -294,6 +296,7 @@ model Category {
   parent    Category?          @relation("CategoryTree", fields: [parentId], references: [id], onDelete: Restrict)
   children  Category[]         @relation("CategoryTree")
   providers ProviderCategory[]
+  jobs      JobCategory[]
 
   @@index([parentId, position], map: "category_parent_id_position_idx")
   @@map("category")
@@ -323,6 +326,88 @@ model ProviderCategory {
 
 /// Who caused a transition. SYSTEM is a scheduled close or a webhook — real transitions with no
 /// person behind them, which is why `actorId` is nullable and why the pairing is a CHECK (§8.2).
+/// `W4-T01`. Two states, and `W4-T02` owns the rest of the lifecycle.
+///
+/// Declaring AWARDED/IN_PROGRESS/COMPLETED/CANCELLED now would put four values in this enum that
+/// nothing can produce and no route can reach. `ALTER TYPE ... ADD VALUE` is a cheap migration.
+enum JobStatus {
+  DRAFT
+  OPEN
+
+  @@map("job_status")
+}
+
+/// The same four values as `SearchUrgencySchema`, and deliberately not a parallel vocabulary:
+/// `W3-T01` §3.1 settled that *urgencia* is `EmergencyRequest` and this field, never a category.
+enum JobUrgency {
+  urgente
+  hoy
+  semana
+  flexible
+
+  @@map("job_urgency")
+}
+
+/// A request for work. `W4-T01` ships the posting half; quotes are `W4-T03`.
+///
+/// **Almost every column is nullable, and that is the design** (spec §2.2): the operator's rule is
+/// that a user completes a minimal flow even with missing parameters. A DRAFT requires nothing but
+/// an owner. The single requirement — at least one category — is enforced at *publish*, by
+/// `jobMachine`'s guard in `@marketplace/contracts`, because a schema that demanded it would make a
+/// draft impossible.
+model Job {
+  id          String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  clientId    String      @map("client_id") @db.Uuid
+  status      JobStatus   @default(DRAFT)
+  title       String?
+  description String?
+  urgency     JobUrgency?
+
+  /// Integer cents, EUR (`money.ts`). A range because "I don't know" is the honest answer for most
+  /// first-time clients, and a single figure is read by a provider as a target.
+  budgetMinCents Int? @map("budget_min_cents")
+  budgetMaxCents Int? @map("budget_max_cents")
+
+  /// Where the work is. Nullable even when OPEN (spec §2.5): a client with no saved address still
+  /// gets to post; the job just will not match a radius query until one exists. `SetNull` because
+  /// deleting an address must never delete the job.
+  addressId String? @map("address_id") @db.Uuid
+
+  /// When it became OPEN. Null while DRAFT, and the only column that records the transition
+  /// outside `audit_record`.
+  publishedAt DateTime? @map("published_at") @db.Timestamptz(3)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  client     User          @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  address    Address?      @relation("JobAddress", fields: [addressId], references: [id], onDelete: SetNull)
+  categories JobCategory[]
+
+  @@index([clientId, createdAt(sort: Desc), id(sort: Desc)], map: "job_client_created_idx")
+  @@index([status, createdAt(sort: Desc), id(sort: Desc)], map: "job_status_created_idx")
+  @@map("job")
+}
+
+/// Many-to-many, because a bathroom is not one trade — the operator's example, 2026-09-20:
+/// *"a reformation of a bathroom, might need tiles, plumbing, and electricity"*.
+///
+/// Mirrors `ProviderCategory` exactly: composite key, Cascade from the owner, Restrict to the
+/// category so a trade in use cannot be deleted, and an index on `category_id` for the reverse
+/// lookup `W4-T07` needs when it matches a provider to a feed.
+model JobCategory {
+  jobId      String   @map("job_id") @db.Uuid
+  categoryId String   @map("category_id") @db.Uuid
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  job      Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  category Category @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+
+  @@id([jobId, categoryId])
+  @@index([categoryId], map: "job_category_category_idx")
+  @@map("job_category")
+}
+
 enum ActorType {
   USER
   SYSTEM

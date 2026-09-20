@@ -5,6 +5,7 @@ import { ConfigError, getConfig } from './config.js';
 import { getPrismaClient } from './db/client.js';
 import { createSearchRepository } from './modules/search/repository.js';
 import { createCategoryRepository } from './modules/categories/repository.js';
+import { createJobRepository } from './modules/jobs/repository.js';
 import { createProviderRepository } from './modules/providers/repository.js';
 import {
   createProviderOwnRepository,
@@ -30,6 +31,7 @@ async function main(): Promise<void> {
   const providers = createProviderRepository(prisma);
   const providerOwn = createProviderOwnRepository(prisma);
   const providerWriter = createProviderWriter(prisma);
+  const jobs = createJobRepository(prisma);
 
   const app = buildApp({
     config,
@@ -39,6 +41,7 @@ async function main(): Promise<void> {
     providers,
     providerOwn,
     providerWriter,
+    jobs,
     prisma,
   });
 
