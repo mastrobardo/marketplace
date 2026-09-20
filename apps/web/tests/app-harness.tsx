@@ -13,6 +13,7 @@ import { type SessionUser } from '../src/shared/session.js';
 import { buildCatalogue } from './fixtures/catalogue.js';
 import { searchCatalogue } from './fixtures/search.js';
 import { profileFromCatalogue, seededProviderIds } from './fixtures/provider.js';
+import { DEMO_JOB_ID, demoJob, demoQuotes } from './fixtures/quotes.js';
 
 /**
  * Render the real `App` at a path, with the API stubbed.
@@ -99,6 +100,20 @@ export function stubApi(overrides: Partial<ApiClient> = {}): ApiClient {
         : Promise.resolve(profile);
     },
     getSession: () => Promise.resolve(null),
+    /**
+     * `W4-T04`. Signed out is the harness default, so these are only ever reached by a test that
+     * has overridden `getSession` — and then they answer with the one fixture, never an invention.
+     */
+    getMyJobs: () => Promise.resolve([demoJob()]),
+    getJob: (id: string) =>
+      id === DEMO_JOB_ID
+        ? Promise.resolve(demoJob())
+        : Promise.reject(new ApiError(404, 'NOT_FOUND')),
+    // One page, `hasMore: false` — a test that wants a second page overrides this and says so.
+    getJobQuotes: () =>
+      Promise.resolve({ items: demoQuotes(), page: { nextCursor: null, hasMore: false } }),
+    decideQuote: (quoteId: string) =>
+      Promise.resolve({ ...demoQuotes()[0]!, id: quoteId, status: 'ACCEPTED' as const }),
     signUp: () => Promise.resolve(),
     signIn: () => Promise.resolve(STUB_USER),
     signOut: () => Promise.resolve(),

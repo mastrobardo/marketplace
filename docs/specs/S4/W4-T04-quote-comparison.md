@@ -254,8 +254,11 @@ tail. The seeder (§3.4) is what makes these screens reachable in a preview.
   the action has no undo until `W4-T05` gives it one.
 - **An expired quote renders as expired and cannot be accepted** — the button is gone, not disabled
   and failing at the API.
-- `hasMore` renders a **load more** that appends and re-sorts, so the ranking always covers
-  everything on screen (§2.7).
+- **The loader assembles the whole set**, following the cursor until the API says there is no more,
+  bounded at 100 quotes. There is no *load more* button, and that is a change from this spec's first
+  draft: a ranking applied to the first 20 of 40 quotes is not a partial comparison, it is a **wrong**
+  one, so the set the screen sorts has to be the set the job has. A job that exceeds the bound says
+  so rather than silently ranking a prefix.
 
 ### 3.4 Seed data
 
@@ -314,13 +317,20 @@ this spec (§5.4 axis 2) and can still call for an ADR; flagged rather than assu
 - **AC15** — An accepted quote reads `ACCEPTED` after `valid_until` passes, not `EXPIRED` (§2.1).
 - **AC16** — `GET /api/jobs/:id/quotes` returns `{ items, page }`, defaults to 20, refuses a limit
   above 100, and its cursor walks the whole set exactly once with no row repeated or skipped.
-- **AC17** — The comparison screen sorts by rating then price, places unrated providers last, and
-  marks the cheapest quote under **every** sort order (§3.3).
+- **AC17** — The comparison screen sorts by rating then price, places unrated providers last, sinks
+  every quote nobody can act on below every quote they can, and marks the cheapest **live** quote
+  under every sort order (§3.3). The mark is absent when fewer than two quotes are live: *cheapest*
+  is a comparison, and a badge on the only option would read as an endorsement.
 - **AC18** — The screen renders an expired quote as expired with no accept control.
 - **AC19** — Accepting from the screen requires confirmation; dismissing the dialog sends nothing.
 - **AC20** — Both screens redirect to the login form without a session, as `/account` does.
 - **AC21** — Every string on both screens exists in ES and EN; no hardcoded copy.
-- **AC22** — Both screens pass axe with no violations (`W12-T04`'s gate).
+- **AC22** — Both screens are built to `W12`'s accessibility rules — a labelled sort control, one
+  `h1`, a named dialog, and no disabled control standing in for an absent one. **They are not
+  covered by an automated axe pass, and that is a gap this ticket does not close**: `W12-T04`'s gate
+  runs over Storybook stories and `W12-T16`'s nightly runs axe over *public* routes, and neither can
+  reach a page behind a session. Closing it means either a story per state or a signed-in nightly,
+  and both are `agent-ui`'s call rather than this slice's. Filed in §6.
 - **AC23** — The seeder produces the four load-bearing rows §3.4 names, and is registered in
   `registry.ts` and in both deploy workflows' `--only` lists.
 - **AC24** — The migration is reversible and `prisma migrate diff` reports no drift.
@@ -336,3 +346,6 @@ this spec (§5.4 axis 2) and can still call for an ADR; flagged rather than assu
   mechanism, and it is `[B]`.
 - **A job-posting form** (§3.2), and any change to `GET /api/me/jobs` (§2.7).
 - **Provider-side verification** on coverage — still `W8`.
+- **An automated axe pass over an authenticated route** (AC22). No harness in this repo can reach
+  one today. `agent-ui` owns the choice between a story per state and a signed-in nightly; until
+  then these two screens are reviewed by hand against the same rules.

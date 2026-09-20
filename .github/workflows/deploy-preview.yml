@@ -236,7 +236,7 @@ jobs:
       # to this pull request re-runs the step and writes nothing new. The preview database is
       # branched from `sanitised-staging`, which is seeded too, so usually everything is skipped.
       - name: Seed the preview database
-        run: pnpm db:seed --only auth.demo-users,categories.taxonomy,providers.demo-world
+        run: pnpm db:seed --only auth.demo-users,categories.taxonomy,providers.demo-world,quotes.demo-comparison
         env:
           DATABASE_URL: ${{ steps.migrate.outputs.url }}
           # `auth.demo-users` refuses to run against a non-local host without this: its fallback

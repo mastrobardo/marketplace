@@ -17,12 +17,19 @@
  */
 import {
   CategoryListSchema,
+  JobSchema,
   ProviderProfileSchema,
+  QuotePageSchema,
+  QuoteSchema,
   SearchResponseSchema,
   type CategorySummary,
+  type Job,
   type ProviderProfile,
+  type Quote,
+  type QuotePage,
   type SearchResponse,
 } from '@marketplace/contracts';
+import * as z from 'zod';
 import { type SearchQuery } from '@marketplace/ui';
 import axios, { type AxiosInstance } from 'axios';
 import { SessionSchema, SessionUserSchema, type SessionUser } from './session.js';
@@ -50,6 +57,27 @@ export interface ApiClient {
    * caller is the one route that can render a 404 instead of sending a request nobody should send.
    */
   getProvider: (id: string, locale: string) => Promise<ProviderProfile>;
+
+  /**
+   * ── The client's own jobs, and the quotes on them — `W4-T04` §3.2 ───────────────────────────
+   *
+   * The first calls in this client that need a **session** rather than a locale. They carry no
+   * `Accept-Language`: a job's text is what its owner typed, and a quote's is what a professional
+   * wrote. Neither is ours to translate, and asking for a language we cannot honour is a header
+   * that reads as a promise.
+   */
+  getMyJobs: () => Promise<Job[]>;
+  getJob: (id: string) => Promise<Job>;
+  /** One page. `cursor` continues the previous one — the screen appends and re-ranks (§3.3). */
+  getJobQuotes: (jobId: string, cursor?: string) => Promise<QuotePage>;
+  /**
+   * Accept or reject, as one call taking the decision.
+   *
+   * One method rather than two, mirroring the permission: the API guards both with
+   * `quote:decide-for-own-job` because they are one capability, and a client that split them would
+   * be the only place in the stack that thought otherwise.
+   */
+  decideQuote: (quoteId: string, decision: 'accept' | 'reject') => Promise<Quote>;
 
   /**
    * ── The auth calls — `W2-T09` §4.3 ───────────────────────────────────────────────────────────
@@ -182,6 +210,29 @@ export function createApiClient(
         http.get<unknown>(`api/providers/${id}`, { headers: { 'Accept-Language': locale } }),
       );
       return ProviderProfileSchema.parse(response.data);
+    },
+
+    async getMyJobs() {
+      const response = await call(() => http.get<unknown>('api/me/jobs'));
+      // The envelope is one line here and the *item* is the contract's — `GET /api/me/jobs` is the
+      // last uncursored list in this slice (`W4-T04` §2.7) and has no page schema to import.
+      return z.object({ items: z.array(JobSchema) }).parse(response.data).items;
+    },
+
+    async getJob(id) {
+      const response = await call(() => http.get<unknown>(`api/jobs/${id}`));
+      return JobSchema.parse(response.data);
+    },
+
+    async getJobQuotes(jobId, cursor) {
+      const query = cursor === undefined ? '' : `?cursor=${encodeURIComponent(cursor)}`;
+      const response = await call(() => http.get<unknown>(`api/jobs/${jobId}/quotes${query}`));
+      return QuotePageSchema.parse(response.data);
+    },
+
+    async decideQuote(quoteId, decision) {
+      const response = await call(() => http.post<unknown>(`api/quotes/${quoteId}/${decision}`, {}));
+      return QuoteSchema.parse(response.data);
     },
 
     async signUp(input) {

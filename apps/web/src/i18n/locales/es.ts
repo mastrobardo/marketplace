@@ -237,6 +237,51 @@ export const es = {
     'Los enlaces duran una hora y solo se pueden usar una vez. Pide otro para cambiar la contrase\u00f1a.',
   'auth.reset.set.invalid.again': 'Pedir otro enlace',
 
+  // ── `W4-T04` — mis trabajos y la comparación de presupuestos ──────────────────────────────
+  'jobs.title': 'Mis trabajos',
+  'jobs.empty.title': 'Todavía no has publicado ningún trabajo',
+  'jobs.empty.body': 'Cuando publiques uno, los profesionales podrán enviarte sus presupuestos.',
+  'jobs.status.DRAFT': 'Borrador',
+  'jobs.status.OPEN': 'Abierto',
+  'jobs.status.CANCELLED': 'Cancelado',
+  'jobs.untitled': 'Trabajo sin título',
+  'jobs.quotes.link': 'Ver presupuestos',
+
+  'job.back': 'Volver a mis trabajos',
+  'job.quotes.title': 'Presupuestos',
+  'job.quotes.count_one': '{{count}} presupuesto',
+  'job.quotes.count_other': '{{count}} presupuestos',
+  'job.quotes.empty.title': 'Todavía no hay presupuestos',
+  'job.quotes.empty.body':
+    'Los profesionales de las categorías que has elegido verán tu trabajo y podrán enviarte un presupuesto.',
+  'job.quotes.more': 'Ver más presupuestos',
+  'job.quotes.sort.label': 'Ordenar por',
+  'job.quotes.sort.recommended': 'Recomendados',
+  'job.quotes.sort.price': 'Precio',
+  'job.quotes.sort.newest': 'Más recientes',
+  'job.quotes.cheapest': 'El más barato',
+  'job.quotes.unrated': 'Sin valoraciones todavía',
+  'job.quotes.rating': '{{rating}} de 5 ({{count}})',
+  'job.quotes.validUntil': 'Válido hasta el {{date}}',
+  'job.quotes.coverage.title': 'Lo que pide el trabajo',
+  'job.quotes.coverage.listed': 'lo ofrece en su perfil',
+  'job.quotes.coverage.notListed': 'no lo tiene en su perfil',
+  'job.quotes.coverage.licence': 'oficio regulado',
+  'job.quotes.status.ACCEPTED': 'Aceptado',
+  'job.quotes.status.REJECTED': 'Rechazado',
+  'job.quotes.status.WITHDRAWN': 'Retirado por el profesional',
+  'job.quotes.status.EXPIRED': 'Caducado',
+  'job.quotes.accept': 'Aceptar',
+  'job.quotes.reject': 'Rechazar',
+  'job.quotes.confirm.title': '¿Aceptar este presupuesto?',
+  'job.quotes.confirm.body':
+    'Vas a aceptar el presupuesto de {{provider}} por {{amount}}. Todavía no se cobra nada, pero de momento no podrás deshacerlo.',
+  'job.quotes.confirm.accept': 'Sí, aceptar',
+  'job.quotes.confirm.cancel': 'Cancelar',
+  'job.quotes.accepted.notice':
+    'Has aceptado el presupuesto de {{provider}}. Los demás siguen pendientes hasta que el trabajo se adjudique.',
+  'job.quotes.error': 'No hemos podido guardar tu respuesta. Vuelve a intentarlo.',
+
   'footer.rights': 'Todos los derechos reservados',
 } as const;
 

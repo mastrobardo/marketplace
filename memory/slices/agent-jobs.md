@@ -62,13 +62,27 @@ Keep it to facts that changed how you would work. Task-specific detail stays in 
   states were unreachable, and would have had this slice invent award semantics that `W4-T05` then
   rewrites.
 - **apply**: when a ticket's title describes a whole lifecycle, list what produces each arrow before
-  estimating it. **The open question, which `W4-T05` inherits:** does a job track `IN_PROGRESS` and
-  `COMPLETED` at all, or read them off its `Booking`? Two machines over one engagement can disagree,
-  and a job reading `COMPLETED` while its booking reads `DISPUTED` costs a refund. Settle it with
-  `agent-money` before either slice writes a state — it is a seam question, not a jobs one.
+  estimating it.
+
+  **The question this entry left open is answered, and was already answered when it was written.**
+  Operator, 2026-09-20: *"BOTH. Booking and job should reflect the same state. This will be also a
+  way to check if smtg is going badly"* — which is ADR-013 §1 and §2 verbatim in substance: `Job`
+  and `Booking` are two of the three sources of truth, **reconciled rather than coupled**, and a
+  reconciler writes a **finding** when they disagree (`W5-T11`, gaining a second dimension —
+  lifecycle against money, not only ledger against Stripe). A job does *not* need its booking's
+  permission to change state; coupling them would punish a professional whose webhook is late.
+  ADR-013 §2 adds the caveat to carry forward: **most divergence is a defect in our own plumbing
+  rather than a person behaving badly**, and a reconciler that cannot tell those apart becomes noise
+  and stops being read.
+
+  What does **not** follow from "both" is building the states now: `IN_PROGRESS` and `COMPLETED`
+  still have nothing that can produce them, so they arrive with `W5` (`MEM-2026-09-20-29`).
 - **evidence**: `docs/specs/S4/W4-T02-job-state-machine.md` §6.1;
-  `apps/api/prisma/migrations/0011_job_cancellation/migration.sql`
-- **status**: active
+  `apps/api/prisma/migrations/0011_job_cancellation/migration.sql`; ADR-013 §1, §2; operator,
+  2026-09-20
+- **status**: **answered 2026-09-20.** Kept because the *reasoning* — two machines over one
+  engagement can disagree, and the disagreement costs a refund — is what makes the reconciler
+  necessary rather than optional.
 
 ### A cancellation reason is audit metadata, not a column
 
@@ -120,10 +134,64 @@ Keep it to facts that changed how you would work. Task-specific detail stays in 
 - **why**: a plain `UNIQUE (job_id, provider_id)` would make a withdrawn quote a **permanent** bar
   on ever quoting that job again — a rule nobody intended, invisible in review, and discovered by a
   support ticket months later.
-- **apply**: **the predicate is load-bearing and changes meaning when states are added.** When
-  `W4-T04` introduces `ACCEPTED`/`REJECTED`, decide explicitly whether a *rejected* quote should
-  block a resubmission — under the current predicate it would, silently. A partial index is a rule
-  written in a `WHERE` clause, so it deserves the same scrutiny as a rule written in code.
+- **apply**: **the predicate is load-bearing and changes meaning when states are added.** A partial
+  index is a rule written in a `WHERE` clause, so it deserves the same scrutiny as a rule written in
+  code.
 - **evidence**: `apps/api/prisma/migrations/0012_quote_submission/migration.sql`;
   `apps/api/tests/quote-live.test.ts` AC3/AC4
+- **status**: **amended by `W4-T04`, 2026-09-20.** This entry used to end *"decide explicitly whether
+  a rejected quote should block a resubmission — under the current predicate it would, silently"*,
+  and **that stated the consequence backwards**: a `REJECTED` row is not `PENDING`, so it falls out
+  of a predicate naming `PENDING` and the slot was already free. The decision still had to be made;
+  the default simply ran the opposite way from the warning. `0014` now reads
+  `WHERE status IN ('PENDING', 'ACCEPTED')` — see `MEM-2026-09-20-30`. Kept rather than corrected in
+  place, because *"a warning that points the wrong way is worse than no warning"* is the lesson.
+
+### A decision by a person outranks the calendar, and the index says which decisions are live
+
+- **id**: MEM-2026-09-20-30
+- **scope**: slice:S4
+- **fact**: `quote_status` is `PENDING | WITHDRAWN | ACCEPTED | REJECTED`, and two rules about it
+  live in partial indexes rather than in the service:
+  `quote_one_active_per_provider_idx` is now `WHERE status IN ('PENDING', 'ACCEPTED')`, and
+  `quote_one_accepted_per_job_idx` is `UNIQUE (job_id) WHERE status = 'ACCEPTED'`.
+  Separately, `quoteStatusOf` returns the **stored** status for anything but `PENDING`: an accepted
+  quote reads `ACCEPTED` after `validUntil` passes, never `EXPIRED`.
+- **why**: three product decisions, two of them the operator's (2026-09-20). A **rejection frees the
+  slot** — it means *"not this offer"*, not *"not you"*, so a provider who was too expensive may come
+  back cheaper. **Acceptance takes it**, which is not a second decision but what *"one active quote"*
+  already meant: without it a provider could hold the live offer and submit a competing `PENDING` one
+  alongside it. And **accepting does not touch the siblings or the job** — the award is a payment
+  `W5-T02` has not built, so burning the alternatives before money moves would leave a job with
+  nothing live on it when an award fails.
+- **apply**: **the expiry rule generalises — arithmetic only ever overrides a state nobody has
+  answered.** Reuse it for any lifecycle in this slice where a deadline and a decision can both be
+  true. And when adding a state, check both predicates: a partial index is a rule in a `WHERE`
+  clause, and `MEM-2026-09-20-22` is the standing proof that such a rule can be *documented*
+  backwards without anything failing. The cost carried knowingly: **nothing rate-limits resubmission
+  after a rejection**, and `W5-T08`'s per-quote allowance is the mechanism that will.
+- **evidence**: `apps/api/prisma/migrations/0014_quote_decision_indexes/migration.sql`;
+  `packages/contracts/src/quote.ts` `quoteStatusOf`; `apps/api/tests/quote-decision-live.test.ts`
+  AC5/AC6/AC15; `docs/specs/S4/W4-T04-quote-comparison.md` §2.1, §2.4
+- **status**: active
+
+### An authenticated page over this slice's data is this slice's to build, not `W12`'s
+
+- **id**: MEM-2026-09-20-31
+- **scope**: slice:S4
+- **fact**: `/:lang/jobs` and `/:lang/jobs/:id` live in `apps/web/src/routes/` and were built by
+  `agent-jobs`. ADR-011 gives `agent-ui` the **storefront** — the public, indexable pages a visitor
+  reaches without an account — and that is not the same thing as "every page".
+- **why**: the precedent is `W2`'s, not an exception invented here: `/account` is `W2-T09`/`W2-T10`'s,
+  built by `agent-identity` in the same tree. A page behind a session, rendering one slice's own
+  shapes, has no storefront concerns (no SEO, no prerender, no anonymous empty state) and every
+  slice concern. Routing it through `W12` would mean the agent who owns neither the contract nor the
+  endpoint decides how its rules are shown.
+- **apply**: build the authenticated screens for your own slice, in `src/routes/`, following `W12`'s
+  rules — loader-driven (ADR-011 R3), primitives from `@marketplace/ui`, ES+EN keys in `es.ts` first.
+  **What you cannot do today is prove them accessible automatically**: `W12-T04`'s axe gate runs over
+  Storybook stories and `W12-T16`'s nightly over *public* routes, so a signed-in page is covered by
+  neither. Say so in the spec rather than claiming an axe pass.
+- **evidence**: `apps/web/src/routes/job.tsx`; `apps/web/src/app/routes.tsx`;
+  `docs/specs/S4/W4-T04-quote-comparison.md` §3.2, §6; ADR-011 §2
 - **status**: active

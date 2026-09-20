@@ -97,9 +97,53 @@ its job.
 
 ## Deviations from spec
 
-<none so far>
+**Three, all found while building, all written back into the spec rather than left in the diff.**
+
+1. **The migration is two migrations.** The spec assumed one. Postgres refuses to *use* a new enum
+   value in the transaction that added it, and Prisma runs one migration per transaction — so the
+   two partial indexes that name `ACCEPTED` cannot be created until `0013` has committed. Verified
+   against a real Postgres before writing it that way, rather than reasoned about. `0014` carries
+   the indexes, and `0013`'s rollback additionally has to drop and restore **`0012`'s** index,
+   because its `WHERE status = 'PENDING'` predicate is typed by the enum being rebuilt
+   (`operator does not exist: quote_status = quote_status_old`). Found by running the rollback,
+   which `db.test.ts` does.
+
+2. **No *load more* button; the loader follows the cursor and assembles the whole set** (spec §3.3,
+   rewritten). The first draft had the screen page and append. That is wrong for this screen: the
+   ranking is *rating, then price* over every offer, and ranking the first page of two is not a
+   partial comparison but a wrong one. It also makes the cursor's purpose honest — the API needed
+   one because the list is written by strangers, the screen needs one because it sorts, and those
+   are the same requirement from two ends.
+
+3. **AC22 weakened, deliberately and visibly.** It asked for an axe pass; there is no harness in
+   this repo that can run axe over a page behind a session — `W12-T04` covers stories, `W12-T16`
+   covers public routes. Rather than delete the criterion or claim it, it now states what was built
+   to and names the gap as out of scope with an owner (`agent-ui`).
+
+**One test was wrong rather than the code**: `cheapestOf` returning `null` for a single live quote
+failed a test asserting it should pick that quote. The rule is right — *cheapest* is a comparison,
+and marking the only option is an endorsement — so the test was rewritten to state the real case
+(two live quotes and a cheaper withdrawn one).
 
 ## Self-assessment
 
-- **Weakest part of this change**:
+- **Weakest part of this change**: **`ACCEPTED` is a one-way door.** A client who accepts the wrong
+  quote cannot take it back — the only exit is cancelling the job, which is terminal and means
+  reposting. A confirmation dialog is the whole mitigation, and a dialog is not an undo. The spec
+  argues the alternative is worse (inventing a reversal for an award that cannot yet happen), and
+  the rule for paying the debt is written down in the machine itself. But it ships as a real sharp
+  edge, and if `W5-T02` slips, it stays sharp for as long as that takes.
+
 - **What a reviewer should look at hardest**:
+  1. **The index predicate change in `0014`.** `PENDING` → `PENDING, ACCEPTED` is three separate
+     product decisions compressed into one `WHERE` clause, and the operator made two of them. If
+     the reading of *"a rejection frees the slot"* is wrong, nothing fails — a rejected provider
+     simply re-quotes, which is the outcome the operator asked for and also what a bug would look
+     like. `quote-decision-live.test.ts` AC5/AC6 is where that is pinned.
+  2. **The ordering of the audit write and the status update** in `decide()`. The audit row is
+     written *first*, inside the transaction, so a unique-index violation on the update rolls both
+     back. Swap them and a refused second acceptance leaves an ACCEPT in `audit_record` for a quote
+     that was never accepted. Asserted by AC14's second case, which is easy to read past.
+  3. **`GET /api/jobs/:id/quotes` changing response shape** without an ADR. Argued in spec §4: the
+     change was specified in advance by `W4-T03`, which shipped the interim shape and named this
+     ticket. `agent-contracts` can still call for one.
