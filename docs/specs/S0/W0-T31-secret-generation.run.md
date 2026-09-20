@@ -162,10 +162,13 @@ for by reflex, and it defeats the whole design. `AC10` asserts its absence, but 
 regex over source text, which is a weaker instrument than the type system protecting everything else
 here.
 
-**What is not proven.** `--write` has never been executed end to end: doing so would either write a
-real secret or need a `gh` fixture, and the refusal that makes this tool safe also prevents me from
-exercising its success path. AC3 proves the *arguments* are right; the first real write will be the
-operator's.
+**`--write` is now proven, by the operator rather than by me.** On 2026-09-20 they ran
+`./scripts/secrets/set-preview-seed-password.sh` and `PREVIEW_SEED_DEMO_PASSWORD` was set. That is
+the one path I could not exercise — the refusal that makes this tool safe is also what stops an
+agent testing its success case — so it stayed a stated gap until a human closed it. AC3 proved the
+*arguments*; this proves the whole thing.
+
+`STAGING_SEED_DEMO_PASSWORD` is still unset.
 
 **What a reviewer should look at hardest:**
 
