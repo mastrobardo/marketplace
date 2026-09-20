@@ -233,6 +233,7 @@ model ProviderProfile {
   /// database can produce, and it was never one anybody wanted (W3-T02 §8.1).
   baseAddress Address            @relation("ProviderBaseAddress", fields: [baseAddressId], references: [id], onDelete: Restrict)
   categories  ProviderCategory[]
+  quotes      Quote[]
 
   @@index([baseAddressId], map: "provider_profile_base_address_idx")
   @@index([ratingAvg(sort: Desc), id(sort: Desc)], map: "provider_profile_rating_id_idx")
@@ -393,6 +394,7 @@ model Job {
   client     User          @relation(fields: [clientId], references: [id], onDelete: Cascade)
   address    Address?      @relation("JobAddress", fields: [addressId], references: [id], onDelete: SetNull)
   categories JobCategory[]
+  quotes     Quote[]
 
   @@index([clientId, createdAt(sort: Desc), id(sort: Desc)], map: "job_client_created_idx")
   @@index([status, createdAt(sort: Desc), id(sort: Desc)], map: "job_status_created_idx")
@@ -416,6 +418,59 @@ model JobCategory {
   @@id([jobId, categoryId])
   @@index([categoryId], map: "job_category_category_idx")
   @@map("job_category")
+}
+
+/// `W4-T03`. Two values, because `ACCEPTED`/`REJECTED` belong to `W4-T04` — the ticket that can
+/// produce them. `EXPIRED` is deliberately **not** a value: it is what `valid_until` already says,
+/// and a status that only becomes true when a sweep runs is wrong between the sweeps.
+enum QuoteStatus {
+  PENDING
+  WITHDRAWN
+
+  @@map("quote_status")
+}
+
+/// A *presupuesto*: **one quote for the whole job**, never for part of it (spec §2.1). The operator,
+/// 2026-09-20: *"It would be also too chaotic for a user accepting X presupuestos"* — a client who
+/// wants a bathroom should not have to become a general contractor to get one.
+///
+/// There is no link to `job_category`: a quote covers everything the job names. Which of those
+/// trades the provider actually lists is computed at read time and shown to the client (§2.3), and
+/// **restricts nothing** — *"It is up to the professional to decide to apply or not."*
+model Quote {
+  id         String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  jobId      String      @map("job_id") @db.Uuid
+  /// The `provider_profile` that wrote it, not the `app_user` — a quote is written in a
+  /// professional capacity, and the profile is what carries the rating and the rate the client
+  /// weighs it by.
+  providerId String      @map("provider_id") @db.Uuid
+  status     QuoteStatus @default(PENDING)
+
+  /// Integer cents, EUR (`money.ts`). **Information, not an instruction** — ADR-013 §4.1: the job's
+  /// price never passes through this platform, so nothing charges this and nothing reconciles
+  /// against it.
+  amountCents Int @map("amount_cents")
+
+  /// Prose, not line items. A professional who wants to itemise can; the schema does not demand it
+  /// of everyone who does not (`W4-T01`'s rule about required fields).
+  breakdown String?
+
+  /// When the offer lapses. Required: an open-ended price on building work is not an offer.
+  validUntil DateTime @map("valid_until") @db.Timestamptz(3)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  job      Job             @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  provider ProviderProfile @relation(fields: [providerId], references: [id], onDelete: Cascade)
+
+  /// One **active** quote per provider per job — the slice's own non-negotiable, and enforced here
+  /// rather than only in the service. Partial (`WHERE status = 'PENDING'`), written by hand in
+  /// `0012` because Prisma cannot express a partial index: a plain unique constraint would make a
+  /// withdrawn quote a permanent bar on ever quoting that job again.
+  @@index([jobId, createdAt(sort: Desc), id(sort: Desc)], map: "quote_job_created_idx")
+  @@index([providerId, createdAt(sort: Desc), id(sort: Desc)], map: "quote_provider_created_idx")
+  @@map("quote")
 }
 
 enum ActorType {

@@ -348,32 +348,42 @@ Promotion happens in the same PR as the work. A separate "memory PR" never gets 
 
 Task IDs are stable — use them as board card titles.
 
-> ### ▶ NEXT — `W4-T03`: quotes, and the question the data model refused to prejudge
+> ### ▶ NEXT — `W4-T04`: comparing quotes, and the first state after `OPEN`
 >
-> **`W4-T02` shipped on 2026-09-20**, and both debts `W4-T01` named are paid: `OPEN` has an exit and
-> is out of `terminal`, and "only a draft may be edited" is now `canEditJob`, an exhaustive
-> `Record<JobStatus, boolean>` that **fails the build** when a state is added without a decision
-> (`MEM-2026-09-20-13`). A client can end a job: `POST /api/jobs/:id/cancel`, `DRAFT`/`OPEN` →
-> `CANCELLED`, reason optional and recorded in `audit_record.metadata` rather than a column.
+> **`W4-T03` shipped on 2026-09-20**, and the funnel now has both halves of the presupuesto: a
+> client posts a job, providers answer it with **one quote covering the whole thing**. The question
+> `W4-T01` §2.4 refused to prejudge is answered — see the row below, and `MEM-2026-09-20-21`.
 >
-> **The lifecycle is deliberately still unfinished, and the remaining states are not this slice's.**
-> `AWARDED` belongs to `W4-T05` (it needs an accepted quote to award to), `IN_PROGRESS` and
-> `COMPLETED` to the booking lifecycle in `W5` — completion is what triggers capture (`W5-T04`) —
-> and cancelling *after* an award is a refund decision (`W5-T05`). `MEM-2026-09-20-14` and
-> `W4-T02` §6.1 carry the table.
+> **`W4-T04` owns the two states `W4-T03` deliberately did not declare.** `ACCEPTED` and `REJECTED`
+> arrive with the routes that can produce them, the rule `W4-T02` set and `W4-T03` followed. Two
+> things to decide before writing them:
 >
-> **`W4-T03` inherits the question `W4-T01` §2.4 deliberately did not answer:** a three-trade job —
-> **one quote covering everything, or three covering parts?** The data model does not prejudge it,
-> and choosing wrong there is expensive.
+> 1. **The partial unique index changes meaning.** `quote_one_active_per_provider_idx` is
+>    `WHERE status = 'PENDING'`, so today a withdrawn quote frees the slot. Once `REJECTED` exists,
+>    decide explicitly whether a rejected quote should block a resubmission — under the current
+>    predicate it would, silently (`MEM-2026-09-20-22`).
+> 2. **`GET /api/jobs/:id/quotes` has no limit and no cursor**, on the assumption a job attracts a
+>    handful of quotes. `W4-T04` builds the screen that reads it, which is where the page size
+>    stops being a guess. `W4-T03`'s run record flags this as its weakest part.
 >
-> **And one for `agent-money` before either slice writes a state:** does a job track `IN_PROGRESS`
-> and `COMPLETED` at all, or read them off its `Booking`? Two machines over one engagement can
-> disagree, and a job reading `COMPLETED` while its booking reads `DISPUTED` costs a refund.
+> The slice rule stands: *sort by rating then price, the client can re-sort, **do not hide the
+> cheapest***.
 >
-> **One convention changed underfoot:** an own-scoped **collection** is now `/api/me/<collection>`
-> and a **singleton** stays `/api/providers/me` (`W2-T03` §3.6, amended; `MEM-2026-09-20-12`).
-> `GET /api/jobs/me` moved to `GET /api/me/jobs` while it had no callers. `W4-T03`, `W4-T06` and
-> `W6` all have own-scoped collections — use the new spelling.
+> **Accepting is not awarding.** `W4-T05` turns an accepted quote into an award, and ADR-013 §4 made
+> that a payment — the client pays the call-out fee, which means **`W4-T05` is blocked on
+> `W5-T02`**. `W4-T04` itself needs no money and can ship first.
+>
+> **`W4-T02` and `W4-T03` are stacked and unmerged:** PR #277 (green, awaiting its two reviewers)
+> and `W4-T03` on top of it. `canQuoteOn` does not compile without `W4-T02`'s `CANCELLED`, so the
+> dependency is real rather than a preference.
+>
+> **Still open for `agent-money`, before either slice writes a state:** does a job track
+> `IN_PROGRESS` and `COMPLETED` at all, or read them off its `Booking`? `MEM-2026-09-20-14`,
+> and ADR-013 §6.1 now carries the rest of that conversation.
+>
+> **One convention changed underfoot:** an own-scoped **collection** is `/api/me/<collection>` and a
+> **singleton** stays `/api/providers/me` (`W2-T03` §3.6, amended; `MEM-2026-09-20-12`).
+> `GET /api/jobs/me` moved to `GET /api/me/jobs`, and `/me/quotes` follows it.
 >
 > **Not blocking anything:** `W0-T32` (rotating a seeded credential) is deferred by the operator,
 > 2026-09-20 — rotation is a 30-to-60-day cadence, so a manual procedure is survivable. It is not
@@ -554,7 +564,7 @@ for data), so no feature is blocked waiting for an account that is not needed ye
 ### W4 — Jobs & presupuestos (`agent-jobs`)
 - `W4-T01` `[A]` ✅ **Job posting flow — a draft that asks for nothing, and a publish that asks for one thing.** The first `W4` row: there was no `Job` in the schema at all, so this carries the model, `0010_job_posting` and the contract, not just routes. **A `DRAFT` requires nothing but an owner** — every column nullable, `{}` is a valid body, `PUT` merges — and **publishing requires exactly one thing: at least one category** (`MEM-2026-09-20-4`). Not because a form should look complete, but because matching is by category and a job with none reaches nobody, which a client experiences as silence. No description, no title, no budget, no location required. **Categories are many-to-many** (`JobCategory`, mirroring `ProviderCategory`): *a reformation of a bathroom might need tiles, plumbing and electricity* — operator, 2026-09-20. Location is **inferred** from the client's default address at publish and stays null if there is none. Two states only — `W4-T02` owns the rest, and `defineMachine` **rejected the first declaration** because `OPEN` had no exit and was not declared terminal, which the spec had argued against; the contract was right. **Photos deferred** by the operator, with no column: object storage is unbuilt and a nullable column nothing writes is the empty promise this repo keeps refusing. `transition()`'s first consumer, so every publish writes an `audit_record` row inside the same transaction as the status change *(spec: `docs/specs/S4/W4-T01-job-posting.md`)*
 - `W4-T02` `[A]` ✅ **The exit from `OPEN`, and an edit rule that stops being an accident.** The board line here said `DRAFT → OPEN → AWARDED → IN_PROGRESS → COMPLETED / CANCELLED`; this ticket shipped **`CANCELLED` and stopped**, because three of the other states are `agent-money`'s and the fourth needs a quote to award to (`MEM-2026-09-20-14`, spec §6.1 — `AWARDED` → `W4-T05`, `IN_PROGRESS`/`COMPLETED` → `W5`, cancelling after an award → `W5-T05`). A state nothing can write is the empty promise this repo keeps refusing. **Both of `W4-T01`'s named debts are paid in the change that made them wrong:** `OPEN` left `terminal` in the same edit that gave it an exit, and the hand-written `if (status !== 'DRAFT')` became `canEditJob`, an exhaustive `Record<JobStatus, boolean>` — **adding `AWARDED` now fails the compiler** at the edit rule instead of being silently refused for the wrong reason, which is the whole point and was verified by doing it (`MEM-2026-09-20-13`). `POST /api/jobs/:id/cancel` + `job:cancel-own`, one rule from two states, terminal for good: reopening is a new job. The **reason is `audit_record.metadata`, not a column** (`MEM-2026-09-20-15`) — the audit row already holds who, when and from where; `cancelled_at` is a column only because a list screen needs it without a join. **`GET /api/jobs/me` became `GET /api/me/jobs`** on the operator's instinct, which the repo already agreed with: `W2-T03` §3.7 wrote both spellings and named neither rule, so §3.6 now carries it (`MEM-2026-09-20-12`). Not style — `/jobs/me` only ever worked while registered before `/jobs/:id`, and the new spelling deletes the hazard instead of testing for it. `0011`'s rollback **refuses rather than repairs**: rebuilding the enum would need cancelled rows rewritten, which republishes abandoned work while the audit trail still says `CANCEL` *(spec: `docs/specs/S4/W4-T02-job-state-machine.md`)*
-- `W4-T03` `[A]` Quote submission (one active quote per pro per job, validity window)
+- `W4-T03` `[A]` ✅ **One quote for the whole job — the question `W4-T01` refused to prejudge.** Operator, 2026-09-20: *"1 quote for everything […] It would be also too chaotic for a user accepting X presupuestos: i look to remodel a bathroom, i want a quick way to get the job done."* So `Quote` references a `Job`, never a `JobCategory`, and **subcontracting becomes normal and invisible** — the plumber brings their electrician, and the review, flag and ban attach to whoever quoted (`MEM-2026-09-20-21`). **The platform does not gate who may quote**: *"It is up to the professional to decide to apply or not."* What it does instead is state the gap — `coverage` names every category the *job* asked for, whether the provider lists it, and whether it is licensed, which makes "quoting a gated trade you aren't verified for" visible rather than forbidden. **It carries no `verified` field**, and that is the point: nothing in this schema knows one (`W8` is unbuilt), so a nullable one would be `W4-T01`'s empty promise again. `POST /api/jobs/:id/quotes`, `GET /api/jobs/:id/quotes` (owner), `GET /api/me/quotes`, withdraw — **two readers, two permissions**, so "can a provider see a competitor's price?" is a permission question rather than a `WHERE` clause. One active quote per pro per job is a **partial** unique index (`WHERE status = 'PENDING'`): a plain one would make a withdrawn quote a permanent bar, and the predicate changes meaning the moment `W4-T04` adds states (`MEM-2026-09-20-22`). **Expiry is arithmetic, not a state** — no `EXPIRED` row, no worker, because a status that only becomes true when a sweep runs is wrong between the sweeps. `canQuoteOn` is a `Record<JobStatus, boolean>` and **caught its own dependency**: it would not compile on `main`, because `CANCELLED` is still on #277 *(spec: `docs/specs/S4/W4-T03-quote-submission.md`)*
 - `W4-T04` `[A]` Quote comparison UI for the client + accept/reject
 - `W4-T05` `[A]` `[B]` Award → creates Booking (hand-off to S9). ⚠ **Now blocked on `W5-T02`** (ADR-013 §4): awarding *is* a payment — the client pays a small fee upfront, captured and forfeitable — so `AWARDED` cannot be reached without Stripe. This stopped being a pure hand-off on 2026-09-20
 - `W4-T06` `[A]` Job-scoped message thread + attachments

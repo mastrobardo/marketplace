@@ -87,3 +87,43 @@ Keep it to facts that changed how you would work. Task-specific detail stays in 
 - **evidence**: `packages/contracts/src/job.ts` `JobCancelInputSchema`;
   `docs/specs/S4/W4-T02-job-state-machine.md` §2.5; `apps/api/tests/job-live.test.ts` AC5
 - **status**: active
+
+### One quote covers the whole job, and nothing checks whether the provider can do all of it
+
+- **id**: MEM-2026-09-20-21
+- **scope**: slice:S4
+- **fact**: A `Quote` references a `Job`, never a `JobCategory`. There is no per-trade price and no
+  rule requiring the quoting provider to list the job's categories — a plumber may quote a bathroom
+  that also needs electrical work. What the client sees instead is **coverage**: every category the
+  *job* names, whether the provider lists it, and whether it requires a licence.
+- **why**: operator, 2026-09-20 — *"Usually, a plumber knows an electirician wich works with him
+  already, or has a small comapny with all profiles. It would be also too chaotic for a user
+  accepting X presupuestos."* Splitting a job into per-trade quotes makes the client the general
+  contractor, coordinating three trades onto one site in the right order. That coordination already
+  exists in this market, and it is not the client's job.
+- **apply**: subcontracting is therefore **normal and invisible to this platform** — the review, the
+  no-show flag and the ban from ADR-013 all attach to whoever quoted, because they chose the
+  subcontractor. Do not build sub-profiles or per-category quote rows without reopening ADR-013
+  §4.1. And note what coverage does *not* carry: no `verified` field, because `W8` is unbuilt and
+  nothing in the schema knows it — see `MEM-2026-09-20-20`'s last line.
+- **evidence**: `docs/specs/S4/W4-T03-quote-submission.md` §2.1, §2.3;
+  `packages/contracts/src/quote.ts`
+- **status**: active
+
+### A withdrawn quote must not block the next one — the index is partial
+
+- **id**: MEM-2026-09-20-22
+- **scope**: slice:S4
+- **fact**: `quote_one_active_per_provider_idx` is `UNIQUE (job_id, provider_id) WHERE status =
+  'PENDING'`. Partial, hand-written in `0012` because Prisma cannot express it. A provider revises a
+  quote by withdrawing and submitting again; both rows survive.
+- **why**: a plain `UNIQUE (job_id, provider_id)` would make a withdrawn quote a **permanent** bar
+  on ever quoting that job again — a rule nobody intended, invisible in review, and discovered by a
+  support ticket months later.
+- **apply**: **the predicate is load-bearing and changes meaning when states are added.** When
+  `W4-T04` introduces `ACCEPTED`/`REJECTED`, decide explicitly whether a *rejected* quote should
+  block a resubmission — under the current predicate it would, silently. A partial index is a rule
+  written in a `WHERE` clause, so it deserves the same scrutiny as a rule written in code.
+- **evidence**: `apps/api/prisma/migrations/0012_quote_submission/migration.sql`;
+  `apps/api/tests/quote-live.test.ts` AC3/AC4
+- **status**: active
