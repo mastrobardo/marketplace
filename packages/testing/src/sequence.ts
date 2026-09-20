@@ -21,6 +21,7 @@ export const ID_PREFIXES = {
   Address: '00000004',
   Category: '00000005',
   AuditRecord: '00000006',
+  Job: '00000007',
 } as const satisfies Record<string, string>;
 
 export type SeededEntity = keyof typeof ID_PREFIXES;

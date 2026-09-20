@@ -102,6 +102,35 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
   throw new ConfigError(`Invalid environment:\n${problems}`);
 }
 
+/**
+ * The subset `pnpm db:seed` needs — `W0-T30`, fixed after `W4-T01`'s first preview deploy.
+ *
+ * The seed entrypoint used to call `loadConfig()`, which validates the **whole** schema. That is
+ * right for the API and wrong for a seeder: the deploy workflows give the seed step a database URL
+ * and a demo password, because those are the only two things it uses — so every deployed seed run
+ * died on `BETTER_AUTH_SECRET: expected string, received undefined`, a variable it never reads.
+ *
+ * Handing the seed step the auth secrets to satisfy a parse would put a signing key in a process
+ * that has no business holding one. Narrowing what is asked for is the fix.
+ *
+ * Picked from `EnvSchema` rather than redeclared, so these two keep one definition and a change to
+ * either lands in both.
+ */
+const SeedEnvSchema = EnvSchema.pick({ DATABASE_URL: true, SEED_DEMO_PASSWORD: true });
+
+export type SeedConfig = Readonly<z.infer<typeof SeedEnvSchema>>;
+
+/** Like `loadConfig`, for the seed pipeline. Reports every problem at once, for the same reason. */
+export function loadSeedConfig(env: Record<string, string | undefined> = process.env): SeedConfig {
+  const result = SeedEnvSchema.safeParse(env);
+  if (result.success) return Object.freeze(result.data);
+
+  const problems = result.error.issues
+    .map((issue) => `  ${issue.path.join('.') || '(root)'}: ${issue.message}`)
+    .join('\n');
+  throw new ConfigError(`Invalid environment:\n${problems}`);
+}
+
 let cached: Config | undefined;
 
 /**

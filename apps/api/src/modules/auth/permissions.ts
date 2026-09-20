@@ -36,6 +36,21 @@ export type PermissionMatrix = Readonly<Record<string, readonly UserRole[]>>;
 export const PERMISSIONS = {
   /** `W3-T02`. "Own" is not checked here — `/me` addressing makes it structural (§3.6). */
   'provider-profile:update-own': ['PROVIDER'],
+
+  /**
+   * `W4-T01`. All four are `CLIENT`, and that is a statement about *capacity*, not about people:
+   * `roles` is a set and a provider is normally `['CLIENT','PROVIDER']`, so a tradesperson posting
+   * a job is a client doing it and passes.
+   *
+   * "Own" is **not** enforced here either. Three of these address `/:id`, where it cannot be
+   * structural, so the repository scopes every query by `clientId` and a stranger's job is `404`
+   * (spec §3). A permission that needed the row to decide would not be a permission — it would be
+   * a query, and guards run before any repository.
+   */
+  'job:create': ['CLIENT'],
+  'job:read-own': ['CLIENT'],
+  'job:update-own': ['CLIENT'],
+  'job:publish-own': ['CLIENT'],
 } as const satisfies PermissionMatrix;
 
 export type Permission = keyof typeof PERMISSIONS;
