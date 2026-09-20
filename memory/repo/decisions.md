@@ -370,3 +370,80 @@ this file records the *why* an agent would otherwise have to rediscover.
 - **evidence**: operator, 2026-09-20; `TODO.md` `W0-T32`; `W0-T31` spec §3.4;
   `scripts/secrets/generate.ts` `rotationNote`
 - **status**: active
+
+### An engagement has three sources of truth, and the third is the only honest one
+
+- **id**: MEM-2026-09-20-17
+- **scope**: repo
+- **fact**: A job's lifecycle, its booking and ledger, and **the handshake** (a code the client scans
+  when work starts) are three independent records of one engagement. They are **reconciled, never
+  coupled**: a job does not need its booking's permission to change state. ADR-013 is the decision;
+  `W5-T11` grows the second dimension; `W4-T09` builds the handshake.
+- **why**: money lags reality — a late webhook, a retried capture, a Stripe incident — so coupling
+  the machines means a professional who finished the work cannot close the job because the plumbing
+  is behind, which punishes the party who did nothing wrong. And the first two sources can each be
+  produced by one party alone, so neither settles a dispute. The scan cannot: it takes both people
+  in one place, which is what makes `IN_PROGRESS` *attested* rather than claimed.
+- **apply**: when two lifecycles describe one real-world event, reconcile them and treat divergence
+  as a **finding**, not as something to prevent. Before trusting a state, ask which party could have
+  produced it alone. And do not add a fourth source without asking what it attests that the others
+  cannot — this ADR's whole argument is that a source nobody can fake is worth more than two that
+  agree.
+- **evidence**: `docs/adr/ADR-013-engagement-reconciliation.md` §1, §2, §3
+- **status**: active
+
+### Disintermediation is priced and attested, not policed — and never by reading messages
+
+- **id**: MEM-2026-09-20-18
+- **scope**: repo
+- **fact**: `R4` (users taking a job off-platform) is answered in this order: **charge before the
+  work** (platform revenue is realised when the client approves the start, not at completion),
+  **attest that moment** (the handshake), then **detect the residue** (`W5-T11`). Contact masking
+  (`W4-T08`) is superseded, and **message scanning is rejected**. Because revenue lands at the
+  start, a pair that goes off-platform *afterwards* costs the platform nothing — the leak shrinks
+  to one signature: introduced, never approved, and the work happened anyway (ADR-013 §8).
+  Supersedes the open question recorded as `MEM-2026-09-20-14` — a job *does* track `IN_PROGRESS`
+  and `COMPLETED`, cross-verified rather than derived.
+- **why**: scanning messages for phone numbers is evadable by anyone who writes *llámame al seis
+  tres cuatro…*, and it inspects private conversations to solve a revenue problem. An economic
+  footprint cannot be spelled around. The operator's framing, 2026-09-20, is the standard to hold
+  it to: *"I need a mechanism to make this hard ( not completely unavoidable because real life is
+  not 100% enforceable )"* — friction and daylight, not a lock.
+- **apply**: the unit of suspicion is **the pair and the rate, never the single event** — one
+  cancellation is weather. Any detector's output is a finding for a human, because it measures money
+  and attestation and then *infers intent*. `W8-T05` (reviews only after a completed paid booking)
+  is part of this system even though it is filed under trust: do not relax it for review volume
+  without replacing what it does.
+- **evidence**: `docs/adr/ADR-013-engagement-reconciliation.md` §8, §9; `TODO.md` `R4`, `BD-08`
+- **status**: active
+
+### The job's price never touches the platform, and a ban needs evidence a refund does not
+
+- **id**: MEM-2026-09-20-19
+- **scope**: repo
+- **fact**: Three constraints from ADR-013, cheap to honour and expensive to retrofit.
+  **(1)** **One payment passes through this platform** — the call-out fee, captured at award and
+  released when the client approves the start of work. What the job costs is settled between the two
+  people, in cash if they choose; the platform does not see it and does not police their invoicing
+  (operator, 2026-09-20: *"I cannot and i should not enforce a correct facturation"*).
+  **(2)** Revenue is realised at the start of work, never at completion.
+  **(3)** A no-show claim **always refunds the client**, but flags the professional on the first
+  upheld claim and bans on the second — and those are different decisions with different bars.
+- **why**: (1) and (2) are what keep this a marketplace rather than a financial entity: there is no
+  third-party money resting anywhere, so the question of holding it never arises. (3) is about
+  asymmetric cost — refunding a false claim costs a call-out fee, while removing a tradesperson ends
+  their income here and cannot be undone by an apology. And the client side cannot be defended by
+  pattern detection at all: someone who remodels a bathroom once a decade never accumulates enough
+  events, which the operator put as *"less than 1% of users will need to remode their bathrooms 4
+  times per year"*.
+- **apply**: never design a flow where a client's payment for the *work* rests anywhere in this
+  system — the only money it handles is its own fee. Keep refund and sanction as separate decisions
+  wherever a claim triggers both. A low sanction threshold is survivable **only if verification is
+  cheap**, so the arrival attestation in `W4-T09` is a requirement of the two-strike rule rather
+  than an enhancement to it. The one client-side detector worth having is a repeat-claim counter:
+  it catches multi-property owners, who are the only clients with the volume to scam repeatedly —
+  the operator's own observation. Related trap in ADR-013 §4: **card authorizations expire after
+  roughly a week**, so the fee is captured, not held.
+- **evidence**: `docs/adr/ADR-013-engagement-reconciliation.md` §4, §4.1, §6, §6.1; `TODO.md`
+  `BD-01`
+- **status**: active
