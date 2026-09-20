@@ -155,6 +155,7 @@ Keep it to facts that changed how you would work. Task-specific detail stays in 
   the implementation existed, it never went red: restore the stub, rebuild, run it, and say in the
   run record that the red was reconstructed.
 - **evidence**: `docs/specs/S1/W1-T09-test-factories.run.md` §Red phase
+- **status**: active
 ### A state change goes through `transition()`, and its recorder is not optional
 - **id**: MEM-2026-09-10-09
 - **scope**: slice:S1
