@@ -238,3 +238,25 @@ How we do things here, beyond what lint and CI enforce automatically.
 - **evidence**: `packages/contracts/src/job.ts` `EDITABLE_IN` / `canEditJob`;
   `docs/specs/S4/W4-T02-job-state-machine.md` §2.3; run record "Red phase"
 - **status**: active
+
+### A docs-only PR is merged as soon as it is green
+
+- **id**: MEM-2026-09-20-16
+- **scope**: repo
+- **fact**: A pull request whose diff is documentation and memory alone does not wait for review —
+  merge it once its checks pass. Operator, 2026-09-20, on finding `W4-T02`'s work branch stacked on
+  an open docs PR: *"docs branches shall be automerged from now on"*. The exemption ends the moment
+  the diff contains a source file, a migration or a workflow.
+- **why**: the three review axes in `agents/policies/review-and-merge.md` weigh code, spec and
+  prompt, and a docs-only change offers none of them anything to weigh. Leaving one open has a
+  real cost instead: the next ticket either stacks on an unmerged branch or resolves `TODO.md`,
+  `memory/slices/*` and the `▶ NEXT` banner twice, and those are exactly the files every ticket
+  touches — so an open docs PR is a conflict waiting for whoever works next.
+- **apply**: when a ticket's own `TODO.md`/memory update is the only thing blocking it, merge that
+  PR rather than branching on top of it. When stacking is unavoidable anyway, base the work branch
+  on the docs branch and `git rebase --onto origin/main <old-base>` after the squash merge —
+  a squashed base commit is no longer an ancestor, so a plain `git rebase main` replays nothing
+  useful.
+- **evidence**: PR #276 (merged 2026-09-20, ten checks green, no review);
+  `agents/policies/review-and-merge.md` "Merge requirements"
+- **status**: active
