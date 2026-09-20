@@ -1,6 +1,7 @@
 import { authDemoUsers } from './auth-demo-users.js';
 import { categoryTaxonomy } from './categories.js';
 import { demoProviders } from './demo-providers.js';
+import { demoQuotes } from './demo-quotes.js';
 import { type Seeder } from './types.js';
 
 /**
@@ -17,4 +18,11 @@ import { type Seeder } from './types.js';
  * seeder throws. `apps/api/tests/categories-seed.test.ts` AC18 asserts the two indices, so a
  * reorder fails a test instead of a `pnpm db:seed` on somebody's laptop.
  */
-export const seeders: readonly Seeder[] = [authDemoUsers, categoryTaxonomy, demoProviders];
+export const seeders: readonly Seeder[] = [
+  authDemoUsers,
+  categoryTaxonomy,
+  demoProviders,
+  // Last, and it must be: `quotes.demo-comparison` resolves two category slugs and four provider
+  // display names, and throws rather than seeding a job nobody can quote (`W4-T04` §3.4).
+  demoQuotes,
+];

@@ -71,7 +71,9 @@ function boot(options: { session?: Principal | null; found?: Quote | null; withG
     },
     listForJob: () => {
       calls.listedForJob += 1;
-      return Promise.resolve(found === null ? null : [found]);
+      return Promise.resolve(
+        found === null ? null : { items: [found], page: { nextCursor: null, hasMore: false } },
+      );
     },
     listOwn: () => {
       calls.listedOwn += 1;
@@ -81,6 +83,10 @@ function boot(options: { session?: Principal | null; found?: Quote | null; withG
       calls.withdrawn += 1;
       return Promise.resolve(found === null ? null : quote({ status: 'WITHDRAWN' }));
     },
+    // `W4-T04`'s routes are asserted in `quote-decision.test.ts`; this boot only has to satisfy
+    // the interface so the plugin registers.
+    accept: () => Promise.resolve(found),
+    reject: () => Promise.resolve(found),
   };
 
   const app = buildApp({ config: loadConfig(ENV) });
@@ -261,9 +267,12 @@ describe('the repository decides, the boundary reports', () => {
             Promise.reject(
               new AppError('CONFLICT', 'you already have an active quote on this job'),
             ),
-          listForJob: () => Promise.resolve([]),
+          listForJob: () =>
+            Promise.resolve({ items: [], page: { nextCursor: null, hasMore: false } }),
           listOwn: () => Promise.resolve([]),
           withdraw: () => Promise.resolve(quote()),
+          accept: () => Promise.resolve(quote()),
+          reject: () => Promise.resolve(quote()),
         },
         guards: buildGuards({ resolveSession: () => Promise.resolve(principal(['PROVIDER'])) }),
       }),

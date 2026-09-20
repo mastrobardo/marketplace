@@ -25,6 +25,8 @@ import {
 } from '../routes/legal.js';
 import { Component as NotFound } from '../routes/not-found.js';
 import { Component as Account, loader as accountLoader } from '../routes/account.js';
+import { Component as Jobs, loader as jobsLoader } from '../routes/jobs.js';
+import { Component as JobDetail, action as jobAction, loader as jobLoader } from '../routes/job.js';
 import { Component as SignUp, action as signUpAction } from '../routes/signup.js';
 import { Component as Login, action as loginAction } from '../routes/login.js';
 import { Component as VerifyEmail, action as verifyEmailAction } from '../routes/verify-email.js';
@@ -92,6 +94,15 @@ export const routes: RouteObject[] = [
       // `W2-T10`: where the header's name goes. Its loader is the one guard in the storefront —
       // no session, no page, so it redirects to the login form rather than rendering an empty one.
       { path: 'account', Component: Account, loader: accountLoader },
+      /**
+       * `W4-T04` — the client's own jobs, and the quotes on one of them.
+       *
+       * Behind a session like `/account`, and owned by `agent-jobs` rather than `W12`: ADR-011
+       * gives the *storefront* to `agent-ui`, and an authenticated area over a slice's own data is
+       * built by the slice that owns it — the split `W2-T09` already made with `/account`.
+       */
+      { path: 'jobs', Component: Jobs, loader: jobsLoader },
+      { path: 'jobs/:id', Component: JobDetail, loader: jobLoader, action: jobAction },
       { path: 'login', Component: Login, action: loginAction },
       // Where better-auth's emailed link redirects back to, with `?error=<CODE>` when the token is
       // no longer good.

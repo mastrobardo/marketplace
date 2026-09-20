@@ -9,7 +9,13 @@
  * Spec: `docs/specs/S4/W4-T03-quote-submission.md` §3.
  */
 import { type FastifyInstance, type FastifyPluginAsync, type FastifyRequest } from 'fastify';
-import { AppError, QuoteInputSchema, QuoteSchema, type Quote } from '@marketplace/contracts';
+import {
+  AppError,
+  QuoteInputSchema,
+  QuoteListQuerySchema,
+  QuotePageSchema,
+  QuoteSchema,
+} from '@marketplace/contracts';
 
 import { type ZodType } from 'zod';
 
@@ -34,6 +40,25 @@ function idOf(request: FastifyRequest, what: string): string {
   // are worth trying. Same answer either way — `W4-T01`'s rule.
   if (id === undefined || !UUID.test(id)) throw new AppError('NOT_FOUND', `no such ${what}`);
   return id;
+}
+
+/**
+ * A query string, or `VALIDATION_FAILED` with the issues named.
+ *
+ * The same shape as `parseBody` and separate from it on purpose: the message a caller gets back
+ * should say which half of the request was wrong, and `?limit=101` is not a malformed body.
+ */
+function parseQuery<T>(schema: ZodType<T>, query: unknown, what: string): T {
+  const parsed = schema.safeParse(query ?? {});
+  if (!parsed.success) {
+    throw new AppError('VALIDATION_FAILED', what, {
+      issues: parsed.error.issues.map((issue) => ({
+        path: issue.path.join('.'),
+        message: issue.message,
+      })),
+    });
+  }
+  return parsed.data;
 }
 
 function parseBody<T>(schema: ZodType<T>, body: unknown, what: string): T {
@@ -74,17 +99,28 @@ export function quoteRoutes(deps: QuoteRoutesDeps): FastifyPluginAsync {
       },
     );
 
+    /**
+     * Paged since `W4-T04`: `{ items, page }`, 20 by default, 100 at most.
+     *
+     * `W4-T03` shipped this uncapped, which was the right assumption about how many quotes a job
+     * attracts and the wrong shape for a list **other people** write to. The screen that reads it
+     * is what made the page size a question with an answer rather than a guess (spec §2.7).
+     */
     app.get(
       '/jobs/:id/quotes',
       { preHandler: guards.requirePermission('quote:read-for-own-job') },
       async (request) => {
-        const quotes = await repository.listForJob(
+        const query = parseQuery(
+          QuoteListQuerySchema,
+          request.query,
+          'The quote list request is not valid.',
+        );
+        const page = await repository.listForJob(
           principalOf(request).userId,
           idOf(request, 'job'),
+          query,
         );
-        return {
-          items: orNotFound(quotes, 'job').map((quote: Quote) => QuoteSchema.parse(quote)),
-        };
+        return QuotePageSchema.parse(orNotFound(page, 'job'));
       },
     );
 
@@ -109,5 +145,30 @@ export function quoteRoutes(deps: QuoteRoutesDeps): FastifyPluginAsync {
         return QuoteSchema.parse(orNotFound(quote, 'quote'));
       },
     );
+
+    /**
+     * `W4-T04` — the client's answer. **One permission guards both**, because saying yes and saying
+     * no are one capability (spec §2.8).
+     *
+     * `/quotes/:id/accept` rather than `/jobs/:id/quotes/:qid/accept`: a quote id is unique and
+     * already carries its job, and the shorter path is the one `/quotes/:id/withdraw` established.
+     *
+     * Neither takes a body. A rejection reason would be the obvious addition and is deliberately
+     * absent: there is no way to show it to the provider — no notification exists (`OPS-14`, `W11`)
+     * — so it would be a field nothing reads, which is the empty promise this repo keeps refusing.
+     */
+    for (const [event, decide] of [
+      ['accept', repository.accept.bind(repository)],
+      ['reject', repository.reject.bind(repository)],
+    ] as const) {
+      app.post(
+        `/quotes/:id/${event}`,
+        { preHandler: guards.requirePermission('quote:decide-for-own-job') },
+        async (request) => {
+          const quote = await decide(principalOf(request).userId, idOf(request, 'quote'));
+          return QuoteSchema.parse(orNotFound(quote, 'quote'));
+        },
+      );
+    }
   };
 }

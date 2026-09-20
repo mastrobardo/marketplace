@@ -814,3 +814,31 @@ come from real experience.
 - **evidence**: CI run 35497144901 job `deploy`; `apps/api/src/config.ts` `loadSeedConfig`;
   `apps/api/tests/config.test.ts`
 - **status**: active
+
+### A new enum value cannot be used by the migration that adds it — nor by a partial index in a rollback
+- **id**: MEM-2026-09-20-32
+- **scope**: repo
+- **fact**: Two separate traps, both found by running Postgres rather than by reading about it.
+  1. **`ALTER TYPE … ADD VALUE` and any statement using that value must be in different
+     transactions.** Postgres answers `ERROR: unsafe use of new value "ACCEPTED" of enum type
+     quote_status`, `HINT: New enum values must be committed before they can be used`. Prisma runs
+     **one migration per transaction**, so a migration that adds an enum value *and* creates an index
+     whose predicate names it cannot work — it has to be two migrations (`0013`, then `0014`).
+  2. **A partial index whose predicate names an enum blocks that enum being rebuilt**, which is what
+     a rollback has to do since Postgres cannot drop an enum value. `ALTER COLUMN … TYPE` then fails
+     with `operator does not exist: quote_status = quote_status_old`. The rollback must drop the
+     index first and recreate it afterwards — **including an index an *earlier* migration created**,
+     which is a `down.sql` reaching backwards and deserves a comment saying so.
+- **why**: neither failure is visible in review. The first looks like an ordinary migration and the
+  second like an ordinary rollback, and both are only wrong when executed — trap 2 in particular
+  fires in `db.test.ts`'s reverse-order rollback and nowhere else, so a repo without that test ships
+  a `down.sql` that has never run.
+- **apply**: when adding a value to an enum, **assume two migrations** and check whether any partial
+  index, generated column or check constraint names the type; each one is a drop-and-recreate in the
+  rollback. Verify by executing, not by reasoning: the probe is six lines of `psql` and settles it in
+  seconds. And keep a test that runs every `down.sql` in reverse — it is the only thing that has ever
+  caught trap 2 here.
+- **evidence**: `apps/api/prisma/migrations/0013_quote_decision/migration.sql` header;
+  `apps/api/prisma/migrations/0013_quote_decision/down.sql`;
+  `apps/api/tests/db.test.ts` AC10; `apps/api/tests/core-schema.test.ts` AC-2
+- **status**: active

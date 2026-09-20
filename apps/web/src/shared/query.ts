@@ -69,4 +69,15 @@ export const queryKeys = {
   // session would re-fetch on every language switch and — worse — keep a stale entry per language
   // for a sign-out to miss.
   session: () => ['session'] as const,
+  /**
+   * No locale on any of these — `W4-T04`.
+   *
+   * A job's title and a quote's breakdown are what two people typed; they do not have a Spanish
+   * version and an English one. Keying them by language would hold two identical copies and refetch
+   * both on every switch, and — the part that actually bites — a decision written against one key
+   * would leave the other showing a quote that had already been answered.
+   */
+  myJobs: () => ['me', 'jobs'] as const,
+  job: (id: string) => ['job', id] as const,
+  jobQuotes: (jobId: string) => ['job', jobId, 'quotes'] as const,
 };

@@ -75,6 +75,19 @@ export const PERMISSIONS = {
   'quote:read-own': ['PROVIDER'],
   'quote:withdraw-own': ['PROVIDER'],
   'quote:read-for-own-job': ['CLIENT'],
+
+  /**
+   * `W4-T04`. **One permission for both decisions, because it is one capability.**
+   *
+   * Not `quote:accept-*` beside `quote:reject-*`: nothing in this product grants the power to say
+   * yes without the power to say no, and two rows for one capability is a matrix that drifts — the
+   * day somebody grants one and forgets the other, the bug is a client who can accept and cannot
+   * decline.
+   *
+   * `CLIENT`, and a `PROVIDER` is refused even on their **own** quote. The provider already has
+   * `quote:withdraw-own`, which is the different thing they are entitled to do to it.
+   */
+  'quote:decide-for-own-job': ['CLIENT'],
 } as const satisfies PermissionMatrix;
 
 export type Permission = keyof typeof PERMISSIONS;

@@ -423,9 +423,16 @@ model JobCategory {
 /// `W4-T03`. Two values, because `ACCEPTED`/`REJECTED` belong to `W4-T04` — the ticket that can
 /// produce them. `EXPIRED` is deliberately **not** a value: it is what `valid_until` already says,
 /// and a status that only becomes true when a sweep runs is wrong between the sweeps.
+/// `ACCEPTED` and `REJECTED` arrived with `W4-T04`, the routes that can produce them — a state is
+/// declared by the ticket that can write it, never by the one that can see it coming.
+///
+/// There is no `EXPIRED`: expiry is arithmetic over `valid_until`, evaluated when a quote is read
+/// (`quoteStatusOf`). A status that only becomes true when a sweep runs is wrong between the sweeps.
 enum QuoteStatus {
   PENDING
   WITHDRAWN
+  ACCEPTED
+  REJECTED
 
   @@map("quote_status")
 }
@@ -464,10 +471,20 @@ model Quote {
   job      Job             @relation(fields: [jobId], references: [id], onDelete: Cascade)
   provider ProviderProfile @relation(fields: [providerId], references: [id], onDelete: Cascade)
 
-  /// One **active** quote per provider per job — the slice's own non-negotiable, and enforced here
-  /// rather than only in the service. Partial (`WHERE status = 'PENDING'`), written by hand in
-  /// `0012` because Prisma cannot express a partial index: a plain unique constraint would make a
-  /// withdrawn quote a permanent bar on ever quoting that job again.
+  /// Two partial unique indexes, both hand-written because Prisma cannot express a `WHERE` on one.
+  ///
+  /// **One active quote per provider per job** — the slice's own non-negotiable, enforced here
+  /// rather than only in the service. `WHERE status IN ('PENDING', 'ACCEPTED')` since `W4-T04`
+  /// (`0013`), and each state in and out of that predicate is a decision:
+  ///   - `WITHDRAWN` is out — revising is withdraw-then-resubmit, and a plain unique constraint
+  ///     would have made a withdrawn quote a permanent bar on ever quoting that job again.
+  ///   - `REJECTED` is out — operator, 2026-09-20: a rejection is *"not this offer"*, not *"not
+  ///     you"*, so a provider who was too expensive may come back cheaper.
+  ///   - `ACCEPTED` is **in** — an accepted quote is the most active a quote gets, and without it a
+  ///     provider could hold the live offer and submit a competing one on the same job.
+  ///
+  /// **One accepted quote per job** (`quote_one_accepted_per_job_idx`): two clicks that arrive
+  /// together are a race the service loses and the index does not.
   @@index([jobId, createdAt(sort: Desc), id(sort: Desc)], map: "quote_job_created_idx")
   @@index([providerId, createdAt(sort: Desc), id(sort: Desc)], map: "quote_provider_created_idx")
   @@map("quote")
