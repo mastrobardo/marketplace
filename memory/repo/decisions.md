@@ -585,6 +585,12 @@ this file records the *why* an agent would otherwise have to rediscover.
   one **retroactively flags providers who were never flagged** — a moderation decision taken by
   editing a config value, with nobody reviewing it as one. ADR-013 §6 requires the flag to be
   appealable, and an appeal is meaningless if the rule that produced it cannot be reconstructed.
+  **And the operating pattern makes this immediate rather than theoretical.** Operator, 2026-09-20:
+  *"most probably, we will start with High threshold and lower as time passes to fit what we see on
+  everyday usage."* Downward is the dangerous direction for a sanction and the harmless one for a
+  display: every loosening of a ban rule would sweep in people who were never at risk under the rule
+  in force at the time, while every loosening of a display rule simply reveals scores that were
+  always true. The asymmetry is not a corner case here — it is the planned direction of travel.
 - **apply**: **do not build a config module until something reads a threshold.** Nothing does today
   — reviews, the no-show flag and tier allowances are all unbuilt — and a config system with no
   consumer is the empty promise this repo keeps refusing (`W4-T01`'s photos column, `W4-T02`'s
@@ -621,4 +627,27 @@ this file records the *why* an agent would otherwise have to rediscover.
   project depends on the corpus.
 - **evidence**: `scripts/memory/check.ts` header; `MEM-2026-09-11-04`; the 7 entries it found and
   this PR fixed
+- **status**: active
+
+### Build it when a feature needs it, never in anticipation of one
+
+- **id**: MEM-2026-09-20-29
+- **scope**: repo
+- **fact**: Machinery is built by the ticket that has a consumer for it, and not before. Operator,
+  2026-09-20: *"It is fine to dont have a config now: we build things feature based. When this will
+  be needed, it will be implemented."* The phrase this repo has used ad hoc for the violation is
+  **the empty promise**: a shape that implies a capability nothing can deliver.
+- **why**: the rule was derived independently at least five times before anybody wrote it down —
+  `W4-T01` refused a photos column while object storage was unbuilt; `W4-T02` refused the four
+  lifecycle states nothing could produce; `W4-T03` refused a `verified` field on coverage because
+  `W8` cannot populate one; `permissions.ts` refuses a row for a route that does not exist; and
+  `MEM-2026-09-20-27` refused a config module because nothing reads a threshold. Five derivations
+  of one rule is a rule worth stating once.
+- **apply**: the test is **"what reads this today?"** — not "will we want it". A nullable column
+  nothing writes, an enum value no route can produce, a config key no code reads and a service with
+  one caller that is a test are the same defect wearing different clothes, and each one costs a
+  reader time forever while looking like progress. The cost of adding it later is usually one
+  migration; the cost of carrying a lie is every future reader believing it.
+- **evidence**: operator, 2026-09-20; `docs/specs/S4/W4-T01-job-posting.md` §4;
+  `docs/specs/S4/W4-T02-job-state-machine.md` §2.1; `docs/specs/S4/W4-T03-quote-submission.md` §2.3
 - **status**: active
