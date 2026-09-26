@@ -1,0 +1,16 @@
+# Every third-party image the local stack is made of, and the name it takes in this repo's own
+# registry. `.github/workflows/mirror-images.yml` copies each one into GHCR; `docker-compose.yml`
+# and `docker/garage/Dockerfile` are what consume the copies.
+#
+# One line per image: <upstream reference> <package name>. The tag is taken from the upstream
+# reference, so the mirror is always named after what it is a copy of.
+#
+# Why this file exists: three times now an upstream has stopped serving an image this stack needs —
+# MinIO's Docker Hub repositories were deleted (#237), MinIO's own quay.io stopped answering
+# anonymous pulls (#292), and the MinIO projects themselves were archived (W0-T33). Digest pinning
+# survives none of those: a pin detects a tag that was *changed*, not a repository that was
+# *withdrawn*. A copy we hold is the only thing that does (W0-T27).
+docker.io/imresamu/postgis:17-3.5-alpine  postgis
+docker.io/axllent/mailpit:v1.27           mailpit
+docker.io/dxflrs/garage:v2.4.1            garage
+docker.io/alpine:3.22                     alpine

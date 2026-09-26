@@ -8,7 +8,7 @@
 # Every port is bound to 127.0.0.1 on purpose. A laptop on a café network must not be serving
 # Postgres. Each host port is overridable, because a developer machine very often already has a
 # Postgres on 5432 from another project; set POSTGRES_PORT / MAIL_SMTP_PORT / MAIL_HTTP_PORT /
-# OBJECTS_PORT / OBJECTS_CONSOLE_PORT in a local `.env` (gitignored) and nothing else changes —
+# OBJECTS_PORT / OBJECTS_ADMIN_PORT in a local `.env` (gitignored) and nothing else changes —
 # every service still reaches its neighbours by container name on the compose network.
 #
 # The credentials below are local-development placeholders and are the only credentials
@@ -76,80 +76,80 @@ services:
       start_period: 10s
 
   # ---------------------------------------------------------------------------------------------
-  # S3-compatible object storage, standing in for Cloudflare R2 (ADR-006).
+  # S3-compatible object storage, standing in for the Cloudflare R2 that ADR-006 chose for staging
+  # and production.
   #
-  # Registry note, **second move in three weeks, and the last one this file absorbs quietly.**
-  # `#237` moved these images off Docker Hub to quay.io, because MinIO had removed the Docker Hub
-  # repositories. MinIO has now gated quay too: an anonymous pull of
-  # `quay.io/minio/minio` answers `unauthorized: access to the requested resource is not
-  # authorized`, and so does `quay.io/minio/mc`. Verified by hand against both registries' token
-  # endpoints — quay issues an anonymous token and then refuses the manifest, which is what makes
-  # this read like a transient CI failure rather than a repository that is no longer public.
-  # `ghcr.io/minio/*` answers 403; Docker Hub still answers 401. There is no public tap left.
+  # **This is Garage, because MinIO no longer exists as something a project can depend on** (W0-T33).
+  # The history is three registry moves and one archival: `#237` moved these images off Docker Hub
+  # after MinIO deleted the repositories; `#292` moved them off quay.io — MinIO's own registry —
+  # after anonymous pulls started answering `unauthorized`; and the reason there was nowhere left to
+  # move to is that the projects themselves are gone. `dl.min.io` answers **410 Gone** with
+  # "The open-source MinIO Server, MinIO Client (mc) and MinIO KES projects are archived and no
+  # longer maintained… does not provide security updates, or security advisories", and both GitHub
+  # repositories report `archived: true`. Every MinIO image in existence, including the Bitnami
+  # build `#292` pinned to unblock the stack, is therefore frozen for good — which is why
+  # authenticating to quay with a robot account was never the answer: the credential buys an
+  # unmaintained server.
   #
-  # So these are **Bitnami's builds of the same two programs**, from `bitnamilegacy` — the org
-  # Bitnami parked their free catalogue in when they moved the maintained images behind a paid
-  # plan. Public, multi-arch (amd64 for CI, arm64 for a laptop), and **frozen**: the newest tag is
-  # July 2025 and there will never be another. It runs as uid 1001 with its data under
-  # `/bitnami/minio/data` and its own entrypoint, so the explicit `command:` this service used to
-  # carry is gone — the image's `run.sh` starts the server and puts the console on 9001 itself.
-  # `mc ready local` still works, because the image configures that alias from the two variables
-  # below.
+  # Garage is maintained (v2.4.1, September 2026), public, multi-arch, and purpose-built as an
+  # S3-compatible object store. Two consequences show up below:
   #
-  # **This is a stopgap with an owner and a deadline**, not a fix: a frozen image gets no security
-  # patch, ever. `W0-T33` is the ticket that replaces it, and the operator made it the top priority
-  # after this unblocking (2026-09-26).
-  #
-  # Both images stay pinned by tag **and** digest. The tag is what a human reads; the digest is
-  # what actually resolves, so a tag that is deleted or re-pointed fails the pull loudly instead of
-  # quietly starting a different MinIO. Three registry moves in, that is not hypothetical.
+  #   - **The image is built here** (`docker/garage/Dockerfile`), not pulled. Upstream ships
+  #     `FROM scratch` — the binary and nothing else, no shell — and both the server and the
+  #     provisioner need one. The binary is upstream's, copied verbatim from a pinned digest.
+  #   - **The ports are Garage's**: S3 on 3900, admin API on 3903. `OBJECTS_PORT` still publishes
+  #     the S3 API on 9000 by default, so nothing outside this file had to learn a new number.
+  #     There is no web console to replace MinIO's, so `OBJECTS_CONSOLE_PORT` became
+  #     `OBJECTS_ADMIN_PORT`.
   # ---------------------------------------------------------------------------------------------
   objects:
-    image: docker.io/bitnamilegacy/minio:2025.7.23-debian-12-r5@sha256:6dabb4a2088c9a79908de3bc05f4586c23ad2182c8908e7e3acbf61c1467fb20
+    image: marketplace/objects:2.4.1
+    build:
+      context: ./docker/garage
     restart: unless-stopped
-    environment:
-      MINIO_ROOT_USER: marketplace
-      MINIO_ROOT_PASSWORD: marketplace_local
     ports:
-      - '127.0.0.1:${OBJECTS_PORT:-9000}:9000'
-      - '127.0.0.1:${OBJECTS_CONSOLE_PORT:-9001}:9001'
+      - '127.0.0.1:${OBJECTS_PORT:-9000}:3900'
+      - '127.0.0.1:${OBJECTS_ADMIN_PORT:-9001}:3903'
     volumes:
-      # `/bitnami/minio/data`, not `/data`: this image's server runs as uid 1001 and writes there.
-      - objects-data:/bitnami/minio/data
+      # Metadata is an LMDB database and data is content-addressed blocks: two directories, and so
+      # two named volumes. `objects-init` mounts the metadata one read-only to read this node's id.
+      - objects-meta:/var/lib/garage/meta
+      - objects-data:/var/lib/garage/data
     healthcheck:
-      # Unchanged, and checked rather than assumed: the image ships `mc` and configures the `local`
-      # alias from MINIO_ROOT_USER/PASSWORD, so this is the same command it always was.
-      test: ['CMD', 'mc', 'ready', 'local']
+      # `garage health` exits 0 only once the cluster can actually serve reads and writes, and 1
+      # before that — which is strictly later than the process being up, because a fresh node has no
+      # layout yet. Checked against the pinned binary rather than assumed: in that window the admin
+      # endpoint answers 503 and this command exits 1, so "healthy" means usable (AC4).
+      test: ['CMD', 'garage', 'health']
       interval: 5s
       timeout: 5s
       retries: 20
       start_period: 10s
 
   # ---------------------------------------------------------------------------------------------
-  # One-shot bucket provisioning. Runs to completion and exits; `stack:up --wait` tolerates that
-  # because the container is expected to stop with exit code 0.
+  # One-shot provisioning of the S3 key and the bucket. Runs to completion and exits; `stack:up
+  # --wait` tolerates that because the container is expected to stop with exit code 0.
+  #
+  # The same image as the server, because the work is `garage` CLI calls — see
+  # `docker/garage/provision.sh` for why the credentials live there rather than in this file, and
+  # why running it twice is safe. The cluster layout is **not** provisioned here: a node without one
+  # is unhealthy, and this service waits for health, so it would be waiting for itself.
   # ---------------------------------------------------------------------------------------------
   objects-init:
-    image: docker.io/bitnamilegacy/minio-client:2025.7.21-debian-12-r3@sha256:73bd39f7899a0cef12b8dd5df13aa93a3ed1aaa44236542442e9ac76819ac158
+    image: marketplace/objects:2.4.1
+    build:
+      context: ./docker/garage
     depends_on:
       objects:
         condition: service_healthy
-    environment:
-      MINIO_ROOT_USER: marketplace
-      MINIO_ROOT_PASSWORD: marketplace_local
-    entrypoint:
-      - sh
-      - -c
-      - |
-        set -eu
-        mc alias set local http://objects:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD"
-        # Private by default and never made public: licence documents and job photos are served
-        # through short-lived presigned GETs only (ADR-006, gotcha MEM-2026-09-07-08).
-        mc mb --ignore-existing local/marketplace-uploads
-        mc anonymous set none local/marketplace-uploads
-        echo "objects-init: marketplace-uploads ready"
+    volumes:
+      # Read-only, and read exactly once: `garage node id` needs the node's public key from the
+      # metadata directory to address admin commands at it. Nothing writes through this mount.
+      - objects-meta:/var/lib/garage/meta:ro
+    entrypoint: ['/usr/local/bin/provision.sh']
 
 volumes:
   db-data:
   mail-data:
+  objects-meta:
   objects-data:

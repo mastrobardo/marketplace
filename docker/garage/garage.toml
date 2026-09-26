@@ -1,0 +1,33 @@
+# Garage, single node, local only — the object store `pnpm stack:up` brings up (W0-T33).
+#
+# Every value here is deliberately boring. The two secrets are the shape Garage mandates, not a
+# choice: `rpc_secret` must be 32 hex-encoded bytes and the admin token is a bearer token, so
+# neither can be the `marketplace_local` style placeholder the rest of the stack uses. They are
+# fixed, obviously-patterned and local-only, and `tests/local-stack.test.ts` (AC6) scans this file
+# for anything shaped like a *real* credential.
+replication_factor = 1
+
+# Metadata is a database (LMDB) and data is content-addressed blocks. Two directories, two named
+# volumes — a laptop keeps them on the same disk, and nothing here depends on that.
+metadata_dir = "/var/lib/garage/meta"
+data_dir = "/var/lib/garage/data"
+db_engine = "lmdb"
+
+# Inter-node RPC. A single node still uses it: the provisioner is a second container and reaches
+# this node over this port (`docker/garage/provision.sh`).
+rpc_bind_addr = "[::]:3901"
+rpc_secret = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+
+[s3_api]
+# 3900, not 9000 — this is Garage's own port. `OBJECTS_PORT` still publishes it on 9000 by default,
+# so nothing outside the stack had to learn a new number.
+api_bind_addr = "[::]:3900"
+# Garage's default region name. Production is Cloudflare R2 (ADR-006), whose region is `auto`, so
+# whatever reads this must read it from configuration rather than hard-coding either value.
+s3_region = "garage"
+
+[admin]
+# The healthcheck uses the `garage health` CLI rather than this endpoint, but it is published
+# (`OBJECTS_ADMIN_PORT`) because `GET /health` is the one signal a human can check from the host.
+api_bind_addr = "[::]:3903"
+admin_token = "marketplace_admin"
