@@ -542,7 +542,17 @@ come from real experience.
   Verify a stack change with `pnpm stack:up` plus the live suites locally; note `.env` uses
   `POSTGRES_PORT=5433` here while CI uses 5432.
 - **evidence**: PR #237; `docker-compose.yml`
-- **status**: active
+- **status**: **amended 2026-09-26 — it happened again, and the mitigation this entry recommends did
+  not help.** MinIO has now closed quay.io, the registry #237 moved to: an anonymous pull of
+  `quay.io/minio/{minio,mc}` answers `unauthorized`, `ghcr.io/minio/*` answers 403, Docker Hub is
+  still 401. **Digest pinning was the wrong mitigation for this failure mode** — it protects against
+  a tag being *re-pointed*, and what keeps happening is the repository being *withdrawn*, which no
+  pin can survive. #292 pinned Bitnami's frozen builds (`bitnamilegacy/minio`,
+  `bitnamilegacy/minio-client`) to unblock the stack, and `W0-T33` owns choosing something durable.
+  The deprioritisation recorded above — *"deliberately not built into the fix"* — is the part to
+  learn from: `W0-T27` is a **mirror**, and a mirror is the only measure that would have made either
+  of these two outages a non-event. Three withdrawals in eighteen days is the evidence that an
+  upstream public image is not infrastructure.
 
 ### `Math.round(v * 10**n) === v * 10**n` is not a valid "already rounded" check
 
