@@ -396,6 +396,14 @@ model Job {
   categories JobCategory[]
   quotes     Quote[]
 
+  /// A third index exists and is **not declared here**, because Prisma cannot express a partial one:
+  /// `job_feed_open_published_idx` — `(published_at DESC, id DESC) WHERE status = 'OPEN'`, written by
+  /// hand in `0015_job_feed_index` (`W4-T07` §2.4). The feed pages by `published_at`, not
+  /// `created_at`: a draft created in June and published this morning is new to a provider and old to
+  /// this table, so `job_status_created_idx` serves the owner's lists and not that one. The predicate
+  /// is also what makes the cursor safe — `published_at` is nullable, and `OPEN` is exactly when it
+  /// is set. Noted here for the reason `Quote`'s partial unique indexes are: an index a reader of this
+  /// file cannot see is one the next migration will contradict.
   @@index([clientId, createdAt(sort: Desc), id(sort: Desc)], map: "job_client_created_idx")
   @@index([status, createdAt(sort: Desc), id(sort: Desc)], map: "job_status_created_idx")
   @@map("job")

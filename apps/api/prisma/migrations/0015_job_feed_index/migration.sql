@@ -1,0 +1,25 @@
+-- W4-T07 §2.4 — the order a feed pages in, and the one index that serves it.
+--
+-- `job_status_created_idx` is `(status, created_at DESC, id DESC)` and it does **not** serve this
+-- query, because the feed does not page by `created_at`. A draft created in June and published this
+-- morning is new to a provider and old to the table, so ordering a feed by creation time buries
+-- today's job under six weeks of nothing — a wrong list rather than a differently sorted one.
+--
+-- **Partial, and the predicate is doing three jobs at once:**
+--
+--   1. It is the feed's own filter, so the index holds exactly the rows the feed reads.
+--   2. It keeps the index off every DRAFT row, which in a healthy product is most of them.
+--   3. It is the same predicate that makes the sort key **non-null**. `published_at` is nullable on
+--      the model, `encodeCursor` throws on a null sort value by design (`pagination.ts`), and
+--      `status = 'OPEN'` is precisely the condition under which the column is guaranteed set —
+--      `publish()` writes the status and the timestamp in one transaction. The index's WHERE and the
+--      cursor's safety are one fact, stated once.
+--
+-- Hand-written because Prisma cannot express a partial index, like 0012's and 0014's, and invisible
+-- to `prisma migrate diff` for the same reason — which is why the `Job` model's comment names it.
+--
+-- `id DESC` rather than ASC: `trySort` appends the tiebreaker as `asc`, so the statement orders
+-- `published_at DESC, id ASC`. Postgres reads a btree in either direction, so one index serves both
+-- and the declared direction only decides which scan is the forward one.
+CREATE INDEX "job_feed_open_published_idx" ON "job"("published_at" DESC, "id" DESC)
+    WHERE "status" = 'OPEN';

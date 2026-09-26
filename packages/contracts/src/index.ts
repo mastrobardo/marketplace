@@ -6,6 +6,7 @@
  */
 export * from './catalogue.js';
 export * from './errors.js';
+export * from './job-feed.js';
 export * from './job.js';
 export * from './money.js';
 export * from './pagination.js';

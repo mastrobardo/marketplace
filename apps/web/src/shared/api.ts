@@ -19,11 +19,13 @@ import {
   CategoryListSchema,
   JobSchema,
   ProviderProfileSchema,
+  JobFeedPageSchema,
   QuotePageSchema,
   QuoteSchema,
   SearchResponseSchema,
   type CategorySummary,
   type Job,
+  type JobFeedPage,
   type ProviderProfile,
   type Quote,
   type QuotePage,
@@ -70,6 +72,15 @@ export interface ApiClient {
   getJob: (id: string) => Promise<Job>;
   /** One page. `cursor` continues the previous one — the screen appends and re-ranks (§3.3). */
   getJobQuotes: (jobId: string, cursor?: string) => Promise<QuotePage>;
+  /**
+   * The provider's side — `W4-T07`. One page of the market, `cursor` continuing the previous one.
+   *
+   * No locale header, like the two calls above and for the same reason: a job's title is what a
+   * client typed. The **coverage labels** are the one thing here that has two spellings, and they
+   * arrive as `nameEs`/`nameEn` on the row rather than resolved by the endpoint — so the screen picks,
+   * and asking for a language would be a header the API cannot honour.
+   */
+  getJobFeed: (cursor?: string) => Promise<JobFeedPage>;
   /**
    * Accept or reject, as one call taking the decision.
    *
@@ -228,6 +239,12 @@ export function createApiClient(
       const query = cursor === undefined ? '' : `?cursor=${encodeURIComponent(cursor)}`;
       const response = await call(() => http.get<unknown>(`api/jobs/${jobId}/quotes${query}`));
       return QuotePageSchema.parse(response.data);
+    },
+
+    async getJobFeed(cursor) {
+      const query = cursor === undefined ? '' : `?cursor=${encodeURIComponent(cursor)}`;
+      const response = await call(() => http.get<unknown>(`api/me/job-feed${query}`));
+      return JobFeedPageSchema.parse(response.data);
     },
 
     async decideQuote(quoteId, decision) {

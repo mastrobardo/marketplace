@@ -348,51 +348,63 @@ Promotion happens in the same PR as the work. A separate "memory PR" never gets 
 
 Task IDs are stable — use them as board card titles.
 
-> ### ▶ NEXT — `W4-T07`: the half of the funnel a provider cannot reach
+> ### ▶ NEXT — the two forms the funnel still has no UI for
 >
-> **`W4-T04` shipped on 2026-09-20**, and the client's side of the presupuesto is complete: post a
-> job, receive quotes, compare them, accept or reject one. `ACCEPTED` and `REJECTED` arrived with
-> the routes that produce them, and the screen that reads them is the first authenticated page this
-> slice owns (`MEM-2026-09-20-31`).
+> **`W4-T07` shipped on 2026-09-26**, and the loop is closed *in the database*: a client posts a job,
+> providers within their own radius find it in their trades, they quote, the client compares and
+> answers. `GET /api/me/job-feed` matches on `status = 'OPEN'` + `ST_DWithin` against the provider's
+> own reach + a shared trade, labels the regulated trades they do not list rather than hiding those
+> jobs (`MEM-2026-09-26-1`), and `/es/feed` is the screen that reads it. `jobs.demo-feed` seeds a
+> world a person can sign in to and walk.
 >
-> **What is missing is the other side: a provider has no way to find a job.** `POST /api/jobs/:id/quotes`
-> exists and nothing lists the jobs worth quoting on, so every quote in the system today was written
-> by somebody handed a uuid. `W4-T07` — *matched by category + radius + licence status* — is the
-> endpoint that closes the loop, and it needs no money, no Stripe and no product decision that has
-> not been made. **`W3-T05` already built the hard half**: `ST_DWithin` against each provider's own
-> `service_radius_metres`, one statement, facets included. This is that query with the operands
-> swapped — jobs near a provider rather than providers near a place.
+> **What is missing is two forms, and both are tails rather than tickets.**
 >
-> **Two things `W4-T04` learned that `W4-T07` will need immediately.** A list written by strangers is
-> the one that must be paged from the start (`W4-T04` §2.7) — a job feed is exactly that. And the
-> ranking a screen wants is often not the order that can page: `ratingAvg` could not be a sort key
-> because a cursor cannot carry a null, and a feed sorted by "best match" will meet the same wall.
+> 1. **A client still cannot post a job from the browser** — `W4-T01`'s tail, open since 2026-09-20
+>    and now the more visible half: the feed has providers reading it and nothing but a seeder puts
+>    jobs in front of them. `POST /api/jobs`, `PUT /api/jobs/:id` and `POST /api/jobs/:id/publish` all
+>    exist; what does not is a form, the category picker it needs (`GET /api/categories` is real), and
+>    the address it infers from (`W4-T01` §2.5 — and `jobs.demo-feed` now gives the demo client a
+>    default one).
+> 2. **A provider still cannot send a quote from the browser** — `W4-T03`'s tail, and `W4-T07`
+>    deliberately did not take it (spec §6): a feed row links to nothing it cannot deliver, so there is
+>    no *send a quote* button anywhere.
 >
-> **`W4-T05` and `W4-T09` are still blocked on `W5-T02`**, and that has not moved: awarding *is* a
-> payment (ADR-013 §4). If the priority is the money path rather than the funnel, `W5-T02` is the
-> unblocker for both, and it is `[A]` `[B]` — the mechanism is buildable, the take rate is not an
-> agent's to invent.
+> Neither needs a product decision that has not been made, neither touches money, and together they
+> are the difference between a funnel that works and a funnel anybody can be shown. **File them as
+> `W4-T10` and `W4-T11` or fold them into a single UI ticket — that is the operator's call**, and it
+> is the reason this banner names two tails rather than a task id.
 >
-> **One sharp edge shipped knowingly.** An accepted quote **cannot be un-accepted**: `ACCEPTED` is
-> terminal, and a client who accepts the wrong one can only cancel the job, which is terminal too.
-> A confirmation dialog is the whole mitigation. `W4-T05` takes `ACCEPTED` out of `terminal` in the
-> same change that gives it an exit — the rule `MEM-2026-09-20-11` cost this repo once already, and
-> it is written into `quoteMachine` itself this time.
+> **If the money path is the priority instead, `W5-T02` is still the unblocker** for both `W4-T05`
+> (award) and `W4-T09` (the handshake), and that has not moved: awarding *is* a payment (ADR-013 §4).
+> It is `[A]` `[B]` — the mechanism is buildable, the take rate is not an agent's to invent — and
+> ADR-013 §4 supersedes its "manual capture" line, so verify the flow and the authorization expiry
+> against current Stripe docs before building.
 >
-> **A rejection does not stop a provider re-quoting**, by the operator's decision, 2026-09-20 — a
-> provider who was too expensive may come back cheaper. **Nothing rate-limits that**, and the
-> mechanism that eventually will is `W5-T08`'s per-quote allowance (`MEM-2026-09-20-30`).
+> **`W4-T06` (the job-scoped message thread) is unblocked and reframed but not superseded.** `W13`'s
+> epic owns contact *from a search result*, before any job exists; `W4-T06` is the thread that exists
+> once a job does. Building it does not pre-empt the ADR, but read `W13`'s brief first.
 >
-> **Settled, and no longer open for `agent-money`:** a job and its booking **both** track the
-> engagement's state. Operator, 2026-09-20: *"BOTH. Booking and job should reflect the same state.
-> This will be also a way to check if smtg is going badly"* — which is ADR-013 §1 and §2 already:
-> reconciled rather than coupled, with `W5-T11`'s reconciler writing a **finding** when they
-> disagree. It does not mean building `IN_PROGRESS`/`COMPLETED` now; nothing can produce them until
-> `W5` (`MEM-2026-09-20-14`, amended).
+> **Two things `W4-T07` shipped knowingly**, both named in its spec and neither blocking:
+> the screen's filters act on the hundred most recent rows it loaded, not on the whole feed (§2.6
+> names the trigger for making them query parameters); and **`/es/feed` has no navigation** — the shell
+> header is `W12`'s and this ticket did not edit it, so a provider reaches the page by URL until
+> `agent-ui` gives the signed-in header a place for slice entry points.
 >
-> **`W4-T01`'s tail is still open:** a client cannot post a job from the browser. `W4-T04` built the
-> list and the comparison screen and deliberately did not take the posting form, so the demo reaches
-> the funnel through `quotes.demo-comparison` rather than through a form.
+> **The licence question is now explicit rather than assumed.** `agents/roles/agent-jobs.md` still says
+> the feed must *"respect licence gating"*; `W4-T07` §2.2 amends that to a label, because
+> `Certification` is `W8-T01`/`W8-T02` and unbuilt, so nothing here can know who holds a licence. The
+> role file is **not** edited — rewriting a charter is the operator's decision, and `agents-drift`
+> compares it with `.claude/agents/`. Until `W8` lands, an unlicensed provider can quote a gated job
+> and nothing stops them, which was already true of `POST /api/jobs/:id/quotes`.
+>
+> **`W4-T05` and `W4-T09` remain blocked on `W5-T02`.** An accepted quote still **cannot be
+> un-accepted**: `ACCEPTED` is terminal, and `W4-T05` takes it out of `terminal` in the same change
+> that gives it an exit (`MEM-2026-09-20-11`'s rule, written into `quoteMachine`). A confirmation
+> dialog is the whole mitigation.
+>
+> **A rejection still does not stop a provider re-quoting**, by the operator's decision, 2026-09-20 —
+> and **nothing rate-limits that**; `W5-T08`'s per-quote allowance is the mechanism that will
+> (`MEM-2026-09-20-30`).
 >
 > **Not blocking anything:** `W0-T32` (rotating a seeded credential) is deferred by the operator,
 > 2026-09-20 — rotation is a 30-to-60-day cadence, so a manual procedure is survivable. It is not
@@ -577,7 +589,7 @@ for data), so no feature is blocked waiting for an account that is not needed ye
 - `W4-T04` `[A]` ✅ **Comparing quotes, and the first answer a client gives.** `ACCEPTED` and `REJECTED` arrive with the routes that produce them — `POST /api/quotes/:id/{accept,reject}` behind **one** permission, because saying yes and saying no are one capability and two rows for it is a matrix that drifts. **Accepting is not awarding** (ADR-013 §4): the siblings stay `PENDING` and the job stays `OPEN`, because the award takes a payment `W5-T02` has not built and a failed award must leave every alternative standing. Two rules live in the database — `quote_one_accepted_per_job_idx`, and the `0012` predicate widened to `WHERE status IN ('PENDING','ACCEPTED')`, which is **three decisions in one `WHERE` clause**: withdrawn frees the slot (unchanged), **rejected frees it** (operator: a rejection is *"not this offer"*, not *"not you"*), accepted takes it. `MEM-2026-09-20-22` warned that a rejected quote would block a resubmission and **stated its own consequence backwards**; corrected here. **`GET /api/jobs/:id/quotes` is paged now** — 20/100, real cursor — and the page size stopped being a guess for a reason worth keeping: a list written by **other people** is the one that must be bounded, which is why `/me/jobs` and `/me/quotes` keep their plain cap. **Paging order is `createdAt`, not the rating-then-price ranking the screen wants**, and that is forced: a cursor cannot carry a null, `ratingAvg` is nullable by design, and `search.ts` had already refused a rating sort for the same reason — so the ranking is applied by the screen over the whole set its loader assembles. **The screens are this slice's, not `W12`'s** (`/:lang/jobs`, `/:lang/jobs/:id`), on `/account`'s precedent — ADR-011 gives `agent-ui` the *storefront*, and a page behind a session is not that (`MEM-2026-09-20-31`). **Two things found by building it:** Postgres refuses to use a new enum value in the transaction that adds it, so the migration is two (`0013`/`0014`), and a partial index naming an enum blocks that enum being rebuilt in a rollback — `MEM-2026-09-20-32`. **One sharp edge, knowingly:** `ACCEPTED` is terminal and there is no un-accept, so a confirmation dialog is the only mitigation until `W4-T05` *(spec: `docs/specs/S4/W4-T04-quote-comparison.md`)*
 - `W4-T05` `[A]` `[B]` Award → creates Booking (hand-off to S9). ⚠ **Now blocked on `W5-T02`** (ADR-013 §4): awarding *is* a payment — the client pays a small fee upfront, captured and forfeitable — so `AWARDED` cannot be reached without Stripe. This stopped being a pure hand-off on 2026-09-20. **It inherits two things from `W4-T04`:** `ACCEPTED` is `terminal` in `quoteMachine` and must leave that list **in the same change** that gives it an exit (an award, or an un-accept — `MEM-2026-09-20-11`'s rule, written into the machine this time); and `canDecideOn`/`canQuoteOn` are exhaustive `Record<JobStatus, boolean>`s, so adding `AWARDED` **fails the build** until somebody decides whether an awarded job still accepts quotes and still lets its owner answer them. The seam question about `IN_PROGRESS`/`COMPLETED` is **settled** — job and booking both carry state, reconciled not coupled (ADR-013 §1–2)
 - `W4-T06` `[A]` Job-scoped message thread + attachments
-- `W4-T07` `[A]` Job feed for providers: matched by category + radius + licence status
+- `W4-T07` `[A]` ✅ **The job feed, and the half of the funnel a provider could not reach.** `POST /api/jobs/:id/quotes` had existed since `W4-T03` and nothing listed the jobs, so every quote in this system was written by somebody handed a uuid. `GET /api/me/job-feed` closes the loop with three predicates — `status = 'OPEN'`, `ST_DWithin` against the **provider's own** `service_radius_metres`, and at least one shared trade — which is `W3-T05`'s statement with the operands swapped and its headline rule intact: *which jobs will I travel to*, never *which jobs are near me*. **The charter's "licence gating" is half implemented and half amended** (`MEM-2026-09-26-1`): nothing in this schema knows whether a provider holds a licence — `Certification` is `W8` and unbuilt — so a gate would be gating on profile completeness while calling it compliance. The feed **labels** instead (operator, 2026-09-26: *"Agree with the labels proposal: in the view will be the client to be able to filter"*), and the screen turns it into a switch the professional flips. That is the third time this slice has chosen *state the fact, leave the choice*, after `W4-T03`'s coverage and `W4-T04`'s untouched siblings. **Paged by `published_at`, not `created_at`** — a draft created in June and published this morning is new to a provider and old to the table — and `0015`'s partial index earns its predicate twice: `WHERE status = 'OPEN'` is the feed's own filter **and** the condition that makes the nullable sort key non-null, which is what lets a cursor carry it at all (`MEM-2026-09-26-2`). **The query declares no filters**: the filtering is the screen's, over a bounded prefix it renders when it truncates. **What a feed row does not carry is the design**: no coordinate, no street, nothing about the client, nothing about anybody else's quote — asserted over the serialised body, with the outbound `strictObject` parse as the gate. **Found by building it:** a keyset comparing an id cast to `text` against a `::uuid` cursor is not a slow query but no query at all, and only the second page says so (`MEM-2026-09-26-3`). **`jobs.demo-feed` is the first seeder that depends on `auth.demo-users`**, because before it no account anybody could sign in as could read a feed at all — `provider@marketplace.local` had no profile (`MEM-2026-09-26-4`) *(spec: `docs/specs/S4/W4-T07-provider-job-feed.md`)*
 - `W4-T09` `[A]` `[B]` **The handshake — a code the client scans when work starts** (ADR-013 §3). Filed 2026-09-20 and new: the professional presents a code on their device, the client scans it, and that moment releases the call-out fee and moves the engagement to `IN_PROGRESS`. **It is the only source of truth neither party can produce alone**, which is what makes the state *attested* rather than claimed — the operator's reference is how Wallapop releases on confirmation. Single-use, short-lived, bound to one booking, **redeemed by the counterparty's authenticated session**: a code that is merely a URL is one the professional can scan themselves, which removes the only property worth building. **This is where platform revenue is realised** (ADR-013 §4) — approval releases the fee, which makes insisting on it the professional protecting their own money rather than a rule anyone has to police. Also owns the **arrival attestation** (*"I'm here"*, location-stamped) without which the two-strike ban rests on claims nobody can check, and the contest window that goes with it. Blocked on `W5-T02`
 - `W4-T08` `[M]` `[B]` `[SUPERSEDED-PENDING]` Anti-disintermediation: mask contact details until booking is paid *(human: how aggressive to be — product call)*. ⚠ **Do not build this as written.** Operator, 2026-09-20, described a different model: seeing a contact is a **subscription** feature, not a reward for a paid booking, and non-paying users reach a professional through **in-app messaging** instead of being blocked. Transaction-gated and access-gated are different products with different revenue logic. `W13` owns the reconciliation and must land its ADR before this ticket means anything
 

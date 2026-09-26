@@ -1,6 +1,7 @@
 import { authDemoUsers } from './auth-demo-users.js';
 import { categoryTaxonomy } from './categories.js';
 import { demoProviders } from './demo-providers.js';
+import { demoFeed } from './demo-feed.js';
 import { demoQuotes } from './demo-quotes.js';
 import { type Seeder } from './types.js';
 
@@ -25,4 +26,10 @@ export const seeders: readonly Seeder[] = [
   // Last, and it must be: `quotes.demo-comparison` resolves two category slugs and four provider
   // display names, and throws rather than seeding a job nobody can quote (`W4-T04` §3.4).
   demoQuotes,
+  /**
+   * Last. It resolves two category slugs, **and the two accounts `auth.demo-users` writes** — the
+   * only seeder here that depends on those, because being able to sign in is the whole point of it
+   * (`W4-T07` §3.4). It throws rather than seeding a feed nobody can read.
+   */
+  demoFeed,
 ];

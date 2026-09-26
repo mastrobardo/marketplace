@@ -143,8 +143,11 @@ describeLive('AC15 — pnpm db:seed writes the tree', () => {
   });
 
   it('AC17 — the demo world exists and added no categories of its own', async () => {
-    expect(await prisma.providerProfile.count()).toBe(5);
-    expect(await prisma.providerCategory.count()).toBe(7);
+    // Six profiles, not five, since `W4-T07`: `providers.demo-world`'s five, plus the one
+    // `jobs.demo-feed` gives the sign-in-able demo account so that somebody can actually read a job
+    // feed (`W4-T07` §3.4). Nine category links for the same reason — seven plus its two trades.
+    expect(await prisma.providerProfile.count()).toBe(6);
+    expect(await prisma.providerCategory.count()).toBe(9);
     // The count above already pins it: four extra rows would make this `TAXONOMY.length + 4`.
     expect(await prisma.category.count()).toBe(TAXONOMY.length);
   });
