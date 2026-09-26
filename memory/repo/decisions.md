@@ -681,3 +681,45 @@ this file records the *why* an agent would otherwise have to rediscover.
 - **evidence**: `docs/specs/S10/W12-T21-translations-as-json.md` §2.1, §4;
   `apps/web/src/i18n/index.ts` header; operator, 2026-09-20
 - **status**: active
+
+### No AWS, anywhere in this project
+
+- **id**: MEM-2026-09-26-3
+- **scope**: repo
+- **fact**: **Operator, 2026-09-26: *"NO AWS. I dont use aws for personal projects and will never."***
+  Said while `W0-T33` was choosing a local object store, and it applies to the project, not to that
+  ticket: no AWS service, no AWS account, and no AWS-published tool in the stack. The provisioner
+  that had been drafted as `amazon/aws-cli` — the obvious server-agnostic S3 client — became Garage's
+  own CLI instead, which is one fewer image in the stack anyway.
+- **why**: A standing constraint stated once. Left unrecorded it gets rediscovered by whichever agent
+  reaches for the most-documented tool, which for anything S3-shaped is always AWS's.
+- **apply**: Object storage is **Cloudflare R2** in staging and production (ADR-006) and Garage
+  locally (`W0-T33`). Talking to either means SigV4, which does **not** require AWS's SDK: the slice
+  that first uploads a file should reach for **`aws4fetch`** — a small signer used widely against R2 —
+  rather than `@aws-sdk/client-s3`. If something genuinely has no non-AWS equivalent, that is an
+  escalation to the operator, not a judgement call.
+- **evidence**: operator, session 2026-09-26 (`memory/sessions/2026-09-26-agent-devops-W0-T33.md`);
+  `docs/specs/S0/W0-T33-object-store.md` §2.1
+- **status**: active
+
+### The local object store is Garage, and MinIO is not coming back
+
+- **id**: MEM-2026-09-26-4
+- **scope**: repo
+- **fact**: `pnpm stack:up` runs **Garage** (built in `docker/garage/`, upstream binary v2.4.1 on
+  Alpine) as the stand-in for Cloudflare R2. MinIO was not swapped out for taste: its open-source
+  server and `mc` are **archived** — `dl.min.io` is 410 Gone, both GitHub repositories report
+  `"archived": true` — so every MinIO image in existence, including the `bitnamilegacy` pin that
+  `#292` used to unblock the stack, is frozen for good.
+- **why**: Three outages in eighteen days all had the same root cause and each was treated as a
+  registry problem (`MEM-2026-09-17-8`). Recording the *archival* is what stops a fourth attempt to
+  find a working MinIO tap — including the one that looks reasonable, a robot account on quay.io,
+  which buys an unmaintained server at the cost of ending *clone and run*.
+- **apply**: Do not reintroduce MinIO or `mc`, and do not benchmark local behaviour as if it were
+  production's: production is R2 (ADR-006), so anything object-store-shaped reads its endpoint,
+  region and credentials from configuration. Garage's region is `garage` and R2's is `auto` — a
+  hard-coded region is the bug this will produce first. Garage has **no anonymous access at all**, so
+  ADR-006's private-by-default is structural rather than a policy to set.
+- **evidence**: `docker-compose.yml` `objects`; `docs/specs/S0/W0-T33-object-store.md`;
+  `memory/repo/gotchas.md` MEM-2026-09-17-8
+- **status**: active

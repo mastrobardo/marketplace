@@ -46,7 +46,7 @@ pnpm stack:logs    # follow
 |---|---|---|---|
 | Postgres 17 + PostGIS 3.5 | `127.0.0.1:5432` | `marketplace` / `marketplace_local`, database `marketplace` | `postgis` and `postgis_topology` enabled at init |
 | Mail catcher (Mailpit) | SMTP `1025`, UI/API `8025` | none | http://127.0.0.1:8025 — no relay, so nothing can reach a real inbox |
-| Object storage (MinIO) | S3 `9000`, console `9001` | `marketplace` / `marketplace_local` | bucket `marketplace-uploads`, private |
+| Object storage (Garage) | S3 `9000`, admin API `9001` | the S3 key in `docker/garage/provision.sh`, which creates it | bucket `marketplace-uploads`, private — Garage has no anonymous access at all |
 
 Every port is bound to the loopback interface, so the stack is never reachable from the network.
 
@@ -58,7 +58,7 @@ container name:
 echo 'POSTGRES_PORT=5433' >> .env
 ```
 
-`POSTGRES_PORT`, `MAIL_SMTP_PORT`, `MAIL_HTTP_PORT`, `OBJECTS_PORT` and `OBJECTS_CONSOLE_PORT` all
+`POSTGRES_PORT`, `MAIL_SMTP_PORT`, `MAIL_HTTP_PORT`, `OBJECTS_PORT` and `OBJECTS_ADMIN_PORT` all
 work the same way.
 
 The stack's own tests live in `tests/local-stack.test.ts`. They are static by default — they read

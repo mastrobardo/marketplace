@@ -428,3 +428,23 @@ Keep it to facts that changed how you would work. Task-specific detail stays in 
 - **evidence**: `W0-T31` run record Amendment; `scripts/secrets/generate.ts` `rotationNote`;
   `tests/secrets-generate.test.ts` AC8
 - **status**: active
+
+### The mirror is only half a mirror until someone clicks "Change visibility"
+
+- **id**: MEM-2026-09-26-5
+- **scope**: slice:S0
+- **fact**: `.github/workflows/mirror-images.yml` pushes every stack image into
+  `ghcr.io/mastrobardo/marketplace/…` with the built-in `GITHUB_TOKEN`, which needs no external
+  account — but **a GHCR package is created private, and `GITHUB_TOKEN` cannot change that.** Making
+  it public is a PAT call or one click per package in *Settings → Packages → Change visibility*. Until
+  that is done, CI can pull the mirror (it has a token) and a laptop cannot, so `docker-compose.yml`
+  must not be repointed at the mirror before the flip.
+- **why**: This is the failure that passes CI and breaks every clone — the exact asymmetry
+  `W0-T27` exists to remove, reintroduced by the last step of implementing it. It is also why the
+  repoint is a separate commit from the workflow: the workflow can land and be run at any time, and
+  the repoint is only safe afterwards.
+- **apply**: Sequence it: land the workflow → dispatch it → flip the four packages public → verify an
+  **anonymous** pull (`docker logout ghcr.io` first, or a clean context) → then repoint compose and
+  `docker/garage/Dockerfile`. Never verify a public mirror with a logged-in daemon; it proves nothing.
+- **evidence**: `.github/workflows/mirror-images.yml`; `docs/specs/S0/W0-T33-object-store.run.md` §5
+- **status**: active

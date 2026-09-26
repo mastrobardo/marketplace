@@ -91,10 +91,11 @@ describe('AC5 — data survives a restart', () => {
     expect(declared.length, 'no named volumes declared').toBeGreaterThan(0);
     for (const [name, dataDir] of [
       ['db', '/var/lib/postgresql/data'],
-      // `/bitnami/minio/data` since the object store became Bitnami's build of MinIO: that image
-      // runs as uid 1001 and writes there. The assertion is about *a named volume holding the
-      // data*, and the path is only how this test finds the mount.
-      ['objects', '/bitnami/minio/data'],
+      // `/var/lib/garage/data` since the object store became Garage (W0-T33). Garage splits an LMDB
+      // metadata database from content-addressed data blocks; this is the blocks, which is what
+      // "object data" means here. The assertion is about *a named volume holding the data*, and the
+      // path is only how this test finds the mount.
+      ['objects', '/var/lib/garage/data'],
     ] as const) {
       const mounts = services()[name]?.volumes ?? [];
       const mount = mounts.find((entry) => entry.split(':')[1] === dataDir);
@@ -114,10 +115,24 @@ describe('AC6 — the compose file holds no real credential', () => {
     ['a private key block', /-----BEGIN [A-Z ]*PRIVATE KEY-----/],
   ];
 
+  // Not only `docker-compose.yml`. Since W0-T33 the object store's two credentials live in
+  // `docker/garage/`, because Garage's key formats cannot satisfy the placeholder rule below and
+  // writing them into compose would have meant weakening this check to let them through. The scan
+  // follows them there instead: what is being claimed is that *the stack's checked-in configuration*
+  // holds no real credential, and that claim would be false if this only ever read one file.
+  const CONFIG_FILES = [
+    COMPOSE,
+    join(root, 'docker/garage/garage.toml'),
+    join(root, 'docker/garage/provision.sh'),
+  ] as const;
+
   it('contains nothing shaped like a real secret', () => {
-    const raw = readFileSync(COMPOSE, 'utf8');
-    for (const [what, shape] of SECRET_SHAPES) {
-      expect(shape.test(raw), `docker-compose.yml contains ${what}`).toBe(false);
+    for (const file of CONFIG_FILES) {
+      expect(existsSync(file), `${file} does not exist`).toBe(true);
+      const raw = readFileSync(file, 'utf8');
+      for (const [what, shape] of SECRET_SHAPES) {
+        expect(shape.test(raw), `${file} contains ${what}`).toBe(false);
+      }
     }
   });
 
@@ -258,13 +273,17 @@ describe.skipIf(!live)('AC10 — mail is captured, never delivered', () => {
 
 describe.skipIf(!live)('AC11 — object storage is live and provisioned', () => {
   it('reports the object store live', async () => {
-    const response = await fetch(`http://${hostPort('objects', 9000)}/minio/health/live`);
+    // Garage's admin API, on 3903. This endpoint answers 503 — not a connection error — while the
+    // node is up but has no cluster layout, so a 200 here means the store can serve, which is the
+    // same claim the MinIO endpoint this replaces was making.
+    const response = await fetch(`http://${hostPort('objects', 3903)}/health`);
     expect(response.status).toBe(200);
   });
 
   it('creates the uploads bucket', () => {
-    // Credentials come from the object store's own definition — the names the image mandates.
-    const env = services()['objects']?.environment ?? {};
+    // No credentials to pass: `bucket list` is an admin operation over Garage's RPC port, and the
+    // node's id — which is how a second container addresses it — comes from the metadata volume this
+    // service already mounts read-only.
     const listed = dc(
       'run',
       '--rm',
@@ -273,7 +292,7 @@ describe.skipIf(!live)('AC11 — object storage is live and provisioned', () => 
       'sh',
       PROVISIONER,
       '-c',
-      `mc alias set live http://objects:9000 "${env['MINIO_ROOT_USER'] ?? ''}" "${env['MINIO_ROOT_PASSWORD'] ?? ''}" >/dev/null && mc ls live`,
+      'garage -h "$(garage node id -q)@objects:3901" bucket list',
     );
     expect(listed).toContain('marketplace-uploads');
   });

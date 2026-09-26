@@ -1,0 +1,97 @@
+# W0-T27 — a copy, held by this repository, of every third-party image the local stack is made of.
+#
+# Three times an upstream has stopped serving an image `pnpm stack:up` needs. MinIO's Docker Hub
+# repositories were deleted (#237). MinIO's own quay.io stopped answering anonymous pulls (#292).
+# Then the MinIO projects themselves were archived, which is what W0-T33 had to answer. Each time,
+# CI went red on every PR and on `main`, and a fresh clone could not start — not because anything in
+# this repository changed, but because someone else's registry changed.
+#
+# This ticket was once deprioritised on the reasoning that #237 pinned by digest, so a re-pointed tag
+# would fail loudly. That was true and it was aimed at the wrong failure: a digest pin detects an
+# image that was *changed* and survives nothing about one that was *withdrawn*. A copy we hold is
+# the only measure that would have made all three outages a non-event.
+#
+# `docker buildx imagetools create` copies between registries **server-side**: no layer is pulled
+# into this runner, and the multi-architecture index is preserved rather than flattened to whatever
+# the runner happens to be — which matters, because CI is amd64 and every laptop here is arm64.
+name: mirror-images
+
+on:
+  # On demand, because that is how the mirror gets refreshed after a pin changes.
+  workflow_dispatch:
+  # And weekly, so the copy is not a one-off that quietly ages out of date. 04:23 on Mondays — not
+  # on the hour, where GitHub's scheduler queues heavily.
+  schedule:
+    - cron: '23 4 * * 1'
+  # And whenever the list itself changes, so a new pin is mirrored in the same push that adds it.
+  push:
+    branches: [main]
+    paths:
+      - 'docker/mirror.images'
+      - '.github/workflows/mirror-images.yml'
+
+permissions:
+  contents: read
+  # The only elevated scope here, and the reason this needs no external account: the built-in token
+  # can push to packages owned by this repository.
+  packages: write
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  mirror:
+    name: mirror
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Log in to GHCR
+        run: echo '${{ secrets.GITHUB_TOKEN }}' | docker login ghcr.io -u '${{ github.actor }}' --password-stdin
+
+      - name: Copy every listed image into this repository's registry
+        run: |
+          set -euo pipefail
+          # `${{ github.repository }}` is `owner/repo`, so a package lands at
+          # ghcr.io/owner/repo/<name> — named after the repository that depends on it.
+          registry="ghcr.io/${{ github.repository }}"
+          # Skip comments and blank lines; every other line is `<upstream ref> <package name>`.
+          grep -vE '^\s*(#|$)' docker/mirror.images | while read -r upstream package; do
+            tag="${upstream##*:}"
+            mirror="$registry/$package:$tag"
+            echo "::group::$upstream -> $mirror"
+            docker buildx imagetools create --tag "$mirror" "$upstream"
+            echo '::endgroup::'
+          done
+
+      - name: Check the copies kept both architectures
+        run: |
+          set -euo pipefail
+          registry="ghcr.io/${{ github.repository }}"
+          grep -vE '^\s*(#|$)' docker/mirror.images | while read -r upstream package; do
+            tag="${upstream##*:}"
+            mirror="$registry/$package:$tag"
+            # A copy that lost an architecture is worse than no copy: it works in CI and fails on
+            # every laptop, or the reverse, and only once the upstream it stands in for is gone.
+            for required in linux/amd64 linux/arm64; do
+              if ! docker buildx imagetools inspect "$mirror" | grep -qE "^ *Platform: *$required\$"; then
+                echo "::error::$mirror is missing $required"
+                exit 1
+              fi
+            done
+            echo "$mirror: linux/amd64 and linux/arm64 present"
+          done
+
+      - name: Summarise
+        run: |
+          {
+            echo '### Mirrored images'
+            echo
+            echo '| upstream | copy |'
+            echo '|---|---|'
+            grep -vE '^\s*(#|$)' docker/mirror.images | while read -r upstream package; do
+              echo "| \`$upstream\` | \`ghcr.io/${{ github.repository }}/$package:${upstream##*:}\` |"
+            done
+          } >> "$GITHUB_STEP_SUMMARY"

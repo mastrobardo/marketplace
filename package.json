@@ -19,7 +19,7 @@
   },
   "scripts": {
     "prepare": "pnpm --filter @marketplace/config build && pnpm --filter @marketplace/api db:generate",
-    "stack:up": "docker compose up --detach --wait db mail objects && docker compose run --rm objects-init",
+    "stack:up": "docker compose build --quiet objects && docker compose up --detach --wait db mail objects && docker compose run --rm objects-init",
     "stack:down": "docker compose down",
     "stack:reset": "docker compose down --volumes",
     "stack:logs": "docker compose logs --follow",

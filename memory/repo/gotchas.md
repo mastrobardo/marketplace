@@ -554,6 +554,17 @@ come from real experience.
   of these two outages a non-event. Three withdrawals in eighteen days is the evidence that an
   upstream public image is not infrastructure.
 
+  **Amended again 2026-09-26 (W0-T33), and this is the last amendment it needs: the upstream is not
+  gated, it is gone.** `dl.min.io` answers **410 Gone** — *"The open-source MinIO Server, MinIO
+  Client (mc) and MinIO KES projects are archived and no longer maintained. MinIO does not provide
+  product support, security updates, or security advisories for them"* — and both
+  `github.com/minio/minio` and `github.com/minio/mc` report `"archived": true`. So the three
+  registry failures were symptoms of one cause, and **the whole class of mitigation this entry
+  reached for twice was aimed too low**: not the pin, not the second registry, not a credential for
+  the first one. A repository can be withdrawn and a *project* can be ended, and the only measures
+  that survive either are a copy you hold and a dependency that is still maintained. The stack now
+  runs Garage and every image has a mirror (`docs/specs/S0/W0-T33-object-store.md`).
+
 ### `Math.round(v * 10**n) === v * 10**n` is not a valid "already rounded" check
 
 - **id**: MEM-2026-09-17-9
@@ -851,4 +862,48 @@ come from real experience.
 - **evidence**: `apps/api/prisma/migrations/0013_quote_decision/migration.sql` header;
   `apps/api/prisma/migrations/0013_quote_decision/down.sql`;
   `apps/api/tests/db.test.ts` AC10; `apps/api/tests/core-schema.test.ts` AC-2
+- **status**: active
+
+### A healthcheck that needs provisioning, and a provisioner that waits for health
+
+- **id**: MEM-2026-09-26-1
+- **scope**: repo
+- **fact**: Garage refuses reads and writes until a cluster layout assigns its node a role: in that
+  window `GET /health` answers **503** and `garage health` exits **1**, while RPC already answers.
+  `objects-init` waits for `condition: service_healthy` (`W0-T02` AC4), so provisioning the layout
+  from there would have been a service waiting for the node that was waiting to be provisioned. The
+  layout is assigned by the server's own entrypoint on first boot instead; `objects-init` does only
+  the S3 key and the bucket.
+- **why**: The deadlock is invisible in the design and obvious in the measurement. It was found by
+  standing a throwaway node up by hand and watching `/health` before and after `layout apply` —
+  before writing any compose. A healthcheck can be a *usability* signal ("can this serve?") or a
+  *liveness* signal ("is the process up?"), and the moment a dependent container waits on the first
+  kind, anything it provisions must already be true.
+- **apply**: Before wiring `depends_on: service_healthy`, ask **what makes that service healthy, and
+  who does it.** If the answer is "the thing that is waiting", the graph is circular. Split it: node
+  properties (a layout, a cluster join) belong to the node's own startup; application properties (a
+  bucket, a key, a schema) belong to the provisioner. And measure the health signal in both states
+  rather than reading its documentation — the 503 is what made this concrete.
+- **evidence**: `docker/garage/entrypoint.sh`; `docker/garage/provision.sh`;
+  `docs/specs/S0/W0-T33-object-store.run.md` §2
+- **status**: active
+
+### `FROM scratch` images have no shell, and `sh -c` is how most compose services do their work
+
+- **id**: MEM-2026-09-26-2
+- **scope**: repo
+- **fact**: `dxflrs/garage`'s image is the binary and nothing else — `docker run --entrypoint /bin/sh`
+  fails with `stat /bin/sh: no such file or directory`. Both stack services that use it need a shell
+  (a bootstrap on start, a multi-step provisioning script), so `docker/garage/Dockerfile` copies the
+  upstream binary from its pinned digest onto Alpine. The build is a `COPY`: **2.9s** with
+  `--no-cache`.
+- **why**: The compose idiom for one-shot work is `entrypoint: ['sh', '-c', …]`, and it silently
+  assumes a shell that a scratch or distroless image does not have. Discovering this after writing
+  the compose file would have meant rewriting the provisioning around the admin HTTP API and parsing
+  JSON with `sed`, which is where that road leads.
+- **apply**: Check for a shell before designing anything around one — `docker run --rm --entrypoint
+  /bin/sh <image> -c true`. Copying a pinned upstream binary onto a base with a shell keeps the
+  binary upstream's and costs one Dockerfile; it also means the stack's own image is something this
+  repo can mirror (`W0-T27`), which an upstream withdrawal cannot take away.
+- **evidence**: `docker/garage/Dockerfile`; `docs/specs/S0/W0-T33-object-store.run.md` §2
 - **status**: active
