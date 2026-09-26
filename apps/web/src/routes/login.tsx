@@ -16,7 +16,7 @@ import {
   type ResendOutcome,
 } from '../features/auth/actions.js';
 import { seedSession } from '../shared/session.js';
-import { type TranslationKey } from '../i18n/locales/es.js';
+import { type TranslationKey } from '../i18n/index.js';
 
 /**
  * Sign in — one message for every refusal, and exactly one exception.

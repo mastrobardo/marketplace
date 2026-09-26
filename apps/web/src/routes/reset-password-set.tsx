@@ -6,7 +6,7 @@ import { Button } from '@marketplace/ui';
 import { AuthField, FormAlert, useAuthForm } from '../features/auth/form.js';
 import { ResetSetSchema, type ResetSetValues } from '../features/auth/schema.js';
 import { apiFrom, failureMessage } from '../features/auth/actions.js';
-import { type TranslationKey } from '../i18n/locales/es.js';
+import { type TranslationKey } from '../i18n/index.js';
 
 /**
  * Set the new password.

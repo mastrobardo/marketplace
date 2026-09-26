@@ -651,3 +651,33 @@ this file records the *why* an agent would otherwise have to rediscover.
 - **evidence**: operator, 2026-09-20; `docs/specs/S4/W4-T01-job-posting.md` §4;
   `docs/specs/S4/W4-T02-job-state-machine.md` §2.1; `docs/specs/S4/W4-T03-quote-submission.md` §2.3
 - **status**: active
+
+### Translations are data, not code — and the type safety went with them on purpose
+
+- **id**: MEM-2026-09-20-33
+- **scope**: repo
+- **fact**: `apps/web/src/i18n/locales/` holds `es.json` and `en.json`, not `.ts` modules.
+  `TranslationKey` is `string`. There is no compile-time union of key names, no
+  `satisfies Translations` parity check, and no fixture that compiles a broken catalogue.
+- **why**: operator, 2026-09-20 — *"translations should go on jsons. Which, in a future, might come
+  from some online service. Having them in the code is a nogo."* The type safety was **kept in the
+  first draft and then removed on a second instruction** — *"It is fine to have extensive guards and
+  typechecks, but this is not one of those occasions."* The reasoning that makes it right: if a
+  translation service is going to own the catalogue, its keys are **not knowable at compile time**,
+  so a union derived from the snapshot in the repo is true only until the first fetch — and deriving
+  types from it re-couples translations to the code in the change meant to free them.
+  **It was verified to be technically possible before being rejected**: `keyof typeof es` does yield
+  a literal union from a JSON module under `resolveJsonModule` + `moduleResolution: Bundler`, and a
+  two-way `Exact<>` type reproduces the parity check. *Could not* and *chose not to* are different
+  facts, and only the second one is true here.
+- **apply**: **do not keep a mechanism whose premise you are in the act of removing** — the mirror of
+  `MEM-2026-09-20-29`. When a change exists to decouple X from the code, machinery that re-derives
+  guarantees from X's contents is not a bonus, it is the thing being removed, wearing a helpful face.
+  Ask what is still true after the decoupling lands.
+  What guards a missing translation now is `apps/web/tests/i18n.test.ts` (key-set parity, non-empty
+  values) and `missingKeyHandler` throwing at runtime — all three survive the catalogue arriving over
+  HTTP, which the compiler could not. **`W0-T23`'s i18n design is void** and its problem is not:
+  seven slice agents still append to two files, and JSON merges slightly worse than TypeScript.
+- **evidence**: `docs/specs/S10/W12-T21-translations-as-json.md` §2.1, §4;
+  `apps/web/src/i18n/index.ts` header; operator, 2026-09-20
+- **status**: active

@@ -1,6 +1,6 @@
 import { type ReactElement } from 'react';
 import { useTranslation } from 'react-i18next';
-import { type TranslationKey } from '../../i18n/locales/es.js';
+import { type TranslationKey } from '../../i18n/index.js';
 
 /**
  * The sentence that goes with `missingRequiredFields`.

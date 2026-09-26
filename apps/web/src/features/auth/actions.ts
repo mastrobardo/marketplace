@@ -10,7 +10,7 @@ import { type Params, type RouterContextProvider } from 'react-router';
 import { ApiError, type ApiClient } from '../../shared/api.js';
 import { routeContext } from '../../shared/query.js';
 import { isLocale, LOCALES } from '../../i18n/index.js';
-import { type TranslationKey } from '../../i18n/locales/es.js';
+import { type TranslationKey } from '../../i18n/index.js';
 import { ResendSchema } from './schema.js';
 
 export function apiFrom(context: Readonly<RouterContextProvider>): ApiClient {

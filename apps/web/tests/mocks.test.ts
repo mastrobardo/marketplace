@@ -205,18 +205,27 @@ describe('AC17..AC18 — none of this ships, and all of it is typechecked', () =
 
     /**
      * `tests/fixtures` was excluded wholesale, because it held the three *deliberately broken*
-     * i18n-lint fixture projects. The mock world now lives in the same directory and must be
-     * typechecked — `app-harness.tsx` imports it — so the exclude is narrowed to those three
+     * i18n-lint fixture projects. The mock world lives in the same directory and must be
+     * typechecked — `app-harness.tsx` imports it — so the exclude was narrowed to those three
      * subdirectories rather than the parent.
+     *
+     * **`W12-T21` deleted all three**, along with the compile-time key union they proved. The
+     * catalogues are JSON now, so there is no `satisfies Translations` left to break on purpose,
+     * and a fixture that compiles a broken catalogue has nothing to assert. What this test still
+     * protects is the half that matters: `tests/fixtures` is in the program.
      */
     expect(tsconfig.exclude, 'tests/fixtures is still excluded wholesale').not.toContain(
       'tests/fixtures',
     );
-    for (const broken of ['incomplete-catalogue', 'unknown-key', 'valid']) {
+    for (const gone of ['incomplete-catalogue', 'unknown-key', 'valid']) {
+      expect(
+        existsSync(join(fixtures, gone)),
+        `tests/fixtures/${gone} is back — the i18n lint fixtures went with W12-T21`,
+      ).toBe(false);
       expect(
         tsconfig.exclude,
-        `tests/fixtures/${broken} is a lint fixture and must stay out of the program`,
-      ).toContain(`tests/fixtures/${broken}`);
+        `tsconfig still excludes tests/fixtures/${gone}, which no longer exists`,
+      ).not.toContain(`tests/fixtures/${gone}`);
     }
   });
 

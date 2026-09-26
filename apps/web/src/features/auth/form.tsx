@@ -27,7 +27,7 @@ import {
 import { zodResolver } from '@hookform/resolvers/zod';
 import { type ZodType } from 'zod';
 import { TextInput } from '@marketplace/ui';
-import { type TranslationKey } from '../../i18n/locales/es.js';
+import { type TranslationKey } from '../../i18n/index.js';
 
 export interface AuthFormOptions<T extends FieldValues> {
   /**

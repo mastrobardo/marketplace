@@ -14,7 +14,7 @@
  * the only point that knows the current language.
  */
 import * as z from 'zod';
-import { type TranslationKey } from '../../i18n/locales/es.js';
+import { type TranslationKey } from '../../i18n/index.js';
 
 /**
  * better-auth's own limits, mirrored so the browser can say it before the network does.

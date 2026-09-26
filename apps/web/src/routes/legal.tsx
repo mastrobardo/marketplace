@@ -2,7 +2,7 @@ import { type ReactElement } from 'react';
 import { useParams } from 'react-router';
 import type { LoaderFunctionArgs } from 'react-router';
 import { useTranslation } from 'react-i18next';
-import { type TranslationKey } from '../i18n/locales/es.js';
+import { type TranslationKey } from '../i18n/index.js';
 import { Component as NotFound } from './not-found.js';
 
 /**

@@ -6,7 +6,7 @@ import { Button } from '@marketplace/ui';
 import { AuthField, FormAlert, useAuthForm } from '../features/auth/form.js';
 import { ResetRequestSchema, type ResetRequestValues } from '../features/auth/schema.js';
 import { apiFrom, failureMessage, localeOf } from '../features/auth/actions.js';
-import { type TranslationKey } from '../i18n/locales/es.js';
+import { type TranslationKey } from '../i18n/index.js';
 
 /**
  * Ask for a reset link.

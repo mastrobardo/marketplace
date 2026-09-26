@@ -13,7 +13,7 @@
  */
 import { type Option, type SearchSchema } from '@marketplace/ui';
 import { type CategorySummary } from '@marketplace/contracts';
-import { type TranslationKey } from '../../i18n/locales/es.js';
+import { type TranslationKey } from '../../i18n/index.js';
 
 export type Translate = (key: TranslationKey) => string;
 
