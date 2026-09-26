@@ -80,4 +80,10 @@ export const queryKeys = {
   myJobs: () => ['me', 'jobs'] as const,
   job: (id: string) => ['job', id] as const,
   jobQuotes: (jobId: string) => ['job', jobId, 'quotes'] as const,
+  /**
+   * `W4-T07`. No locale either, for the same reason — and no cursor: the loader assembles the whole
+   * bounded set under **one** key, so re-sorting or filtering in the screen re-reads a warm cache
+   * instead of paging the API again (§3.3).
+   */
+  jobFeed: () => ['me', 'job-feed'] as const,
 };

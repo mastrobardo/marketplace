@@ -14,6 +14,7 @@ import { buildCatalogue } from './fixtures/catalogue.js';
 import { searchCatalogue } from './fixtures/search.js';
 import { profileFromCatalogue, seededProviderIds } from './fixtures/provider.js';
 import { DEMO_JOB_ID, demoJob, demoQuotes } from './fixtures/quotes.js';
+import { demoFeed } from './fixtures/feed.js';
 
 /**
  * Render the real `App` at a path, with the API stubbed.
@@ -112,6 +113,9 @@ export function stubApi(overrides: Partial<ApiClient> = {}): ApiClient {
     // One page, `hasMore: false` — a test that wants a second page overrides this and says so.
     getJobQuotes: () =>
       Promise.resolve({ items: demoQuotes(), page: { nextCursor: null, hasMore: false } }),
+    // `W4-T07`. One page, `hasMore: false` — a test that wants a second page overrides this.
+    getJobFeed: () =>
+      Promise.resolve({ items: demoFeed(), page: { nextCursor: null, hasMore: false } }),
     decideQuote: (quoteId: string) =>
       Promise.resolve({ ...demoQuotes()[0]!, id: quoteId, status: 'ACCEPTED' as const }),
     signUp: () => Promise.resolve(),

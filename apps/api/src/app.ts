@@ -18,6 +18,8 @@ import { type CategoryRepository } from './modules/categories/repository.js';
 import { providerRoutes } from './modules/providers/routes.js';
 import { jobRoutes } from './modules/jobs/routes.js';
 import { type JobRepository } from './modules/jobs/repository.js';
+import { jobFeedRoutes } from './modules/jobs/feed-routes.js';
+import { type JobFeedRepository } from './modules/jobs/feed-repository.js';
 import { quoteRoutes } from './modules/quotes/routes.js';
 import { type QuoteRepository } from './modules/quotes/repository.js';
 import { type ProviderRepository } from './modules/providers/repository.js';
@@ -79,6 +81,14 @@ export interface BuildAppOptions {
    * there is no public half to fall back to, unlike `providers`.
    */
   jobs?: JobRepository;
+  /**
+   * The job feed (`W4-T07`).
+   *
+   * Separate from `jobs` because it is a separate plugin guarded by a separate permission: the market
+   * a professional reads and the postings a client owns are different capabilities (spec §2.9). A
+   * build without it has no `/api/me/job-feed` and every other job route unchanged.
+   */
+  jobFeed?: JobFeedRepository;
   quotes?: QuoteRepository;
   /** The Prisma client the session guard reads liveness from — `W2-T03` §3.3. */
   prisma?: ProviderLivenessClient;
@@ -124,6 +134,7 @@ export function buildApp({
   providerOwn,
   providerWriter,
   jobs,
+  jobFeed,
   quotes,
   prisma,
 }: BuildAppOptions): FastifyInstance {
@@ -219,6 +230,21 @@ export function buildApp({
     app.register(
       jobRoutes({
         repository: jobs,
+        guards: buildGuards({ resolveSession: buildSessionResolver({ auth, prisma }) }),
+      }),
+      { prefix: '/api' },
+    );
+  }
+
+  /**
+   * `W4-T07` — the feed. Same fail-closed shape, and here the shape is load-bearing rather than
+   * consistent: this is the one route in the API that serves **other people's** jobs, so a build that
+   * registered it without a guard would publish every open job's postal code to anybody who asked.
+   */
+  if (jobFeed !== undefined && auth !== undefined && prisma !== undefined) {
+    app.register(
+      jobFeedRoutes({
+        repository: jobFeed,
         guards: buildGuards({ resolveSession: buildSessionResolver({ auth, prisma }) }),
       }),
       { prefix: '/api' },

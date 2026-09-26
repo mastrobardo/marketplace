@@ -88,6 +88,21 @@ export const PERMISSIONS = {
    * `quote:withdraw-own`, which is the different thing they are entitled to do to it.
    */
   'quote:decide-for-own-job': ['CLIENT'],
+
+  /**
+   * `W4-T07`. **Reading the market is not reading your own postings**, and the two are held by
+   * different capacities of the same person.
+   *
+   * Not `job:read-own` widened: that guards `GET /api/me/jobs`, where the principal is the scope and
+   * the capacity is *client*. This guards `GET /api/me/job-feed`, where the principal is the scope and
+   * the capacity is *professional* — and the day a subscription tier meters how much of the market a
+   * provider may see (`W13`), the thing it meters needs a name of its own.
+   *
+   * Like `quote:create`, the role is not enough on its own: the repository also requires a
+   * `ProviderProfile` **with a service radius**, because a feed is computed from both and a provider
+   * who has neither is unserviceable rather than unlucky (spec §2.7).
+   */
+  'job:read-feed': ['PROVIDER'],
 } as const satisfies PermissionMatrix;
 
 export type Permission = keyof typeof PERMISSIONS;

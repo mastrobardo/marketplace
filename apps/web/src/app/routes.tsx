@@ -27,6 +27,7 @@ import { Component as NotFound } from '../routes/not-found.js';
 import { Component as Account, loader as accountLoader } from '../routes/account.js';
 import { Component as Jobs, loader as jobsLoader } from '../routes/jobs.js';
 import { Component as JobDetail, action as jobAction, loader as jobLoader } from '../routes/job.js';
+import { Component as Feed, loader as feedLoader } from '../routes/feed.js';
 import { Component as SignUp, action as signUpAction } from '../routes/signup.js';
 import { Component as Login, action as loginAction } from '../routes/login.js';
 import { Component as VerifyEmail, action as verifyEmailAction } from '../routes/verify-email.js';
@@ -103,6 +104,14 @@ export const routes: RouteObject[] = [
        */
       { path: 'jobs', Component: Jobs, loader: jobsLoader },
       { path: 'jobs/:id', Component: JobDetail, loader: jobLoader, action: jobAction },
+      /**
+       * `W4-T07` — the other side of the same funnel: the jobs a professional could take.
+       *
+       * Behind a session like `/jobs`, owned by `agent-jobs` on the same rule, and **not linked from
+       * the header**: the shell is `W12`'s and this ticket does not edit it, so a provider reaches
+       * `/es/feed` by URL until `agent-ui` gives the signed-in header a place for slice entry points.
+       */
+      { path: 'feed', Component: Feed, loader: feedLoader },
       { path: 'login', Component: Login, action: loginAction },
       // Where better-auth's emailed link redirects back to, with `?error=<CODE>` when the token is
       // no longer good.

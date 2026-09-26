@@ -95,7 +95,7 @@ jobs:
       #
       # Explicit ids, not the registry: what reaches staging should be readable in a diff.
       - name: Seed staging
-        run: pnpm db:seed --only auth.demo-users,categories.taxonomy,providers.demo-world,quotes.demo-comparison
+        run: pnpm db:seed --only auth.demo-users,categories.taxonomy,providers.demo-world,quotes.demo-comparison,jobs.demo-feed
         env:
           DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
           # Required. `auth.demo-users` refuses a non-local host without it rather than write the

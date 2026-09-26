@@ -122,8 +122,11 @@ describe.runIf(live)(
         // the taxonomy's size rather than `4 + 18`: a demo seeder that added one would show up here
         // as a number nobody could explain.
         expect(await prisma.category.count()).toBe(TAXONOMY.length);
-        expect(await prisma.providerProfile.count()).toBe(5);
-        expect(await prisma.providerCategory.count()).toBe(7);
+        // Six profiles and nine links since `W4-T07`: this seeder's five and seven, plus the profile
+        // `jobs.demo-feed` attaches to the sign-in-able demo account with its two trades (§3.4). Both
+        // seeders have run by the time this reads, because the whole registry does.
+        expect(await prisma.providerProfile.count()).toBe(6);
+        expect(await prisma.providerCategory.count()).toBe(9);
       });
 
       it('skips itself on a second run and writes nothing new', async () => {
@@ -139,10 +142,13 @@ describe.runIf(live)(
     describe('AC7 — a visitor searching Madrid sees the demo world', () => {
       it('returns every seeded provider', async () => {
         const body = await page('where=28013');
+        // Six since `W4-T07`: this seeder's five, plus `Paco Fontanero` — the profile
+        // `jobs.demo-feed` attaches to the sign-in-able demo account so that the job feed has a
+        // reader (`W4-T07` §3.4). He is a real provider in Madrid, so search finds him like any other.
         expect(
           body.items.map((item) => item.displayName).sort(),
           'the storefront would show an empty results page',
-        ).toHaveLength(5);
+        ).toHaveLength(6);
       });
 
       it('orders them by distance, nearest first', async () => {
@@ -164,9 +170,11 @@ describe.runIf(live)(
     });
 
     describe('AC8 — the filters have something to filter', () => {
-      it('`what=fontaneria` returns the two plumbers and nobody else', async () => {
+      it('`what=fontaneria` returns the plumbers and nobody else', async () => {
         const body = await page('where=28013&what=fontaneria');
-        expect(body.items).toHaveLength(2);
+        // Three since `W4-T07`: `Fontanería Gómez`, `Manitas Rivas`, and the demo account's own
+        // profile. The assertion that matters is the one below — every row really does list the trade.
+        expect(body.items).toHaveLength(3);
         for (const item of body.items) {
           expect(item.categories.map((category) => category.slug)).toContain('fontaneria');
         }
@@ -183,9 +191,11 @@ describe.runIf(live)(
     });
 
     describe('AC9 — every seeded provider has a profile page that works', () => {
-      it('answers 200 with a body the contract accepts, for all five', async () => {
+      it('answers 200 with a body the contract accepts, for every one of them', async () => {
         const ids = (await page('where=28013')).items.map((item) => item.id);
-        expect(ids).toHaveLength(5);
+        // At least the five this seeder writes. `jobs.demo-feed` adds a sixth (`W4-T07` §3.4), and the
+        // point of this test is that **whatever** is seeded has a profile page that serves.
+        expect(ids.length).toBeGreaterThanOrEqual(5);
 
         for (const id of ids) {
           const response = await app.inject({ method: 'GET', url: `/api/providers/${id}` });
