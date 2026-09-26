@@ -19,6 +19,18 @@ name: marketplace
 
 services:
   # ---------------------------------------------------------------------------------------------
+  # **Every image here is pulled from this repository's own registry** (`W0-T27`). They are copies of
+  # the upstreams named beside each one, made by `.github/workflows/mirror-images.yml` from the list
+  # in `docker/mirror.images`, and each is pinned to the **upstream digest** — `imagetools create`
+  # copies the manifest rather than rebuilding it, so the copy and the original are the same bytes
+  # and the pin verifies that on every pull.
+  #
+  # The reason is three outages in eighteen days, all from images this project does not own: MinIO's
+  # Docker Hub repositories were deleted (#237), MinIO's own quay.io stopped serving anonymous pulls
+  # (#292), and then the MinIO projects were archived outright (#293). A digest pin catches an image
+  # that *changed* and does nothing about one that is *withdrawn*.
+  # ---------------------------------------------------------------------------------------------
+  # ---------------------------------------------------------------------------------------------
   # Postgres + PostGIS. Mirrors the Neon Postgres 17 that ADR-006 puts in every other environment.
   #
   # Image note: `postgis/postgis` publishes amd64 only. `imresamu/postgis` is the multi-architecture
@@ -26,7 +38,8 @@ services:
   # back when the canonical repository publishes arm64 itself.
   # ---------------------------------------------------------------------------------------------
   db:
-    image: imresamu/postgis:17-3.5-alpine
+    # Copy of docker.io/imresamu/postgis:17-3.5-alpine
+    image: ghcr.io/mastrobardo/marketplace/postgis:17-3.5-alpine@sha256:97a2ace7243d6fe2c11582ce2f2a6c0edfe6d8e95335b875a10a5885f98c79b7
     restart: unless-stopped
     environment:
       POSTGRES_USER: marketplace
@@ -55,7 +68,8 @@ services:
   # maintained successor, multi-architecture, same SMTP-catcher + HTTP-API shape.
   # ---------------------------------------------------------------------------------------------
   mail:
-    image: axllent/mailpit:v1.27
+    # Copy of docker.io/axllent/mailpit:v1.27
+    image: ghcr.io/mastrobardo/marketplace/mailpit:v1.27@sha256:e22dce5b36f93c77082e204a3942fb6b283b7896e057458400a4c88344c3df68
     restart: unless-stopped
     environment:
       MP_MAX_MESSAGES: '5000'
