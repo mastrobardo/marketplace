@@ -101,14 +101,25 @@ failed: expected 500 to be less than 400` until the suite was pointed at **5433*
 `.env` sets `POSTGRES_PORT=5433` while CI uses 5432, so the run had been talking to an unrelated
 Postgres. Already a known gotcha (`MEM-2026-09-17-8`), and re-learned anyway.
 
-## 5. What is not verified here
+## 5. What was not verified here, and what it got wrong (amended 2026-09-26)
 
-**The mirror workflow has not run.** It needs a push to `main` or a manual dispatch, and its
-packages are published under the operator's account, so it is theirs to trigger. Two consequences:
+As written, this section said the mirror workflow had not run, that GHCR packages are created
+private, that `GITHUB_TOKEN` cannot change that, and that a human therefore had to flip four
+packages before compose could be repointed. **Two of those four claims were wrong, and the wrong
+ones came from reading documentation instead of measuring.**
 
-1. `docker-compose.yml` and `docker/garage/Dockerfile` still reference the upstream images. The
-   repoint to `ghcr.io/mastrobardo/marketplace/…` is a follow-up commit once the copies exist.
-2. **GHCR packages are created private**, and the built-in `GITHUB_TOKEN` cannot change that — it
-   needs a PAT or one click per package in *Settings → Packages → Change visibility*. Four packages,
-   once, and until then a clone that pulls from the mirror would need `docker login ghcr.io`. This is
-   the one step in this ticket a human has to do, and the reason the repoint is not in this commit.
+What actually happened on merge: the `push` path filter fired `mirror-images` automatically, and it
+**copied all four images correctly on the first run** — each copy digest-for-digest identical to its
+upstream — and then **failed its own verification step** (`alpine:3.22 is missing linux/amd64`, for
+an index that contains amd64). That was `grep -q` under `pipefail` killing `docker` with SIGPIPE;
+`MEM-2026-09-26-7` has the full mechanism, including that it reproduces only under `bash`, not
+`zsh`, and only on the longest of the four listings.
+
+And the packages **were public from the moment they were pushed** — no flip, nothing to click. The
+operator noticed; an anonymous token plus a manifest `GET` confirmed 200 for all four. Packages
+published by Actions and linked to a *public* repository inherit that visibility, and GitHub's
+"default is private" describes a package scoped to a personal account. `MEM-2026-09-26-5` is
+superseded by `MEM-2026-09-26-6` for asserting the opposite from documentation alone — and for
+holding the repoint back a whole PR over a problem that never existed.
+
+The repoint, the check fix and these corrections landed in `W0-T27-mirror-repoint`.

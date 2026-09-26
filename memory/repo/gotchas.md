@@ -907,3 +907,28 @@ come from real experience.
   repo can mirror (`W0-T27`), which an upstream withdrawal cannot take away.
 - **evidence**: `docker/garage/Dockerfile`; `docs/specs/S0/W0-T33-object-store.run.md` §2
 - **status**: active
+
+### `set -o pipefail` plus a consumer that exits early is a check that fails at random
+
+- **id**: MEM-2026-09-26-7
+- **scope**: repo
+- **fact**: `mirror-images` reported `ghcr.io/…/alpine:3.22 is missing linux/amd64` for an index
+  that was digest-for-digest identical to upstream and plainly contained amd64. The step was
+  `docker buildx imagetools inspect "$mirror" | grep -qE …`: `grep -q` exits at its first match,
+  `docker` is left writing into a closed pipe and dies of **SIGPIPE (255)**, and `pipefail` turns
+  that into a failed check. The fix reintroduced it one line later with `awk '…{print $2; exit}'`,
+  which exits early for the same reason.
+- **why**: It is timing, so it looks like flake: it hit `alpine` — the longest index of the four —
+  and left the three shorter ones green, because whether the producer is still writing when the
+  consumer leaves depends on how much output there is. It also fails *closed*, so it never passes a
+  bad mirror; the cost is a red run and a plausible-looking wrong diagnosis. Shells differ, too:
+  the first local reproduction was in `zsh`, which handled it fine, and only `bash -euo pipefail`
+  showed the bug — the runner's shell is the one that matters.
+- **apply**: Under `set -o pipefail`, never pipe a long-running or large-output producer into
+  `grep -q`, `head`, `awk … exit` or anything else that stops reading. Capture once
+  (`out="$(cmd)"`) and match against the variable, and write `awk` that drains its input
+  (`/re/ { if (!seen) { v = $1; seen = 1 } } END { print v }`). When reproducing a CI shell bug
+  locally, run it under the same shell CI uses.
+- **evidence**: `.github/workflows/mirror-images.yml` "Check the copies kept both architectures";
+  run <https://github.com/mastrobardo/marketplace/actions/runs/36266198605>
+- **status**: active

@@ -447,4 +447,30 @@ Keep it to facts that changed how you would work. Task-specific detail stays in 
   **anonymous** pull (`docker logout ghcr.io` first, or a clean context) → then repoint compose and
   `docker/garage/Dockerfile`. Never verify a public mirror with a logged-in daemon; it proves nothing.
 - **evidence**: `.github/workflows/mirror-images.yml`; `docs/specs/S0/W0-T33-object-store.run.md` §5
+- **status**: **superseded-by MEM-2026-09-26-6 — the premise was wrong and was never measured.**
+  The four packages were public the moment the workflow first pushed them, verified anonymously
+  against the registry API. The private-by-default rule in GitHub's docs describes a package scoped
+  to a personal account; these are published by Actions and linked to a **public repository**, and
+  they inherited that. Everything this entry says about sequencing follows from the false premise —
+  keep only its last line, which is still right for the wrong reason: verify anonymously.
+
+### Verify a mirror's visibility from outside, not by reading the docs
+
+- **id**: MEM-2026-09-26-6
+- **scope**: slice:S0
+- **fact**: The stack's four mirrored images (`ghcr.io/mastrobardo/marketplace/{postgis,mailpit,garage,alpine}`)
+  were **public as soon as `mirror-images` first pushed them** — no visibility flip, no PAT, nothing
+  for a human to click. Packages published by Actions and linked to a public repository inherit that
+  visibility; GitHub's "default is private" applies to a package scoped to a personal account.
+  Measured, not read: an anonymous token from `ghcr.io/token?scope=repository:<pkg>:pull` followed
+  by a manifest `GET` answers **200** for all four.
+- **why**: The superseded `MEM-2026-09-26-5` asserted the opposite from documentation alone and
+  built a four-step human procedure on top of it — and held the compose repoint back a whole PR for
+  a problem that did not exist. The operator spotted it by looking at the packages page.
+- **apply**: To prove a registry is publicly readable, ask the registry **anonymously**:
+  `curl -s "https://ghcr.io/token?scope=repository:<owner>/<pkg>:pull&service=ghcr.io"` then `GET`
+  the manifest with that token — 200 means public. Never conclude it from the UI, and never from a
+  local `docker pull`, which uses whatever credentials the daemon already holds. `docker logout` is
+  not needed for this and does not belong in a verification step.
+- **evidence**: session 2026-09-26; `docker-compose.yml` `db`/`mail`; `docker/garage/Dockerfile`
 - **status**: active

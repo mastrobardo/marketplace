@@ -70,19 +70,46 @@ jobs:
         run: |
           set -euo pipefail
           registry="ghcr.io/${{ github.repository }}"
-          grep -vE '^\s*(#|$)' docker/mirror.images | while read -r upstream package; do
+
+          # Read from a file, not a pipe: a `while read` on the right-hand side of a pipe runs in a
+          # subshell, so an `exit 1` inside it would only leave the subshell.
+          while read -r upstream package; do
             tag="${upstream##*:}"
             mirror="$registry/$package:$tag"
-            # A copy that lost an architecture is worse than no copy: it works in CI and fails on
-            # every laptop, or the reverse, and only once the upstream it stands in for is gone.
+
+            # **Captured, never piped into an early-exiting consumer.** This cost two red runs on an
+            # index that was digest-for-digest identical to upstream: `grep -q` and `awk … exit`
+            # both stop at their first match, `docker buildx imagetools inspect` is then writing
+            # into a closed pipe, it dies of SIGPIPE (255), and `pipefail` turns that into "the
+            # mirror is broken". Whether it happens is pure timing — it hit `alpine`, whose index is
+            # the longest, and left the three shorter ones green.
+            mirror_listing="$(docker buildx imagetools inspect "$mirror")"
+            upstream_listing="$(docker buildx imagetools inspect "$upstream")"
+
+            # `linux/arm64` on three of these images and `linux/arm64/v8` on alpine, which publishes
+            # the variant. Both are arm64 and a laptop runs either, so the variant is optional.
             for required in linux/amd64 linux/arm64; do
-              if ! docker buildx imagetools inspect "$mirror" | grep -qE "^ *Platform: *$required\$"; then
+              if ! printf '%s\n' "$mirror_listing" | grep -qE "^ *Platform: *$required(/v[0-9]+)?\$"; then
                 echo "::error::$mirror is missing $required"
                 exit 1
               fi
             done
-            echo "$mirror: linux/amd64 and linux/arm64 present"
-          done
+
+            # No `exit` in these: an awk that stops reading is the same bug as the one above.
+            digest_of() { printf '%s\n' "$1" | awk '/^Digest:/ { if (!seen) { d = $2; seen = 1 } } END { print d }'; }
+            mirror_digest="$(digest_of "$mirror_listing")"
+            upstream_digest="$(digest_of "$upstream_listing")"
+
+            # A copy that is not the same bytes as its upstream is not a mirror. They are equal by
+            # construction — `imagetools create` copies the manifest rather than rebuilding it — so
+            # this is cheap, and it is what would notice if that ever stopped being true.
+            if [ "$mirror_digest" != "$upstream_digest" ]; then
+              echo "::error::$mirror is $mirror_digest, but $upstream is $upstream_digest"
+              exit 1
+            fi
+
+            echo "$mirror: amd64 + arm64, $mirror_digest (identical to upstream)"
+          done < <(grep -vE '^\s*(#|$)' docker/mirror.images)
 
       - name: Summarise
         run: |
