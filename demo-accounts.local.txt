@@ -1,0 +1,112 @@
+================================================================================
+ DEMO ACCOUNTS — marketplace, local development
+================================================================================
+
+ NOT COMMITTED. This file is untracked (`.gitignore`: *.local.txt).
+ Written by hand from the seeders; if it disagrees with them, they are right:
+
+   apps/api/prisma/seed/auth-demo-users.ts   the two accounts + the password
+   apps/api/prisma/seed/demo-feed.ts         the provider profile + the jobs  (W4-T07)
+   apps/api/prisma/seed/demo-providers.ts    the five storefront providers    (W3-T10)
+   apps/api/prisma/seed/demo-quotes.ts       the job with four quotes on it   (W4-T04)
+
+ Rebuild the world:   pnpm --filter @marketplace/api db:reset && pnpm --filter @marketplace/api db:seed
+ Then:                pnpm dev          (web on :5173, api on :3000, mail on :8025)
+
+--------------------------------------------------------------------------------
+ 1. THE TWO ACCOUNTS YOU CAN SIGN IN AS
+--------------------------------------------------------------------------------
+
+ Password for BOTH (local only):   seed-password-local-only
+
+   CLIENT     client@marketplace.local      Ana Cliente
+              roles: CLIENT
+              owns the seven W4-T07 jobs, and has a default address in Madrid
+              see:  /es/jobs                      her jobs
+                    /es/jobs/99999999-9999-4999-8999-999999990003
+                                                  "Cambiar el termo eléctrico",
+                                                  which already has Paco's quote on it
+
+   PROVIDER   provider@marketplace.local    Paco Fontanero
+              roles: CLIENT, PROVIDER   (a professional is also a client)
+              profile: fontanería + electricidad, 15 km from Puerta del Sol,
+                       38,00 €/h, no reviews yet
+              see:  /es/feed                      >>> the W4-T07 job feed <<<
+
+ Off a laptop the password is not this one: `auth.demo-users` refuses to write the
+ published value against a non-local database and takes SEED_DEMO_PASSWORD instead.
+
+--------------------------------------------------------------------------------
+ 2. WHAT PACO SHOULD SEE AT /es/feed  (three jobs, newest first)
+--------------------------------------------------------------------------------
+
+   Radiadores y caldera              fontanería + GAS
+                                     -> "Instalaciones de gas — no lo tienes en tu
+                                        perfil · oficio regulado"
+                                     -> the row the "ocultar oficios regulados"
+                                        switch removes
+   Cuadro eléctrico y diferencial    electricidad (regulated, and he lists it)
+   Cambiar el termo eléctrico        fontanería
+                                     -> "Ya has enviado un presupuesto"
+                                     -> the row the "ocultar los trabajos…" switch
+                                        removes
+
+ And the four that must NOT appear, each for its own reason:
+
+   Aire acondicionado en el salón    Alcalá de Henares, ~30 km — outside his 15 km
+                                     (it IS in Clima Costa's feed: 50 km radius)
+   Cerradura forzada                 cerrajería — a trade he does not list
+   Pintar el pasillo                 no address at all — in nobody's feed, ever
+   Cambiar el plato de ducha         CANCELLED
+
+ Try:  sort "Más cerca"            -> Cambiar el termo eléctrico first
+       oficio = Instalaciones de gas + ocultar oficios regulados  -> empty, and the
+                                        empty state should say the FILTERS did it
+
+--------------------------------------------------------------------------------
+ 3. THE 409 PATH  (an unfinished professional profile)
+--------------------------------------------------------------------------------
+
+ Sign in as Paco, then remove his radius to see what a half-finished signup sees:
+
+   docker compose exec -T db psql -U marketplace -d marketplace -c \
+     "UPDATE provider_profile SET service_radius_metres = NULL \
+       WHERE id = '88888888-8888-4888-8888-888888880001';"
+
+ /es/feed should now say what to fix, not show an error page. Put it back with:
+
+   docker compose exec -T db psql -U marketplace -d marketplace -c \
+     "UPDATE provider_profile SET service_radius_metres = 15000 \
+       WHERE id = '88888888-8888-4888-8888-888888880001';"
+
+--------------------------------------------------------------------------------
+ 4. THE PROVIDERS WITH NO PASSWORD  (storefront only — you cannot sign in as these)
+--------------------------------------------------------------------------------
+
+ `providers.demo-world` writes no credential, which is what lets it travel to a
+ preview database. They exist to be FOUND, at /es/search?where=28013:
+
+   Fontanería Gómez            fontanería                 4,7 (31)   42,00 €/h
+   Electricidad Nadal          electricidad, climatización 4,2 (12)  quote-only
+   Manitas Rivas               fontanería, cerrajería      no reviews 24,00 €/h
+   Cerrajería 24h Chamberí     cerrajería                  3,9 (58)  55,00 €/h
+   Clima Costa                 climatización               5,0 (3)   31,00 €/h
+                               Alcalá de Henares, 50 km radius — reaches Madrid
+
+ The W4-T04 comparison demo (four quotes on one job) belongs to a sixth,
+ credential-less client, demo.cliente@example.com, so you cannot sign in and open
+ it: read it in the database, or use Ana's job above, which has one quote on it.
+
+--------------------------------------------------------------------------------
+ 5. IDS WORTH PASTING
+--------------------------------------------------------------------------------
+
+ Ana (client user)         11111111-1111-4111-8111-111111111111
+ Paco (provider user)      22222222-2222-4222-8222-222222222222
+ Paco's provider profile   88888888-8888-4888-8888-888888880001
+ Jobs (W4-T07)             99999999-9999-4999-8999-99999999000N   N = 1..7
+                           1 radiadores · 2 cuadro · 3 termo · 4 aire ·
+                           5 cerradura · 6 pintar (no address) · 7 ducha (cancelled)
+ Paco's quote              eeeeeeee-eeee-4eee-8eee-eeeeeeee0003
+
+ Mail (verification links, resets):   http://127.0.0.1:8025

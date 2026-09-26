@@ -78,24 +78,35 @@ services:
   # ---------------------------------------------------------------------------------------------
   # S3-compatible object storage, standing in for Cloudflare R2 (ADR-006).
   #
-  # Image note: pinned to the last release that still ships the full web console. Later community
-  # releases removed it, and being able to look at a bucket is most of the value locally.
+  # Registry note, **second move in three weeks, and the last one this file absorbs quietly.**
+  # `#237` moved these images off Docker Hub to quay.io, because MinIO had removed the Docker Hub
+  # repositories. MinIO has now gated quay too: an anonymous pull of
+  # `quay.io/minio/minio` answers `unauthorized: access to the requested resource is not
+  # authorized`, and so does `quay.io/minio/mc`. Verified by hand against both registries' token
+  # endpoints — quay issues an anonymous token and then refuses the manifest, which is what makes
+  # this read like a transient CI failure rather than a repository that is no longer public.
+  # `ghcr.io/minio/*` answers 403; Docker Hub still answers 401. There is no public tap left.
   #
-  # Registry note: **not Docker Hub.** `minio/minio` and `minio/mc` were removed from Docker Hub —
-  # the repositories, not just these tags — and every `pnpm stack:up` since answers
-  # `pull access denied for minio/minio, repository does not exist or may require 'docker login'`.
-  # That message is Docker's single wording for "gone" and "unauthorised" both, which is why it
-  # reads like a credentials problem and is not one. quay.io is MinIO's own registry and carries
-  # the identical tags.
+  # So these are **Bitnami's builds of the same two programs**, from `bitnamilegacy` — the org
+  # Bitnami parked their free catalogue in when they moved the maintained images behind a paid
+  # plan. Public, multi-arch (amd64 for CI, arm64 for a laptop), and **frozen**: the newest tag is
+  # July 2025 and there will never be another. It runs as uid 1001 with its data under
+  # `/bitnami/minio/data` and its own entrypoint, so the explicit `command:` this service used to
+  # carry is gone — the image's `run.sh` starts the server and puts the console on 9001 itself.
+  # `mc ready local` still works, because the image configures that alias from the two variables
+  # below.
   #
-  # Both images are pinned by tag **and** digest. The tag is what a human reads; the digest is what
-  # actually resolves, so a tag that is deleted or re-pointed fails the pull loudly instead of
-  # quietly starting a different MinIO. A public image disappearing is no longer hypothetical here.
+  # **This is a stopgap with an owner and a deadline**, not a fix: a frozen image gets no security
+  # patch, ever. `W0-T33` is the ticket that replaces it, and the operator made it the top priority
+  # after this unblocking (2026-09-26).
+  #
+  # Both images stay pinned by tag **and** digest. The tag is what a human reads; the digest is
+  # what actually resolves, so a tag that is deleted or re-pointed fails the pull loudly instead of
+  # quietly starting a different MinIO. Three registry moves in, that is not hypothetical.
   # ---------------------------------------------------------------------------------------------
   objects:
-    image: quay.io/minio/minio:RELEASE.2025-04-22T22-12-26Z@sha256:a1ea29fa28355559ef137d71fc570e508a214ec84ff8083e39bc5428980b015e
+    image: docker.io/bitnamilegacy/minio:2025.7.23-debian-12-r5@sha256:6dabb4a2088c9a79908de3bc05f4586c23ad2182c8908e7e3acbf61c1467fb20
     restart: unless-stopped
-    command: server /data --console-address ":9001"
     environment:
       MINIO_ROOT_USER: marketplace
       MINIO_ROOT_PASSWORD: marketplace_local
@@ -103,8 +114,11 @@ services:
       - '127.0.0.1:${OBJECTS_PORT:-9000}:9000'
       - '127.0.0.1:${OBJECTS_CONSOLE_PORT:-9001}:9001'
     volumes:
-      - objects-data:/data
+      # `/bitnami/minio/data`, not `/data`: this image's server runs as uid 1001 and writes there.
+      - objects-data:/bitnami/minio/data
     healthcheck:
+      # Unchanged, and checked rather than assumed: the image ships `mc` and configures the `local`
+      # alias from MINIO_ROOT_USER/PASSWORD, so this is the same command it always was.
       test: ['CMD', 'mc', 'ready', 'local']
       interval: 5s
       timeout: 5s
@@ -116,7 +130,7 @@ services:
   # because the container is expected to stop with exit code 0.
   # ---------------------------------------------------------------------------------------------
   objects-init:
-    image: quay.io/minio/mc:RELEASE.2025-04-16T18-13-26Z@sha256:aead63c77f9db9107f1696fb08ecb0faeda23729cde94b0f663edf4fe09728e3
+    image: docker.io/bitnamilegacy/minio-client:2025.7.21-debian-12-r3@sha256:73bd39f7899a0cef12b8dd5df13aa93a3ed1aaa44236542442e9ac76819ac158
     depends_on:
       objects:
         condition: service_healthy

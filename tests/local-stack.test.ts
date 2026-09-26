@@ -91,7 +91,10 @@ describe('AC5 — data survives a restart', () => {
     expect(declared.length, 'no named volumes declared').toBeGreaterThan(0);
     for (const [name, dataDir] of [
       ['db', '/var/lib/postgresql/data'],
-      ['objects', '/data'],
+      // `/bitnami/minio/data` since the object store became Bitnami's build of MinIO: that image
+      // runs as uid 1001 and writes there. The assertion is about *a named volume holding the
+      // data*, and the path is only how this test finds the mount.
+      ['objects', '/bitnami/minio/data'],
     ] as const) {
       const mounts = services()[name]?.volumes ?? [];
       const mount = mounts.find((entry) => entry.split(':')[1] === dataDir);
